@@ -1,0 +1,58 @@
+# RealMultiLLM Netlify Configuration
+# Production-ready deployment for Next.js multi-LLM platform
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+  functions = "netlify/functions"
+  
+[build.environment]
+  NODE_VERSION = "20"
+  # Optimize build performance
+  NODE_OPTIONS = "--max-old-space-size=4096"
+  NEXT_TELEMETRY_DISABLED = "1"
+  NODE_ENV = "production"
+
+# Template environment variables for Deploy to Netlify button
+# These will be prompted during deployment
+[template.environment]
+  NEXTAUTH_SECRET = "JWT signing secret - Generate with: openssl rand -base64 32"
+  NEXTAUTH_URL = "Your deployment URL (e.g., https://your-app.netlify.app)"
+  DATABASE_URL = "Database connection string (file:./dev.db or PostgreSQL URL)"
+  
+  # LLM API Keys (at least one required)
+  OPENAI_API_KEY = "OpenAI API key for GPT models (sk-proj-...)"
+  ANTHROPIC_API_KEY = "Anthropic Claude API key (sk-ant-api03-...)"
+  GOOGLE_AI_API_KEY = "Google AI Gemini API key (AIza...)"
+  
+  # Optional OAuth Configuration
+  GOOGLE_CLIENT_ID = "Google OAuth Client ID (optional)"
+  GOOGLE_CLIENT_SECRET = "Google OAuth Client Secret (optional)"
+  GITHUB_CLIENT_ID = "GitHub OAuth Client ID (optional)"  
+  GITHUB_CLIENT_SECRET = "GitHub OAuth Client Secret (optional)"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # security: Add security headers
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com"
+
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    # optimization: Add caching for static assets
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Optional: Create redirects if needed
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200

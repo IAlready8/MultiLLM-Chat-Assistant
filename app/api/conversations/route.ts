@@ -1,0 +1,74 @@
+import { NextResponse } from 'next/server'
+import { getAuthenticatedUser } from '@/lib/api-auth'
+import { ConversationService } from '@/services/conversation-service.db'
+import { z } from 'zod'
+
+// Zod schema for creating a conversation
+const createConvoSchema = z.object({
+  title: z.string().min(1).max(255),
+  messages: z.array(
+    z.object({
+      role: z.enum(['user', 'assistant']),
+      content: z.string().min(1),
+      provider: z.string().nullable().optional(),
+      model: z.string().nullable().optional(),
+      cost: z.number().optional(),
+      latency: z.number().optional(),
+    })
+  ).min(1),
+})
+
+/**
+ * GET /api/conversations
+ * Retrieves all conversations (metadata) for the authenticated user.
+ */
+export async function GET(req: Request) {
+  const authCheck = await getAuthenticatedUser()
+  if (authCheck instanceof NextResponse) return authCheck
+  const { user } = authCheck
+
+  const conversations = await ConversationService.getConversationsByUserId(user.id)
+  return NextResponse.json(conversations)
+}
+
+/**
+ * POST /api/conversations
+ * Creates a new conversation and its first messages.
+ */
+export async function POST(req: Request) {
+  const authCheck = await getAuthenticatedUser()
+  if (authCheck instanceof NextResponse) return authCheck
+  const { user } = authCheck
+
+  const body = await req.json()
+  const validation = createConvoSchema.safeParse(body)
+
+  if (!validation.success) {
+    return NextResponse.json(
+      { error: 'Invalid input', details: validation.error.flatten() },
+      { status: 400 }
+    )
+  }
+
+  const { title, messages } = validation.data
+
+  // Map messages to match Prisma schema (strip out extra fields like cost/latency)
+  const prismaMessages = messages.map(({ role, content, provider, model }) => ({
+    role,
+    content,
+    provider: provider ?? null,
+    model: model ?? null,
+  }))
+
+  try {
+    const newConversation = await ConversationService.createConversation(
+      user.id,
+      title,
+      prismaMessages
+    )
+    return NextResponse.json(newConversation, { status: 201 })
+  } catch (error) {
+    console.error('Error creating conversation:', error)
+    return NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 })
+  }
+}

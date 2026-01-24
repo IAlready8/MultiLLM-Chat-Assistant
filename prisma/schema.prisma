@@ -1,0 +1,165 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // For credential-based authentication
+  accounts      Account[]
+  sessions      Session[]
+  conversations Conversation[]
+  providerConfigs ProviderConfig[]
+  goals         Goal[]
+  personas      Persona[]
+  teamMemberships TeamMember[] // User's teams
+  subscription    Subscription?  // User's subscription
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  title     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  role           String // "user", "assistant", "system"
+  content        String
+  provider       String? // e.g., "openai", "anthropic"
+  model          String? // e.g., "gpt-4", "claude-2"
+  createdAt      DateTime     @default(now())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+model ProviderConfig {
+  id         String   @id @default(cuid())
+  provider   String
+  apiKey     String?  // Encrypted API key stored server-side
+  settings   String?  // JSON string for additional provider settings
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+}
+
+model Analytics {
+  id        String   @id @default(cuid())
+  event     String
+  payload   String?
+  createdAt DateTime @default(now())
+  userId    String
+}
+
+model Goal {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Persona {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  prompt      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Model for team/organization
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  members   TeamMember[]
+}
+
+// Join table for Users and Teams, holding their role
+model TeamMember {
+  id        String   @id @default(cuid())
+  userId    String
+  teamId    String
+  role      String   @default("MEMBER") // Using string instead of enum
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+}
+
+// Model for managing user subscriptions (e.g., via Stripe)
+model Subscription {
+  id                 String           @id @default(cuid())
+  userId             String           @unique
+  tier               String           @default("FREE") // Using string instead of enum
+
+  // Stripe-specific fields
+  stripeCustomerId   String?          @unique
+  stripeSubscriptionId String?        @unique
+  stripePriceId        String?
+  stripeCurrentPeriodEnd DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Enhanced rainbow outline effect */
+.rainbow-outline-hover {
+  position: relative;
+  isolation: isolate;
+}
+.rainbow-outline-hover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(90deg, #8b5cf6, #ec4899, #f59e0b, #10b981, #06b6d4, #6366f1);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: -1;
+}
+.rainbow-outline-hover:hover::before,
+.rainbow-outline-hover:focus-visible::before {
+  opacity: 0.6;
+}
+.rainbow-outline-hover > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Enhanced ambient hero accents */
+.ambient-orb {
+  position: absolute;
+  width: 620px;
+  height: 620px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, 
+    rgba(139, 92, 246, 0.15) 0%, 
+    rgba(236, 72, 153, 0.1) 25%, 
+    rgba(56, 189, 248, 0.08) 50%, 
+    transparent 70%);
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: -1;
+}
+.ambient-orb--left { 
+  top: -200px; 
+  left: -200px; 
+}
+.ambient-orb--right { 
+  bottom: -250px; 
+  right: -250px; 
+  background: radial-gradient(circle, 
+    rgba(56, 189, 248, 0.15) 0%, 
+    rgba(16, 185, 129, 0.1) 25%, 
+    rgba(139, 92, 246, 0.08) 50%, 
+    transparent 70%);
+}
+
+.heading-underline { 
+  position: relative; 
+}
+.heading-underline::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -12px;
+  width: 160px;
+  height: 3px;
+  background: linear-gradient(90deg, #8b5cf6, #ec4899, #06b6d4);
+  border-radius: 9999px;
+  opacity: 0.7;
+}
+
+/* Glass morphism effect for cards */
+.glass-card {
+  background: rgba(15, 15, 15, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Enhanced button effects */
+.glass-button {
+  background: rgba(30, 30, 30, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-button:hover {
+  background: rgba(45, 45, 45, 0.8);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25);
+}
+
+/* Smooth transitions for interactive elements */
+.smooth-transition {
+  transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 2.5%;
+    --foreground: 0 0% 98%;
+    
+    --card: 0 0% 4.5%;
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
+    
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 60%;
+    
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 98%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 0 0% 83.1%;
+    
+    --radius: 0.5rem;
+  }
+  
+  .dark {
+    --background: 0 0% 2.5%;
+    --foreground: 0 0% 98%;
+    
+    --card: 0 0% 4.5%;
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
+    
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 60%;
+    
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 98%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 0 0% 83.1%;
+  }
+}
+ 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}

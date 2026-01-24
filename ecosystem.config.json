@@ -1,0 +1,78 @@
+### 11. **ecosystem.config.js** - PM2 Deployment Configuration
+
+```javascript
+module.exports = {
+  apps: [
+    {
+      name: 'realmultillm',
+      script: 'npm',
+      args: 'start',
+      cwd: '/var/www/realmultillm',
+      instances: 'max',
+      exec_mode: 'cluster',
+      max_memory_restart: '1G',
+      node_args: '--max_old_space_size=4096',
+      
+      // Environment variables
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3000,
+        // Add your production environment variables here
+        // Or use env_file for better security
+      },
+      
+      // Logging
+      log_file: './logs/combined.log',
+      out_file: './logs/out.log',
+      error_file: './logs/error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+      
+      // Monitoring
+      monitoring: false, // Set to true if using PM2 monitoring
+      
+      // Auto-restart
+      min_uptime: '10s',
+      max_restarts: 10,
+      restart_delay: 4000,
+      
+      // Performance
+      listen_timeout: 8000,
+      kill_timeout: 5000,
+      
+      // Advanced options
+      wait_ready: true,
+      listen_retry_delay: 2000,
+      
+      // Cron restart (optional)
+      // cron_restart: '0 3 * * *', // Restart every day at 3 AM
+    }
+  ],
+
+  // Deployment configuration
+  deploy: {
+    production: {
+      user: 'your-username',
+      host: 'your-server.com',
+      ref: 'origin/main',
+      repo: 'https://github.com/IAlready8/RealMultiLLM.git',
+      path: '/var/www/realmultillm',
+      'post-deploy': 'npm ci && npm run build && pm2 reload ecosystem.config.js --env production',
+      env: {
+        NODE_ENV: 'production'
+      }
+    },
+    
+    staging: {
+      user: 'your-username',
+      host: 'staging.your-server.com',
+      ref: 'origin/develop',
+      repo: 'https://github.com/IAlready8/RealMultiLLM.git',
+      path: '/var/www/staging-realmultillm',
+      'post-deploy': 'npm ci && npm run build && pm2 reload ecosystem.config.js --env staging',
+      env: {
+        NODE_ENV: 'staging'
+      }
+    }
+  }
+};
