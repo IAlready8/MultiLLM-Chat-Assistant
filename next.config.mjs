@@ -16,9 +16,6 @@ const nextConfig = {
   // Reduce runtime overhead
   reactStrictMode: true,
   
-  // Configure asset prefix for proper serving on different ports
-  assetPrefix: process.env.ASSET_PREFIX || undefined,
-  
   trailingSlash: false,
   
   // Optimize bundle
