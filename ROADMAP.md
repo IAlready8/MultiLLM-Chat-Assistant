@@ -1,4 +1,4 @@
-# Project Roadmap: Personal LLM Tool
+# Project Roadmap: MultiLLM Chat Assistant
 
 ## Vision
 Create the world's most powerful and intuitive multi-LLM management platform that professionals and enterprises are willing to pay premium prices for (hundreds to thousands of dollars annually).
@@ -18,7 +18,7 @@ A fully-featured, production-ready platform with:
 ### Goals:
 - [x] Unify project structure
 - [x] Fix build process
-- [x] Implement local database (SQLite)
+- [x] Implement PostgreSQL database
 - [x] Fix authentication system
 - [x] Stabilize core LLM integrations
 - [x] Reduce test failures

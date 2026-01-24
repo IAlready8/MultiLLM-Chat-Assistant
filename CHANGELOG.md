@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release of the project.
 - CI/CD pipeline with testing and deployment to Vercel.
-- Documentation for GitHub Actions and Vercel deployment.
+- Documentation for Vercel deployment.
 - Issue templates for bug reports and feature requests.
 - `.nvmrc` file to enforce Node.js version.
 - `CHANGELOG.md` file.

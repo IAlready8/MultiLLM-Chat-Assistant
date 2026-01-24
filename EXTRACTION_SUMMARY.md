@@ -6,8 +6,10 @@ Successfully extracted **220 files** from the Next.js project dump file.
 
 ## Project Overview
 
-**Project Name:** Personal LLM Tool  
+**Project Name:** MultiLLM Chat Assistant  
 **Description:** Multi-LLM platform with chat, personas, analytics, model comparison, pipelines, and secure API key handling.
+
+Note: This summary reflects the original extraction and may not match the current repository state.
 
 **Tech Stack:**
 - Next.js 14 (App Router)
@@ -223,7 +225,7 @@ cp .env.example .env.local
 Required environment variables:
 - `DATABASE_URL` - Database connection string
 - `NEXTAUTH_SECRET` - NextAuth secret
-- `ENCRYPTION_KEY` - API key encryption
+- `SECURE_STORAGE_SECRET` - API key encryption
 - Provider API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
 
 ### 3. Database Setup

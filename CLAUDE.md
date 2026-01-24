@@ -23,7 +23,7 @@ This is a Next.js 14 App Router application with the following key architecture:
 ### Core Stack
 - **Frontend**: Next.js 14 (App Router), React 18, TypeScript
 - **Styling**: Tailwind CSS + Radix UI primitives + Class Variance Authority (CVA)
-- **Database**: Prisma ORM with SQLite (dev) / PostgreSQL (production planned)
+- **Database**: Prisma ORM with PostgreSQL
 - **Authentication**: NextAuth.js v4 with Prisma adapter
 - **Testing**: Vitest + Testing Library + jsdom environment
 
@@ -50,12 +50,11 @@ This is a Next.js 14 App Router application with the following key architecture:
 Key entities in `prisma/schema.prisma`:
 - **User/Auth**: Standard NextAuth tables (User, Account, Session, VerificationToken)
 - **Core Data**: Conversation, ProviderConfig, Analytics, Goal, Persona
-- **Current Provider**: SQLite (file:./dev.db) for development
-- **Production Plan**: PostgreSQL migration planned
+- **Database**: PostgreSQL for local and production environments
 
-To switch to PostgreSQL:
-1. Update `DATABASE_URL` in environment
-2. Run `npx prisma generate && npx prisma migrate deploy`
+To apply migrations:
+1. Local dev: `npx prisma migrate dev`
+2. Production: `npx prisma migrate deploy`
 
 ## LLM Provider Architecture
 
@@ -99,10 +98,7 @@ Copy `.env.example` to `.env.local` and configure:
 
 ## CI/CD Pipeline
 
-GitHub Actions workflow (`.github/workflows/ci.yml`):
-1. **Test Job**: lint, type-check, test with coverage
-2. **Deploy Job**: Build and deploy to Netlify (main branch only)
-3. **Environment**: Uses SQLite for tests, Prisma generation required
+Not configured in this repo. Add a workflow for lint, type-check, tests, and build if needed.
 
 ## Known Architecture Notes
 

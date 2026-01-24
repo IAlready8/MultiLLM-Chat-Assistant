@@ -8,7 +8,7 @@ This document defines lightweight roles, guardrails, and runbooks for AI and hum
 - Code Agent (Web): Implements features in `app/*`, `components/*`, `services/*`, `lib/*`, with tests.
 - Code Agent (Core): Maintains `src/core/llm_manager` and its tests, plans integration surface.
 - Test Agent: Keeps Vitest/JSDOM tests green; adds focused tests for regressions; maintains Pytest for `src/core`.
-- Infra Agent: Owns CI/CD (`.github/workflows`), Prisma migrations, environment validation, and deployments.
+- Infra Agent: Owns CI/CD (if added), Prisma migrations, environment validation, and deployments.
 
 ### Guardrails
 - Security: Never commit secrets; read from environment. Follow `.env.example`.
@@ -32,8 +32,8 @@ This document defines lightweight roles, guardrails, and runbooks for AI and hum
   - Web: `npm run test:run` (or `vitest run`), `npm run test:coverage`.
   - Core: `pytest` inside Python env; dependencies from `requirements.txt`.
 - Database
-  - Local: SQLite (see `prisma/schema.prisma`).
-  - Migration: `npx prisma migrate dev` (dev); plan Postgres for non‑local.
+  - Local: PostgreSQL (see `prisma/schema.prisma`).
+  - Migration: `npx prisma migrate dev` (dev); `npx prisma migrate deploy` (prod).
 
 ### Decision Log
 - Use `STATUS_UPDATE.md` to record key decisions and current focus.

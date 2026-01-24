@@ -1,11 +1,11 @@
 ### 9. **docs/DEPLOYMENT_GUIDE.md** - Complete Deployment Guide
 
 ```markdown
-# RealMultiLLM Deployment Guide
+# MultiLLM Chat Assistant Deployment Guide
 
 ## Overview
 
-This guide provides comprehensive instructions for deploying RealMultiLLM to various platforms and environments.
+This guide provides comprehensive instructions for deploying MultiLLM Chat Assistant to various platforms and environments.
 
 ## Prerequisites
 
@@ -26,16 +26,16 @@ NEXTAUTH_SECRET=your-32-character-secret-key
 NEXTAUTH_URL=https://your-domain.com
 
 # Security
-ENCRYPTION_MASTER_KEY=your-64-character-encryption-key
+SECURE_STORAGE_SECRET=your-secure-storage-secret
 
 # Database
-DATABASE_URL=postgresql://user:password@host:5432/realmultillm
+DATABASE_URL=postgresql://user:password@host:5432/multillm
 
 # LLM API Keys (at least one required)
 OPENAI_API_KEY=sk-your-openai-key
 ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
 GOOGLE_AI_API_KEY=your-google-ai-key
-GROQ_API_KEY=gsk_your-groq-key
+OPENROUTER_API_KEY=your-openrouter-key
 
 # Optional: Redis for caching
 REDIS_URL=redis://username:password@host:6379

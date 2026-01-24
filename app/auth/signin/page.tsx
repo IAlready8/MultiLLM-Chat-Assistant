@@ -19,7 +19,7 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { data: session } = useSession()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,17 +79,6 @@ export default function SignInPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  if (status === 'loading') {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
-          <p>Loading...</p>
-        </div>
-      </div>
-    )
   }
 
   if (session) {

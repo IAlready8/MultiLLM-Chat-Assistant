@@ -31,18 +31,17 @@ DATABASE_URL="your_production_database_url"
 NEXTAUTH_SECRET="your_nextauth_secret"
 NEXTAUTH_URL="https://your-deployment-url.vercel.app"
 
-# LLM Provider API Keys (optional, configured by users in-app)
-# These can be set but are typically configured by users via the UI
+# Client-side storage secret (keep consistent across deploys)
+SECURE_STORAGE_SECRET="your_secure_storage_secret"
+
+# LLM Provider API Keys (optional, can be configured by users in-app)
 OPENAI_API_KEY="sk-your-openai-api-key"
 ANTHROPIC_API_KEY="your-anthropic-api-key"
-GOOGLE_API_KEY="your-google-api-key"
+GOOGLE_AI_API_KEY="your-google-ai-api-key"
 OPENROUTER_API_KEY="your-openrouter-api-key"
 
 # Redis (optional, for caching)
 REDIS_URL="your_redis_url"
-
-# Encryption key for API keys
-ENCRYPTION_KEY="your_32_char_encryption_key"
 ```
 
 ### Setting Environment Variables
@@ -109,20 +108,27 @@ vercel git link
 
 ## Build Configuration
 
-### vercel.json (Automatically Generated)
+### vercel.json (Current)
 Your project already includes a `vercel.json` file configured for Next.js. This is the current configuration:
 
 ```json
 {
+  "version": 2,
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/next"
+      "use": "@vercel/next",
+      "config": {
+        "serverless": true
+      }
     }
   ],
-  "env": {
-    "DATABASE_URL": "file:./prisma/dev.db"
-  }
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/"
+    }
+  ]
 }
 ```
 
@@ -162,10 +168,10 @@ The application uses Prisma for database management. For production deployments:
    ```
 
 2. **Running Migrations:**
-   Vercel automatically handles Prisma migrations during deployment, but you can manually run them using the Prisma CLI if needed.
+   Vercel does not run Prisma migrations by default. Run `npx prisma migrate deploy` in CI or before promoting a deployment.
 
 ### Alternative: PlanetScale, Supabase, or other managed databases
-These are recommended for production deployments over local SQLite files.
+These are recommended for production deployments over local Postgres instances.
 
 ## Monitoring and Analytics
 
@@ -176,9 +182,9 @@ Enable Vercel Analytics for performance monitoring:
 3. Enable Analytics
 
 ### Environment-Specific Behavior
-- Development: Uses local SQLite database
-- Preview: Uses configured database URL
-- Production: Uses production database URL
+- Development: Uses the `DATABASE_URL` you set locally
+- Preview: Uses the preview environment `DATABASE_URL`
+- Production: Uses the production `DATABASE_URL`
 
 ## Performance Optimization
 
@@ -205,7 +211,7 @@ Check the build logs in your Vercel dashboard for specific error messages. Commo
 
 #### 2. Database Connection Issues
 - Ensure DATABASE_URL is correctly set
-- For production, avoid using SQLite; use PostgreSQL or other managed databases
+- For production, avoid local file databases; use PostgreSQL or another managed database
 - Check that your database allows connections from Vercel's deployment regions
 
 #### 3. Authentication Problems

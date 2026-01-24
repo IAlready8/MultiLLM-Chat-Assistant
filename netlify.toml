@@ -18,12 +18,14 @@
 [template.environment]
   NEXTAUTH_SECRET = "JWT signing secret - Generate with: openssl rand -base64 32"
   NEXTAUTH_URL = "Your deployment URL (e.g., https://your-app.netlify.app)"
-  DATABASE_URL = "Database connection string (file:./dev.db or PostgreSQL URL)"
+  SECURE_STORAGE_SECRET = "Secret used for client-side key storage"
+  DATABASE_URL = "PostgreSQL connection string (recommended)"
   
   # LLM API Keys (at least one required)
   OPENAI_API_KEY = "OpenAI API key for GPT models (sk-proj-...)"
   ANTHROPIC_API_KEY = "Anthropic Claude API key (sk-ant-api03-...)"
   GOOGLE_AI_API_KEY = "Google AI Gemini API key (AIza...)"
+  OPENROUTER_API_KEY = "OpenRouter API key (optional)"
   
   # Optional OAuth Configuration
   GOOGLE_CLIENT_ID = "Google OAuth Client ID (optional)"

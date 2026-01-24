@@ -259,7 +259,7 @@ export default function SystemStatusPage() {
             </div>
             <div className="space-y-2">
               <h4 className="font-medium">Database</h4>
-              <p className="text-sm text-muted-foreground">SQLite (Development)</p>
+              <p className="text-sm text-muted-foreground">PostgreSQL</p>
               <p className="text-sm text-muted-foreground">Prisma ORM</p>
             </div>
             <div className="space-y-2">

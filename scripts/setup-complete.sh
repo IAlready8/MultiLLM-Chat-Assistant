@@ -67,11 +67,11 @@ if [ ! -f ".env.local" ]; then
         # Generate secure keys
         if command -v openssl &> /dev/null; then
             NEXTAUTH_SECRET=$(openssl rand -base64 32)
-            ENCRYPTION_KEY=$(openssl rand -base64 64)
+            SECURE_STORAGE_SECRET=$(openssl rand -base64 32)
             
             # Update .env.local with generated keys
-            sed -i.bak "s/NEXTAUTH_SECRET=.*/NEXTAUTH_SECRET=$NEXTAUTH_SECRET/" .env.local
-            sed -i.bak "s/ENCRYPTION_MASTER_KEY=.*/ENCRYPTION_MASTER_KEY=$ENCRYPTION_KEY/" .env.local
+            sed -i.bak "s|NEXTAUTH_SECRET=.*|NEXTAUTH_SECRET=$NEXTAUTH_SECRET|" .env.local
+            sed -i.bak "s|SECURE_STORAGE_SECRET=.*|SECURE_STORAGE_SECRET=$SECURE_STORAGE_SECRET|" .env.local
             rm .env.local.bak
             
             success "Generated secure keys in .env.local"

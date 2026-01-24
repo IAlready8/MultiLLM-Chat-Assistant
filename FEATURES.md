@@ -1,4 +1,4 @@
-# RealMultiLLM - Feature Hierarchy
+# MultiLLM Chat Assistant - Feature Hierarchy
 
 ## Tier 1: Core Engine (The "Multi-LLM" Brain)
 - **1.1: Model Abstraction Layer:** A unified interface to communicate with different types of LLMs (OpenAI, Anthropic, Llama.cpp, etc.) regardless of their underlying API.

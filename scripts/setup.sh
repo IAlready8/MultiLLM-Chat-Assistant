@@ -5,7 +5,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Use environment variable to switch between SQLite (development) and PostgreSQL (production)
+// Use environment variable to configure the PostgreSQL connection
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")

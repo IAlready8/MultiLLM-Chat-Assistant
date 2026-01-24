@@ -15,7 +15,7 @@ Successfully completed the entire build of the Multi-LLM Chat Assistant applicat
 - **Dependencies**: 900 packages successfully installed
 - **TypeScript**: 395 TypeScript files, zero compilation errors
 - **Build System**: Next.js 14.2.33, optimized production build
-- **Database**: Prisma ORM with SQLite (dev) and PostgreSQL (prod) support
+- **Database**: Prisma ORM with PostgreSQL
 - **Environment**: Complete .env.local configuration
 
 ### ✅ Application Features
@@ -46,7 +46,7 @@ Successfully completed the entire build of the Multi-LLM Chat Assistant applicat
 - **Frontend**: Next.js 14 (App Router) + TypeScript + React 18
 - **Styling**: Tailwind CSS + Radix UI components
 - **Backend**: Next.js API routes + Serverless functions
-- **Database**: Prisma ORM (SQLite/PostgreSQL)
+- **Database**: Prisma ORM (PostgreSQL)
 - **Authentication**: NextAuth.js + JWT
 - **State Management**: React hooks + Context API
 

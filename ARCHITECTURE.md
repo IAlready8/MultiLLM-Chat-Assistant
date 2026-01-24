@@ -11,12 +11,12 @@
 ## System Components
 - Web App: Next.js 14 (App Router) + TypeScript UI under `app/*`.
 - API Layer: Next.js Route Handlers under `app/api/*` (REST + streaming endpoints).
-- Data Layer: Prisma ORM with SQLite (dev) and planned PostgreSQL (staging/prod), schema under `prisma/`.
+- Data Layer: Prisma ORM with PostgreSQL, schema under `prisma/`.
 - Auth: NextAuth (OAuth + credentials); adapters configured via Prisma.
 - UI/Design System: Tailwind CSS, Radix UI primitives, CVA variants, tokens in `tailwind.config.ts` and `app/globals.css`.
 - Client/Server Utilities: `lib/*`, `services/*`, `hooks/*`, reusable UI in `components/ui/*`.
 - Python Core (optional): `src/core/llm_manager` — an async LLM manager with caching, provider abstraction, and tests.
-- CI/CD: GitHub Actions workflow at `.github/workflows/ci.yml`, deploy target Netlify.
+- CI/CD: Not configured in this repo; add a workflow if needed.
 
 ## High‑Level Flow
 1. User interacts with pages under `app/*` and UI components in `components/*`.
@@ -28,7 +28,7 @@
 ## Data Model (at a glance)
 - Auth: User, Account, Session (NextAuth tables via Prisma adapter).
 - App: Persona, Conversation/Message (if present), Analytics/Event entities.
-- Storage: SQLite for local dev, with migrations in `prisma/migrations/*` and a plan to move to PostgreSQL for non‑local envs.
+- Storage: PostgreSQL with migrations in `prisma/migrations/*`.
 
 ## LLM Provider Abstraction
 - Provider clients live in `services/llm-providers/*` (e.g., `openai-service.ts`).
@@ -57,11 +57,12 @@
 - Communication: Next.js API routes in `app/api/llm/*` proxy requests to the Python service.
 
 ## Deployment
-- CI runs lint/tests/build; deploys to Netlify. Ensure Prisma `generate` and migrations run in CI.
+- Build: `npm run build` (runs `prisma generate` via `prebuild`).
+- Migrations: `npx prisma migrate deploy` before starting the app.
 - Environment: `DATABASE_URL`, NextAuth secrets/URLs, provider API keys (see `.env.example`).
 
 ## Scaling Plan (Architecture)
-- Data: Migrate SQLite → PostgreSQL; enable connection pooling.
+- Data: Add connection pooling and read replicas as needed.
 - Caching/State: Introduce Redis for rate‑limiting, session extensions, and job queues.
 - Workloads: Add a worker for long‑running tasks (e.g., analytics aggregation, batch inference).
 - Observability: Centralized logs, error tracking, and basic metrics (latency, throughput, tokens, provider error rates).
@@ -69,10 +70,9 @@
 - Performance: Ensure streaming parity, debounce UI updates, and benchmark concurrent throughput.
 
 ## Known Gaps
-- No formal rate‑limiting and input validation on all LLM endpoints.
-- CI scripts mismatch with `package.json` in places (e.g., `test:ci`, `type-check`).
-- README is minimal; needs quickstart and links to docs.
-- Python core not yet wired to web app; choose integration strategy.
+- Rate limiting is scoped to some endpoints; confirm coverage for all LLM routes.
+- CI is not configured; add lint/type-check/test/build workflows when needed.
+- Python core is not fully wired to the web app; confirm the integration path.
 
 ## References
 - Roadmap: `ROADMAP.md`

@@ -1,7 +1,7 @@
 # Design System Documentation
 
 ## Overview
-This document outlines the design system for the Personal LLM Tool, built on modern, industry-standard foundations.
+This document outlines the design system for the MultiLLM Chat Assistant, built on modern, industry-standard foundations.
 
 ## Core Technologies
 - **Radix UI**: Headless component primitives for accessibility and behavior

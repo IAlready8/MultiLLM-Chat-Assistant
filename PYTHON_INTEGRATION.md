@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Personal LLM Tool integrates a Python-based core engine that handles LLM orchestration, caching, and performance optimization. This creates a hybrid architecture where Next.js handles the web interface and API routing, while Python manages the heavy lifting of LLM communications.
+The MultiLLM Chat Assistant integrates a Python-based core engine that handles LLM orchestration, caching, and performance optimization. This creates a hybrid architecture where Next.js handles the web interface and API routing, while Python manages the heavy lifting of LLM communications.
 
 ## Architecture
 
