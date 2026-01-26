@@ -19,6 +19,8 @@ const validateApiKeyFormat = (provider: string, apiKey: string): string | null =
     case 'googleai':
       if (!apiKey.startsWith('AIza')) return 'Google AI keys should start with AIza.'
       return null
+    case 'grok':
+      return null
     default:
       return null
   }
@@ -60,6 +62,8 @@ const testProviderKey = async (provider: string, apiKey: string) => {
         `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`,
         { method: 'GET' }
       )
+    case 'grok':
+      return null
     default:
       return null
   }

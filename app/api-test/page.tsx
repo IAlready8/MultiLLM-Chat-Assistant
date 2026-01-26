@@ -14,7 +14,8 @@ const MODEL_OPTIONS: Record<string, string[]> = {
   openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
   anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
   googleai: ['gemini-1.5-flash', 'gemini-1.5-pro'],
-  openrouter: ['openrouter/auto', 'gryphe/mythomax-l2-13b']
+  openrouter: ['openrouter/auto', 'gryphe/mythomax-l2-13b'],
+  grok: ['grok-beta', 'grok-2-1212']
 }
 
 export default function ApiTestPage() {
@@ -28,7 +29,8 @@ export default function ApiTestPage() {
     openai: 'unknown',
     anthropic: 'unknown',
     googleai: 'unknown',
-    openrouter: 'unknown'
+    openrouter: 'unknown',
+    grok: 'unknown'
   })
   const { toast } = useToast()
 
@@ -79,16 +81,21 @@ export default function ApiTestPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-3xl">
+    <div className="container mx-auto p-6 max-w-3xl space-y-6">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold">API Configuration Test</h1>
+          <Badge variant="secondary">Simulated</Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Test your API configurations and connections before running live chats.
+        </p>
+      </div>
+
       <Card>
-        <CardHeader className="text-center">
-          <div className="flex items-center justify-center gap-2">
-            <CardTitle>API Configuration Test</CardTitle>
-            <Badge variant="secondary">Simulated</Badge>
-          </div>
-          <CardDescription>
-            Test your API configurations and connections
-          </CardDescription>
+        <CardHeader>
+          <CardTitle>Run a connectivity check</CardTitle>
+          <CardDescription>Use a test prompt to confirm provider access.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -97,12 +104,13 @@ export default function ApiTestPage() {
               <select
                 value={provider}
                 onChange={(e) => handleProviderChange(e.target.value)}
-                className="w-full p-2 border rounded"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="googleai">Google AI (Gemini)</option>
                 <option value="openrouter">OpenRouter</option>
+                <option value="grok">Grok (xAI)</option>
               </select>
             </div>
 
@@ -111,7 +119,7 @@ export default function ApiTestPage() {
               <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="w-full p-2 border rounded"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 {(MODEL_OPTIONS[provider] || []).map((option) => (
                   <option key={option} value={option}>
@@ -145,11 +153,7 @@ export default function ApiTestPage() {
             </p>
           </div>
           
-          <Button 
-            className="w-full" 
-            onClick={testApi} 
-            disabled={isLoading}
-          >
+          <Button className="w-full" onClick={testApi} disabled={isLoading}>
             {isLoading ? 'Testing...' : 'Test API Connection'}
           </Button>
           
@@ -166,23 +170,28 @@ export default function ApiTestPage() {
             </Card>
           )}
           
-          <div className="pt-4">
-            <h3 className="font-medium mb-2">Provider Status</h3>
-            <div className="flex flex-wrap gap-2">
-              {(['openai', 'anthropic', 'googleai', 'openrouter'] as const).map((id) => {
-                const status = providerStatus[id]
-                const label = status === 'connected' ? 'Connected' : status === 'disconnected' ? 'Disconnected' : 'Not tested'
-                const variant = status === 'connected' ? 'default' : status === 'disconnected' ? 'destructive' : 'secondary'
-                const name = id === 'googleai' ? 'Google AI' : id.charAt(0).toUpperCase() + id.slice(1)
+          <Card className="bg-muted/40">
+            <CardHeader>
+              <CardTitle className="text-base">Provider Status</CardTitle>
+              <CardDescription>Track connectivity checks per provider.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {(['openai', 'anthropic', 'googleai', 'openrouter', 'grok'] as const).map((id) => {
+                  const status = providerStatus[id]
+                  const label = status === 'connected' ? 'Connected' : status === 'disconnected' ? 'Disconnected' : 'Not tested'
+                  const variant = status === 'connected' ? 'default' : status === 'disconnected' ? 'destructive' : 'secondary'
+                  const name = id === 'googleai' ? 'Google AI' : id === 'grok' ? 'Grok (xAI)' : id.charAt(0).toUpperCase() + id.slice(1)
 
-                return (
-                  <Badge key={id} variant={variant}>
-                    {name}: {label}
-                  </Badge>
-                )
-              })}
-            </div>
-          </div>
+                  return (
+                    <Badge key={id} variant={variant}>
+                      {name}: {label}
+                    </Badge>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </CardContent>
       </Card>
     </div>
