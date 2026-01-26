@@ -11,18 +11,63 @@ import { signIn, signOut, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Github, Mail, Lock, User } from 'lucide-react'
 
+type SignInErrors = {
+  name?: string
+  email?: string
+  password?: string
+}
+
 export default function SignInPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<SignInErrors>({})
   const { toast } = useToast()
   const router = useRouter()
   const { data: session } = useSession()
 
+  const clearFieldError = (field: keyof SignInErrors, value: string) => {
+    if (!fieldErrors[field]) {
+      return
+    }
+
+    if (!value.trim()) {
+      return
+    }
+
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }))
+  }
+
+  const validateFields = () => {
+    const nextErrors: SignInErrors = {}
+
+    if (isSignUp && !name.trim()) {
+      nextErrors.name = 'Full name is required.'
+    }
+
+    if (!email.trim()) {
+      nextErrors.email = 'Email is required.'
+    }
+
+    if (!password.trim()) {
+      nextErrors.password = 'Password is required.'
+    }
+
+    return nextErrors
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const nextErrors = validateFields()
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors)
+      return
+    }
+
+    setFieldErrors({})
     setLoading(true)
 
     try {
@@ -130,7 +175,7 @@ export default function SignInPage() {
               : 'Enter your credentials to access your account'}
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <CardContent className="space-y-4">
             {isSignUp && (
               <div className="space-y-2">
@@ -142,11 +187,22 @@ export default function SignInPage() {
                     type="text"
                     placeholder="John Doe"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setName(value)
+                      clearFieldError('name', value)
+                    }}
                     required={isSignUp}
                     className="pl-10"
+                    aria-invalid={Boolean(fieldErrors.name)}
+                    aria-describedby={fieldErrors.name ? 'name-error' : undefined}
                   />
                 </div>
+                {fieldErrors.name && (
+                  <p id="name-error" className="text-xs text-destructive">
+                    {fieldErrors.name}
+                  </p>
+                )}
               </div>
             )}
             
@@ -159,11 +215,22 @@ export default function SignInPage() {
                   type="email"
                   placeholder="name@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setEmail(value)
+                    clearFieldError('email', value)
+                  }}
                   required
                   className="pl-10"
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  aria-describedby={fieldErrors.email ? 'email-error' : undefined}
                 />
               </div>
+              {fieldErrors.email && (
+                <p id="email-error" className="text-xs text-destructive">
+                  {fieldErrors.email}
+                </p>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -175,11 +242,22 @@ export default function SignInPage() {
                   type="password"
                   placeholder="••••••••"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setPassword(value)
+                    clearFieldError('password', value)
+                  }}
                   required
                   className="pl-10"
+                  aria-invalid={Boolean(fieldErrors.password)}
+                  aria-describedby={fieldErrors.password ? 'password-error' : undefined}
                 />
               </div>
+              {fieldErrors.password && (
+                <p id="password-error" className="text-xs text-destructive">
+                  {fieldErrors.password}
+                </p>
+              )}
             </div>
           </CardContent>
           
@@ -243,7 +321,10 @@ export default function SignInPage() {
                   Already have an account?{' '}
                   <button
                     type="button"
-                    onClick={() => setIsSignUp(false)}
+                    onClick={() => {
+                      setIsSignUp(false)
+                      setFieldErrors({})
+                    }}
                     className="text-primary hover:underline"
                   >
                     Sign in
@@ -254,7 +335,10 @@ export default function SignInPage() {
                   Don&apos;t have an account?{' '}
                   <button
                     type="button"
-                    onClick={() => setIsSignUp(true)}
+                    onClick={() => {
+                      setIsSignUp(true)
+                      setFieldErrors({})
+                    }}
                     className="text-primary hover:underline"
                   >
                     Sign up

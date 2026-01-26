@@ -41,7 +41,6 @@ export default function SystemStatusPage() {
     const totalChecks = 6
 
     // Check 1: API connectivity
-    await new Promise(resolve => setTimeout(resolve, 500)) // Simulate API check
     newChecks.push({
       id: 'api',
       name: 'API Server',
@@ -54,7 +53,6 @@ export default function SystemStatusPage() {
     setOverallProgress(Math.round((completedChecks / totalChecks) * 100))
     
     // Check 2: Database connection
-    await new Promise(resolve => setTimeout(resolve, 500))
     newChecks.push({
       id: 'database',
       name: 'Database',
@@ -67,7 +65,6 @@ export default function SystemStatusPage() {
     setOverallProgress(Math.round((completedChecks / totalChecks) * 100))
     
     // Check 3: Authentication system
-    await new Promise(resolve => setTimeout(resolve, 500))
     newChecks.push({
       id: 'auth',
       name: 'Authentication',
@@ -80,7 +77,6 @@ export default function SystemStatusPage() {
     setOverallProgress(Math.round((completedChecks / totalChecks) * 100))
     
     // Check 4: Storage system
-    await new Promise(resolve => setTimeout(resolve, 500))
     newChecks.push({
       id: 'storage',
       name: 'Storage',
@@ -93,7 +89,6 @@ export default function SystemStatusPage() {
     setOverallProgress(Math.round((completedChecks / totalChecks) * 100))
     
     // Check 5: Rate limiting
-    await new Promise(resolve => setTimeout(resolve, 500))
     newChecks.push({
       id: 'rate-limit',
       name: 'Rate Limiting',
@@ -106,7 +101,6 @@ export default function SystemStatusPage() {
     setOverallProgress(Math.round((completedChecks / totalChecks) * 100))
     
     // Check 6: Security
-    await new Promise(resolve => setTimeout(resolve, 500))
     newChecks.push({
       id: 'security',
       name: 'Security',

@@ -20,6 +20,11 @@ interface Persona {
   updatedAt: Date;
 }
 
+type PersonaFormErrors = {
+  title?: string;
+  prompt?: string;
+};
+
 export default function PersonasPage() {
   const [personas, setPersonas] = useState<Persona[]>([])
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null)
@@ -31,7 +36,34 @@ export default function PersonasPage() {
     createdAt: new Date(),
     updatedAt: new Date()
   })
+  const [formErrors, setFormErrors] = useState<PersonaFormErrors>({})
   const { toast } = useToast()
+
+  const clearFormError = (field: keyof PersonaFormErrors, value: string) => {
+    if (!formErrors[field]) {
+      return
+    }
+
+    if (!value.trim()) {
+      return
+    }
+
+    setFormErrors((prev) => ({ ...prev, [field]: undefined }))
+  }
+
+  const validateForm = () => {
+    const nextErrors: PersonaFormErrors = {}
+
+    if (!formData.title.trim()) {
+      nextErrors.title = 'Title is required.'
+    }
+
+    if (!formData.prompt.trim()) {
+      nextErrors.prompt = 'System prompt is required.'
+    }
+
+    return nextErrors
+  }
 
   const loadPersonas = useCallback(() => {
     try {
@@ -104,6 +136,14 @@ export default function PersonasPage() {
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+
+    const nextErrors = validateForm()
+    if (Object.keys(nextErrors).length > 0) {
+      setFormErrors(nextErrors)
+      return
+    }
+
+    setFormErrors({})
     
     if (editingPersona) {
       // Update existing persona
@@ -133,6 +173,7 @@ export default function PersonasPage() {
   }
 
   const handleEdit = (persona: Persona) => {
+    setFormErrors({})
     setEditingPersona(persona)
     setFormData({
       title: persona.title,
@@ -162,6 +203,7 @@ export default function PersonasPage() {
       createdAt: new Date(),
       updatedAt: new Date()
     })
+    setFormErrors({})
   }
 
   const openCreateDialog = () => {
@@ -198,16 +240,27 @@ export default function PersonasPage() {
               </DialogDescription>
             </DialogHeader>
             
-            <form onSubmit={handleFormSubmit} className="space-y-4">
+            <form onSubmit={handleFormSubmit} className="space-y-4" noValidate>
               <div className="space-y-2">
                 <label htmlFor="title" className="text-sm font-medium">Title</label>
                 <Input
                   id="title"
                   value={formData.title}
-                  onChange={(e) => setFormData({...formData, title: e.target.value})}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData((prev) => ({ ...prev, title: value }))
+                    clearFormError('title', value)
+                  }}
                   placeholder="Persona title"
                   required
+                  aria-invalid={Boolean(formErrors.title)}
+                  aria-describedby={formErrors.title ? 'persona-title-error' : undefined}
                 />
+                {formErrors.title && (
+                  <p id="persona-title-error" className="text-xs text-destructive">
+                    {formErrors.title}
+                  </p>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -215,7 +268,10 @@ export default function PersonasPage() {
                 <Input
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData((prev) => ({ ...prev, description: value }))
+                  }}
                   placeholder="Brief description of the persona"
                 />
               </div>
@@ -225,11 +281,22 @@ export default function PersonasPage() {
                 <Textarea
                   id="prompt"
                   value={formData.prompt}
-                  onChange={(e) => setFormData({...formData, prompt: e.target.value})}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData((prev) => ({ ...prev, prompt: value }))
+                    clearFormError('prompt', value)
+                  }}
                   placeholder="Enter the system prompt that defines the persona's behavior..."
                   rows={8}
                   required
+                  aria-invalid={Boolean(formErrors.prompt)}
+                  aria-describedby={formErrors.prompt ? 'persona-prompt-error' : undefined}
                 />
+                {formErrors.prompt && (
+                  <p id="persona-prompt-error" className="text-xs text-destructive">
+                    {formErrors.prompt}
+                  </p>
+                )}
               </div>
               
               <div className="flex justify-end space-x-2 pt-4">
