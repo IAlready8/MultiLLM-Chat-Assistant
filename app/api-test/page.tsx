@@ -56,9 +56,7 @@ export default function ApiTestPage() {
       }
 
       // This would call the actual API in a real implementation
-      // For now, we'll simulate a response
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
+      // For now, we'll simulate a response without an artificial delay.
       setResponse(`This is a simulated response from ${provider} using model ${model}. You asked: "${prompt}"`)
       setProviderStatus(prev => ({ ...prev, [provider]: 'connected' }))
 

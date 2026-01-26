@@ -50,9 +50,7 @@ export default function AnalyticsPage() {
   const loadAnalyticsData = useCallback(async () => {
     setLoading(true)
     try {
-      // Simulate API call - in real implementation this would come from the backend
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
+      // Simulated data generation (no artificial delay)
       // Mock data based on timeframe
       const mockProviderData: ProviderUsage[] = [
         { provider: 'OpenAI', requests: 1250, tokens: 45000, errors: 3, avgResponseTime: 850 },
