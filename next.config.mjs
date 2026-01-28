@@ -18,11 +18,6 @@ const nextConfig = {
 
   trailingSlash: false,
 
-  // Optimize package imports for better tree shaking
-  experimental: {
-    optimizePackageImports: ['lucide-react', 'recharts', 'date-fns'],
-  },
-
   // Optimize bundle
   webpack: (config, { dev }) => {
     if (!dev) {
