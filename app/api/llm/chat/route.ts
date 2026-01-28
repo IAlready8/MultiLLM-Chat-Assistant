@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { errorManager, createErrorContext, LLMProviderError, NotImplementedError } from '@/lib/error-system';
-import { decryptApiKey } from '@/lib/crypto';
+import { getUserApiKey } from '@/lib/api-key-service';
 
 // ===== Grok (X.AI) Provider Logic =====
 async function chatGrok(
@@ -431,11 +431,14 @@ export async function POST(req: NextRequest) {
         }
 
         const providerConfig = await prisma.providerConfig.findFirst({ where: { userId, provider } });
-        if (!providerConfig?.apiKey) {
-            return new NextResponse(JSON.stringify({ error: `API key for ${provider} not configured` }), { status: 400 });
+        if (!providerConfig) {
+            return new NextResponse(JSON.stringify({ error: `Provider ${provider} not configured` }), { status: 400 });
         }
 
-        const apiKey = decryptApiKey(providerConfig.apiKey);
+        const apiKey = await getUserApiKey(userId, provider);
+        if (!apiKey) {
+            return new NextResponse(JSON.stringify({ error: `Failed to retrieve API key for ${provider}` }), { status: 500 });
+        }
         const requestPayload = { messages, model, temperature, max_tokens, userId };
         // Parse settings JSON for baseUrl if available
         const settings = providerConfig.settings ? JSON.parse(providerConfig.settings) : {};

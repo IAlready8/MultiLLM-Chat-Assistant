@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server'
 import { streamChatMessage } from '@/services/api-service'
 import { ProviderConfig } from '@/lib/config-schemas'
+import { auth } from '@/lib/auth'
+import { configManager } from '@/lib/config-manager'
 
 interface LLMStreamRequest {
   provider: string;
@@ -68,17 +70,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get provider config
-    let providerConfig: ProviderConfig | null = null
-    try {
-      const storedConfigs = localStorage.getItem('providerConfigs')
-      if (storedConfigs) {
-        const configs = JSON.parse(storedConfigs)
-        providerConfig = configs[provider]
-      }
-    } catch (e) {
-      console.error('Failed to get provider config:', e)
+    // Get authenticated user
+    const session = await auth()
+    if (!session?.user?.id) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      )
     }
+
+    // Get provider config from server-side cache/database
+    const providerConfig = await configManager.getProviderConfig(session.user.id, provider)
 
     if (!providerConfig || !providerConfig.apiKey) {
       return new Response(
@@ -131,10 +133,10 @@ export async function POST(request: NextRequest) {
         await writeEvent({ type: 'done' })
       } catch (error: any) {
         // Write error event if something goes wrong
-        await writeEvent({ 
-          type: 'error', 
+        await writeEvent({
+          type: 'error',
           error: error.message || 'Streaming error occurred',
-          details: error.stack
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         })
       } finally {
         // Close the writable stream
@@ -155,11 +157,11 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Streaming API error:', error)
-    
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: error.message || 'Internal server error',
-        type: error.constructor?.name
+        ...(process.env.NODE_ENV === 'development' && { type: error.constructor?.name })
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )

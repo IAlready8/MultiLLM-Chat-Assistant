@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
-import { configManager } from '@/lib/config-manager'
+import { storeUserApiKey, getUserProviderConfigs, deleteUserProviderConfig } from '@/lib/api-key-service'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
@@ -10,8 +10,8 @@ export async function GET() {
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const configs = await configManager.getAllProviderConfigs(user.id)
-  const configuredProviders = Object.keys(configs)
+  const configs = await getUserProviderConfigs(user.id)
+  const configuredProviders = configs.map(c => c.provider)
 
   const response = NextResponse.json({ configuredProviders })
   response.headers.set('Cache-Control', 'no-store')
@@ -32,42 +32,43 @@ export async function POST(request: NextRequest) {
   }
 
   const provider = normalizeProvider(providerRaw)
-  const allowedProviders = new Set(configManager.getAvailableProviders())
-  if (!allowedProviders.has(provider)) {
+
+  // Validate provider
+  if (!defaultProviderModels[provider as keyof typeof defaultProviderModels]) {
     return NextResponse.json({ error: `Unsupported provider: ${provider}` }, { status: 400 })
   }
 
   const apiKey = typeof apiKeyRaw === 'string' ? apiKeyRaw.trim() : ''
   if (!apiKey) {
+    // Delete provider configuration if no API key provided
     try {
-      await configManager.deleteProviderConfig(user.id, provider)
+      await deleteUserProviderConfig(user.id, provider)
     } catch (error) {
       console.warn(`Failed to delete provider config for ${provider}:`, error)
     }
     return NextResponse.json({ success: true })
   }
 
-  const models =
-    defaultProviderModels[provider as keyof typeof defaultProviderModels] || []
-  const rateLimits =
-    defaultRateLimits[provider as keyof typeof defaultRateLimits] || {
-      requests: 60,
-      window: 60000,
-    }
-
-  const updateResult = await configManager.updateProviderConfig(user.id, provider, {
-    apiKey,
-    models,
-    rateLimits,
-    isActive: true,
-  })
-
-  if (!updateResult.success) {
-    return NextResponse.json(
-      { error: 'Invalid provider configuration', details: updateResult.errors },
-      { status: 400 }
-    )
+  // Store API key with settings
+  const models = defaultProviderModels[provider as keyof typeof defaultProviderModels] || []
+  const rateLimits = defaultRateLimits[provider as keyof typeof defaultRateLimits] || {
+    requests: 60,
+    window: 60000,
   }
 
-  return NextResponse.json({ success: true })
+  const settings = {
+    models,
+    rateLimits
+  }
+
+  try {
+    await storeUserApiKey(user.id, provider, apiKey, settings)
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Failed to store API key:', error)
+    return NextResponse.json(
+      { error: 'Failed to store API key securely' },
+      { status: 500 }
+    )
+  }
 }

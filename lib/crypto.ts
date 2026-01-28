@@ -195,46 +195,5 @@ export async function decrypt(encryptedText: string, key: string): Promise<strin
   }
 }
 
-// Simplified API for components
-const DEFAULT_KEY = 'default-encryption-key-12345678901234567890123456789012';
-
-export function encryptApiKey(apiKey: string): string {
-  if (!apiKey) return '';
-  
-  try {
-    // Simple XOR encryption for demo purposes
-    const encrypted = Array.from(apiKey)
-      .map((char, i) => 
-        String.fromCharCode(char.charCodeAt(0) ^ DEFAULT_KEY.charCodeAt(i % DEFAULT_KEY.length))
-      )
-      .join('');
-    
-    return isServer ? Buffer.from(encrypted).toString('base64') : btoa(encrypted);
-  } catch (error) {
-    console.error('Encryption error:', error);
-    return apiKey;
-  }
-}
-
-export function decryptApiKey(encryptedApiKey: string): string {
-  if (!encryptedApiKey) return '';
-  
-  try {
-    // Check if it's already decrypted (plain text)
-    if (!isValidBase64(encryptedApiKey)) {
-      return encryptedApiKey;
-    }
-    
-    const encrypted = isServer ? Buffer.from(encryptedApiKey, 'base64').toString() : atob(encryptedApiKey);
-    const decrypted = Array.from(encrypted)
-      .map((char, i) => 
-        String.fromCharCode(char.charCodeAt(0) ^ DEFAULT_KEY.charCodeAt(i % DEFAULT_KEY.length))
-      )
-      .join('');
-    
-    return decrypted;
-  } catch (error) {
-    console.error('Decryption error:', error);
-    return encryptedApiKey;
-  }
-}
+// REMOVED: Insecure XOR-based encryptApiKey and decryptApiKey functions
+// All encryption now uses AES-256-GCM via aesGcmEncrypt/aesGcmDecrypt

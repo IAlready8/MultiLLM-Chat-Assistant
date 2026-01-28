@@ -111,22 +111,22 @@ const buildProviderMessages = (
   agent: AgentConfig,
   transcript: RoundtableMessage[],
   goal: string
-) => {
-  const history = transcript
+): Array<{ role: 'user' | 'assistant' | 'system'; content: string }> => {
+  const history: Array<{ role: 'user' | 'assistant'; content: string }> = transcript
     .filter(message => message.kind === 'agent')
     .map(message => ({
-      role: message.agentId === agent.id ? 'assistant' : 'user',
+      role: (message.agentId === agent.id ? 'assistant' : 'user') as 'user' | 'assistant',
       content: `${message.agentName ?? 'Agent'}: ${message.content}`
     }))
 
   if (history.length === 0) {
     history.push({
-      role: 'user',
+      role: 'user' as const,
       content: `Goal: ${goal}\nStart the discussion.`
     })
   }
 
-  return [{ role: 'system', content: buildSystemPrompt(agent, goal) }, ...history]
+  return [{ role: 'system' as const, content: buildSystemPrompt(agent, goal) }, ...history]
 }
 
 const streamProviderResponse = async (

@@ -1,6 +1,12 @@
 import { NextRequest } from 'next/server'
-import { decryptApiKey, encryptApiKey } from '@/lib/crypto'
+import { aesGcmEncrypt, aesGcmDecrypt, deriveKey } from '@/lib/crypto'
 import { ProviderConfig } from '@/lib/config-schemas'
+
+// Get encryption key for API keys
+async function getEncryptionKey() {
+  const seed = process.env.API_KEY_ENCRYPTION_SEED || 'default-test-seed-12345678'
+  return await deriveKey(seed)
+}
 
 // Mock storage for serverless environment (in production, use Vercel KV, Redis, or database)
 const mockStorage = new Map<string, any>()
@@ -44,7 +50,7 @@ export async function GET() {
   try {
     // Get stored configs from mock storage
     const storedConfigs = mockStorage.get('providerConfigs') || {}
-    
+
     if (Object.keys(storedConfigs).length === 0) {
       return new Response(
         JSON.stringify({ configs: {} }),
@@ -52,16 +58,17 @@ export async function GET() {
       )
     }
 
+    const encryptionKey = await getEncryptionKey()
+
     // Decrypt API keys for response
-    const decryptedConfigs = Object.entries(storedConfigs).reduce((acc, [provider, config]: [string, any]) => {
-      return {
-        ...acc,
-        [provider]: {
-          ...config,
-          apiKey: config.apiKey ? decryptApiKey(config.apiKey) : ''
-        }
+    const decryptedConfigs: Record<string, any> = {}
+    for (const [provider, config] of Object.entries(storedConfigs)) {
+      const configData = config as any
+      decryptedConfigs[provider] = {
+        ...configData,
+        apiKey: configData.apiKey ? await aesGcmDecrypt(encryptionKey, configData.apiKey) : ''
       }
-    }, {})
+    }
 
     return new Response(
       JSON.stringify({ configs: decryptedConfigs }),
@@ -88,10 +95,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const encryptionKey = await getEncryptionKey()
+
     // Encrypt API key before storing
     const configToStore = {
       ...config,
-      apiKey: config.apiKey ? encryptApiKey(config.apiKey) : ''
+      apiKey: config.apiKey ? await aesGcmEncrypt(encryptionKey, config.apiKey) : ''
     }
 
     // Get existing configs

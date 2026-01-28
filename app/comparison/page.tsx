@@ -20,8 +20,7 @@ interface ModelComparison {
 export default function ComparisonPage() {
   const [comparisonData, setComparisonData] = useState<ModelComparison[]>([])
   const [activeTab, setActiveTab] = useState('models')
-  const { conversationList } = useConversation()
-  
+
   // Mock data for comparison - this would come from your analytics API
   useEffect(() => {
     // This would typically fetch from your analytics endpoint

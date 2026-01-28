@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
-import { encryptApiKey, decryptApiKey } from '@/lib/crypto'
+import { aesGcmEncrypt, aesGcmDecrypt, deriveKey } from '@/lib/crypto'
 import {
   configSchema,
   providerConfigSchema,
@@ -12,6 +12,15 @@ import {
   defaultRateLimits,
 } from './config-schemas'
 import { v4 as uuidv4 } from 'uuid'
+
+// Get encryption key for API keys
+async function getEncryptionKey() {
+  const seed = process.env.API_KEY_ENCRYPTION_SEED
+  if (!seed) {
+    throw new Error('API_KEY_ENCRYPTION_SEED environment variable is required')
+  }
+  return await deriveKey(seed)
+}
 
 export class ConfigurationError extends Error {
   constructor(message: string, public code: string, public details?: any) {
@@ -119,7 +128,8 @@ export class ConfigurationManager {
         return null
       }
 
-      const decryptedApiKey = config.apiKey ? await decryptApiKey(config.apiKey) : ''
+      const encryptionKey = await getEncryptionKey()
+      const decryptedApiKey = config.apiKey ? await aesGcmDecrypt(encryptionKey, config.apiKey) : ''
       const settings = config.settings ? JSON.parse(config.settings) : {}
 
       const providerConfig: ProviderConfig = {
@@ -154,7 +164,8 @@ export class ConfigurationManager {
       }
 
       const validatedConfig = validation.data!
-      const encryptedApiKey = await encryptApiKey(validatedConfig.apiKey)
+      const encryptionKey = await getEncryptionKey()
+      const encryptedApiKey = await aesGcmEncrypt(encryptionKey, validatedConfig.apiKey)
 
       // Prepare settings object
       const settings = {
@@ -277,9 +288,10 @@ export class ConfigurationManager {
       })
 
       const result: Record<string, ProviderConfig> = {}
+      const encryptionKey = await getEncryptionKey()
 
       for (const config of configs) {
-        const decryptedApiKey = config.apiKey ? await decryptApiKey(config.apiKey) : ''
+        const decryptedApiKey = config.apiKey ? await aesGcmDecrypt(encryptionKey, config.apiKey) : ''
         const settings = config.settings ? JSON.parse(config.settings) : {}
 
         result[config.provider] = {
