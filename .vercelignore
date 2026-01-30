@@ -1,0 +1,28 @@
+# Test files
+test/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/
+coverage/
+
+# Development
+.env.local
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+
+# Documentation
+README.md
+CLAUDE.md
+*.md
+docs/
+
+# Git
+.git/
+.gitignore
+
+# Node modules (handled by Vercel)
+node_modules/
