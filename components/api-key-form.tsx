@@ -115,7 +115,22 @@ export default function ApiKeyForm() {
       });
 
       if (!saveResponse.ok) {
-        throw new Error('Failed to save API key.');
+        if (saveResponse.status === 401 || saveResponse.status === 403) {
+          toast({
+            title: "Sign in required",
+            description: "Please sign in again to save API keys.",
+            variant: "destructive",
+          });
+          return;
+        }
+        let errorMessage = 'Failed to save API key.';
+        try {
+          const errorBody = await saveResponse.json();
+          if (errorBody?.error) {
+            errorMessage = errorBody.error;
+          }
+        } catch {}
+        throw new Error(errorMessage);
       }
 
       if (verificationWarning) {
