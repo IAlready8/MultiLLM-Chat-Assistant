@@ -1,8 +1,7 @@
 import { auth } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { errorManager, createErrorContext, LLMProviderError, NotImplementedError } from '@/lib/error-system';
-import { getUserApiKey } from '@/lib/api-key-service';
+import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service';
 
 // ===== Grok (X.AI) Provider Logic =====
 async function chatGrok(
@@ -430,7 +429,8 @@ export async function POST(req: NextRequest) {
             return new NextResponse(JSON.stringify({ error: `Provider '${provider}' not supported` }), { status: 400 });
         }
 
-        const providerConfig = await prisma.providerConfig.findFirst({ where: { userId, provider } });
+        const providerConfigs = await getUserProviderConfigs(userId);
+        const providerConfig = providerConfigs.find(config => config.provider === provider);
         if (!providerConfig) {
             return new NextResponse(JSON.stringify({ error: `Provider ${provider} not configured` }), { status: 400 });
         }
@@ -441,7 +441,7 @@ export async function POST(req: NextRequest) {
         }
         const requestPayload = { messages, model, temperature, max_tokens, userId };
         // Parse settings JSON for baseUrl if available
-        const settings = providerConfig.settings ? JSON.parse(providerConfig.settings) : {};
+        const settings = providerConfig.settings || {};
         const defaultBaseUrl = provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : undefined;
         const baseUrl = settings.baseUrl || defaultBaseUrl;
         const extraHeaders: Record<string, string> = {};

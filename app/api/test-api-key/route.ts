@@ -89,7 +89,10 @@ export async function POST(request: NextRequest) {
 
   const formatError = validateApiKeyFormat(provider, apiKey)
   if (formatError) {
-    return NextResponse.json({ valid: false, message: formatError }, { status: 200 })
+    return NextResponse.json(
+      { valid: false, message: formatError, reason: 'format' },
+      { status: 200 }
+    )
   }
 
   try {
@@ -103,21 +106,34 @@ export async function POST(request: NextRequest) {
     }
 
     if (response.status === 401 || response.status === 403) {
-      return NextResponse.json({ valid: false, message: 'Provider rejected this API key.' }, { status: 200 })
+      return NextResponse.json(
+        { valid: false, message: 'Provider rejected this API key.', reason: 'rejected' },
+        { status: 200 }
+      )
     }
 
     if (response.status === 429) {
-      return NextResponse.json({ valid: false, message: 'Rate limited while verifying key. Try again shortly.' }, { status: 200 })
+      return NextResponse.json(
+        { valid: false, message: 'Rate limited while verifying key. Try again shortly.', reason: 'unverified' },
+        { status: 200 }
+      )
+    }
+
+    if (response.status >= 500) {
+      return NextResponse.json(
+        { valid: false, message: 'Provider error while verifying key. Try again later.', reason: 'unverified' },
+        { status: 200 }
+      )
     }
 
     return NextResponse.json(
-      { valid: false, message: `Provider responded with HTTP ${response.status}.` },
+      { valid: false, message: `Provider responded with HTTP ${response.status}.`, reason: 'provider_error' },
       { status: 200 }
     )
   } catch (error) {
     console.error('API key verification error:', error)
     return NextResponse.json(
-      { valid: false, message: 'Failed to reach provider to verify key.' },
+      { valid: false, message: 'Failed to reach provider to verify key.', reason: 'unverified' },
       { status: 200 }
     )
   }

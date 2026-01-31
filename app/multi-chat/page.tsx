@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,6 +56,7 @@ export default function MultiChatPage() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const { toast } = useToast()
+  const { status } = useSession()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isBusy = chatState.isLoading || isLoadingHistory
   const hasMessages = chatState.messages.length > 0
@@ -131,12 +133,19 @@ export default function MultiChatPage() {
   }, [toast])
 
   useEffect(() => {
+    if (status !== 'authenticated') {
+      if (status === 'unauthenticated') {
+        setIsLoadingHistory(false)
+      }
+      return
+    }
+
     const load = async () => {
       await loadConfiguredProviders()
       await loadLatestConversation()
     }
     void load()
-  }, [loadConfiguredProviders, loadLatestConversation])
+  }, [loadConfiguredProviders, loadLatestConversation, status])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })

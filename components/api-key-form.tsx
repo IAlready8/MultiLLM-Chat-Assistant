@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,7 @@ const providers = [
 
 export default function ApiKeyForm() {
   const { toast } = useToast();
+  const { status } = useSession();
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [configuredProviders, setConfiguredProviders] = useState<string[]>([]);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
@@ -41,10 +43,20 @@ export default function ApiKeyForm() {
   }, [toast]);
 
   useEffect(() => {
+    if (status !== "authenticated") return;
     fetchConfiguredProviders();
-  }, [fetchConfiguredProviders]);
+  }, [fetchConfiguredProviders, status]);
 
   const handleSaveKey = async (providerId: string) => {
+    if (status !== "authenticated") {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to save API keys.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const apiKey = apiKeys[providerId];
     if (!apiKey) {
       toast({
@@ -57,22 +69,42 @@ export default function ApiKeyForm() {
 
     setLoading(prev => ({ ...prev, [providerId]: true }));
     try {
-      // First, optionally test the key to provide feedback to the user
-      const testResponse = await fetch('/api/test-api-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: providerId, apiKey: apiKey }),
-      });
-
-      const testResult = await testResponse.json();
-      if (!testResult.valid) {
-        toast({
-          title: "Invalid API Key",
-          description: testResult.message || "This API key is not valid.",
-          variant: "destructive",
+      let verificationWarning: string | null = null;
+      try {
+        // First, optionally test the key to provide feedback to the user
+        const testResponse = await fetch('/api/test-api-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: providerId, apiKey: apiKey }),
         });
-        setLoading(prev => ({ ...prev, [providerId]: false }));
-        return;
+
+        if (!testResponse.ok) {
+          if (testResponse.status === 401 || testResponse.status === 403) {
+            toast({
+              title: "Sign in required",
+              description: "Please sign in to verify and save API keys.",
+              variant: "destructive",
+            });
+            return;
+          }
+          verificationWarning = "Key verification service unavailable. Saving without verification.";
+        } else {
+          const testResult = await testResponse.json();
+          if (!testResult.valid) {
+            if (testResult.reason === "unverified" || testResult.reason === "provider_error") {
+              verificationWarning = testResult.message || "Unable to verify key right now.";
+            } else {
+              toast({
+                title: "Invalid API Key",
+                description: testResult.message || "This API key is not valid.",
+                variant: "destructive",
+              });
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        verificationWarning = "Could not verify this key right now. Saving without verification.";
       }
 
       // If the test passes, save the key to the secure backend
@@ -86,10 +118,17 @@ export default function ApiKeyForm() {
         throw new Error('Failed to save API key.');
       }
 
-      toast({
-        title: "Success",
-        description: `API key for ${providers.find(p => p.id === providerId)?.name} saved successfully.`,
-      });
+      if (verificationWarning) {
+        toast({
+          title: "Saved (verification skipped)",
+          description: verificationWarning,
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `API key for ${providers.find(p => p.id === providerId)?.name} saved successfully.`,
+        });
+      }
       setConfiguredProviders(prev => [...new Set([...prev, providerId])]);
       setApiKeys(prev => ({ ...prev, [providerId]: "" })); // Clear input field after save
 
@@ -106,6 +145,15 @@ export default function ApiKeyForm() {
   };
 
   const handleClearKey = async (providerId: string) => {
+    if (status !== "authenticated") {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to update API keys.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(prev => ({ ...prev, [providerId]: true }));
     try {
       const response = await fetch('/api/config', {
