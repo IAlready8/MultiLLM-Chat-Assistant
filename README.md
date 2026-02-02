@@ -4,7 +4,7 @@
 ![Last Commit](https://img.shields.io/github/last-commit/IAlready8/MultiLLM-Chat-Assistant/main)
 ![Issues](https://img.shields.io/github/issues/IAlready8/MultiLLM-Chat-Assistant)
 ![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js&logoColor=white)
-![Prisma](https://img.shields.io/badge/Prisma-5-2D3748?logo=prisma&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 
 Multi-LLM platform with chat, personas, analytics, model comparison, pipelines, and AI Roundtable (AI-to-AI conversations). Built with Next.js 14 (App Router), TypeScript, Prisma, NextAuth, Tailwind + Radix UI, and Vitest.
@@ -48,6 +48,14 @@ See `ARCHITECTURE.md` and `PYTHON_INTEGRATION.md` for full details.
 - API/Components Guide: `DOCUMENTATION.md`
 - Status: `STATUS_UPDATE.md`
 - Agents/Contrib Guide: `init/AGENTS.md`
+
+## Where To Look For Structure/Recovery Docs
+- `ARCHITECTURE.md`: System overview, data flow, and integration points.
+- `DESIGN_SYSTEM.md`: UI tokens, component patterns, and styling conventions.
+- `DOCUMENTATION.md`: API/services/component reference and usage examples.
+- `ERROR_FIXES_SUMMARY.md`: Historical fixes and known pitfalls.
+- `STATUS_UPDATE.md`: Current state and notable changes.
+- `CHANGELOG.md`: Timeline of noteworthy changes.
 
 ## Database
 - Prisma + PostgreSQL (schema in `prisma/schema.prisma`)

@@ -10,11 +10,11 @@ This document outlines the design system for the MultiLLM Chat Assistant, built 
 - **Next Themes**: Theme switching capabilities
 
 ## Component Library
-Located in `/components/ui/`, containing 17+ reusable components:
-- button.tsx, card.tsx, dialog.tsx, input.tsx
-- alert-dialog.tsx, dropdown-menu.tsx, select.tsx, tabs.tsx
-- avatar.tsx, badge.tsx, slider.tsx, toast.tsx
-- And more including chart.tsx
+Located in `/components/ui/`, containing reusable components such as:
+- alert.tsx, avatar.tsx, badge.tsx, button.tsx, card.tsx
+- dialog.tsx, dropdown-menu.tsx, input.tsx, label.tsx, progress.tsx
+- sheet.tsx, skeleton.tsx, tabs.tsx, textarea.tsx
+- toaster.tsx, use-toast.tsx
 
 ## Design Tokens
 Defined in `tailwind.config.ts` and `app/globals.css`:

@@ -43,9 +43,9 @@ export default function Home() {
             <CardDescription>Begin a new conversation with your chosen LLM.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow flex items-end">
-            <Link href="/multi-chat" passHref>
-              <Button className="w-full glass-button">Go to Multi-Chat</Button>
-            </Link>
+            <Button className="w-full glass-button" asChild>
+              <Link href="/multi-chat">Go to Multi-Chat</Link>
+            </Button>
           </CardContent>
         </Card>
 
@@ -62,9 +62,9 @@ export default function Home() {
             <CardDescription>Let multiple models debate a goal while you observe.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow flex items-end">
-            <Link href="/ai-roundtable" passHref>
-              <Button className="w-full glass-button">Open Roundtable</Button>
-            </Link>
+            <Button className="w-full glass-button" asChild>
+              <Link href="/ai-roundtable">Open Roundtable</Link>
+            </Button>
           </CardContent>
         </Card>
 
@@ -80,9 +80,9 @@ export default function Home() {
             <CardDescription>See your usage statistics and model comparisons.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow flex items-end">
-            <Link href="/analytics" passHref>
-              <Button className="w-full glass-button">View Analytics</Button>
-            </Link>
+            <Button className="w-full glass-button" asChild>
+              <Link href="/analytics">View Analytics</Link>
+            </Button>
           </CardContent>
         </Card>
 
@@ -98,9 +98,9 @@ export default function Home() {
             <CardDescription>Manage your API keys and application preferences.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow flex items-end">
-            <Link href="/settings" passHref>
-              <Button className="w-full glass-button">Go to Settings</Button>
-            </Link>
+            <Button className="w-full glass-button" asChild>
+              <Link href="/settings">Go to Settings</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

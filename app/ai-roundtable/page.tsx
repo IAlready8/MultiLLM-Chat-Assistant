@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -58,10 +58,13 @@ const pickDefaultModel = (provider: string, index: number) => {
   return models[0]
 }
 
-const buildAgentsForProviders = (providers: string[]) => {
+const buildAgentsForProviders = (
+  providers: string[],
+  buildId: (index: number) => string = () => generateId()
+) => {
   if (providers.length >= 2) {
     return providers.map((provider, index) => ({
-      id: generateId(),
+      id: buildId(index),
       name: `Agent ${index + 1}`,
       provider,
       model: pickDefaultModel(provider, 0),
@@ -72,7 +75,7 @@ const buildAgentsForProviders = (providers: string[]) => {
   if (providers.length === 1) {
     const provider = providers[0]
     return [0, 1].map(index => ({
-      id: generateId(),
+      id: buildId(index),
       name: `Agent ${index + 1}`,
       provider,
       model: pickDefaultModel(provider, index),
@@ -81,7 +84,7 @@ const buildAgentsForProviders = (providers: string[]) => {
   }
 
   return [0, 1].map(index => ({
-    id: generateId(),
+    id: buildId(index),
     name: `Agent ${index + 1}`,
     provider: 'openai',
     model: pickDefaultModel('openai', index),
@@ -192,10 +195,13 @@ const deriveConversationTitle = (goal: string) => {
 
 export default function AIRoundtablePage() {
   const { toast } = useToast()
+  const stableIdBase = useId()
   const [goal, setGoal] = useState('')
   const [maxTurns, setMaxTurns] = useState(6)
   const [messages, setMessages] = useState<RoundtableMessage[]>([])
-  const [agents, setAgents] = useState<AgentConfig[]>(() => buildAgentsForProviders([]))
+  const [agents, setAgents] = useState<AgentConfig[]>(() =>
+    buildAgentsForProviders([], (index) => `${stableIdBase}-${index + 1}`)
+  )
   const [isRunning, setIsRunning] = useState(false)
   const [configuredProviders, setConfiguredProviders] = useState<string[]>([])
   const [providersLoaded, setProvidersLoaded] = useState(false)
