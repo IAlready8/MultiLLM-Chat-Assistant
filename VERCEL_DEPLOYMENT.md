@@ -1,324 +1,75 @@
-# Vercel Deployment Guide for MultiLLM Chat Assistant
+# Vercel Deployment
 
-This document provides comprehensive instructions for deploying the MultiLLM Chat Assistant to Vercel, including setup, configuration, and troubleshooting.
-
-## Table of Contents
-1. [Prerequisites](#prerequisites)
-2. [Environment Variables](#environment-variables)
-3. [Vercel CLI Deployment](#vercel-cli-deployment)
-4. [GitHub Integration](#github-integration)
-5. [Build Configuration](#build-configuration)
-6. [Monitoring and Analytics](#monitoring-and-analytics)
-7. [Troubleshooting](#troubleshooting)
+This guide covers deploying the Next.js app to Vercel with the current repository configuration.
 
 ## Prerequisites
+- Vercel account
+- Project connected to this GitHub repository, or Vercel CLI (`npm i -g vercel`)
+- Node.js 20+ locally (for parity with CI/dev)
 
-- A Vercel account (sign up at [vercel.com](https://vercel.com))
-- Vercel CLI installed: `npm install -g vercel`
-- Node.js 18+ (recommended: 18.x or 20.x)
-- Git repository for the project
+## Build Configuration
+Repository already includes `vercel.json`:
+- `buildCommand`: `npm run build`
+- `installCommand`: `npm install`
+- `framework`: `nextjs`
 
-## Environment Variables
+No extra Vercel build command override is required.
 
-The application requires the following environment variables to be configured in your Vercel project:
+## Required Environment Variables
+Set these in Vercel Project Settings -> Environment Variables.
 
-### Required Variables
-```
-# Database URL (for production)
-DATABASE_URL="your_production_database_url"
+Required:
+- `NEXTAUTH_URL`
+- `NEXTAUTH_SECRET` (required in strict auth mode and recommended for all environments)
+- `API_KEY_ENCRYPTION_SEED`
 
-# Authentication secret
-NEXTAUTH_SECRET="your_nextauth_secret"
-NEXTAUTH_URL="https://your-deployment-url.vercel.app"
+Common optional:
+- `AUTH_REQUIRE_LOGIN`
+- `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
+- `DEMO_ACCOUNT_*`
+- `NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH`
+- `GUEST_USER_*`
+- `PYTHON_CORE_URL` (if using Python orchestration service)
+- `DATABASE_URL` (if you enable real DB-backed behavior)
 
-# Client-side storage secret (keep consistent across deploys)
-SECURE_STORAGE_SECRET="your_secure_storage_secret"
+Use `.env.example` as the source of truth for supported variables.
 
-# LLM Provider API Keys (optional, can be configured by users in-app)
-OPENAI_API_KEY="sk-your-openai-api-key"
-ANTHROPIC_API_KEY="your-anthropic-api-key"
-GOOGLE_AI_API_KEY="your-google-ai-api-key"
-OPENROUTER_API_KEY="your-openrouter-api-key"
+## Deploy via GitHub Integration
+1. Import the repository in Vercel.
+2. Set environment variables.
+3. Trigger a deployment from `main`.
+4. Confirm:
+   - Build succeeds
+   - `/api/auth/session` responds
+   - `/api/config` responds
 
-# Redis (optional, for caching)
-REDIS_URL="your_redis_url"
-```
-
-### Setting Environment Variables
-1. Go to your Vercel project dashboard
-2. Navigate to Settings → Environment Variables
-3. Add each variable with its appropriate value
-
-## Vercel CLI Deployment
-
-### 1. Install Vercel CLI
-```bash
-npm install -g vercel
-```
-
-### 2. Login to Vercel
+## Deploy via Vercel CLI
 ```bash
 vercel login
-```
-
-### 3. Deploy the Project
-From the project root directory, run:
-```bash
-vercel
-```
-
-### 4. Configure Deployment Settings
-When prompted:
-- Set up the project directory (default: current directory)
-- Choose your scope (team or personal account)
-- Set the project name (or use the default)
-- Do NOT automatically set up the domain
-- Do NOT link to Git repository (if you want to push manually first)
-
-### 5. Production Deploy
-```bash
+vercel link
 vercel --prod
 ```
 
-## GitHub Integration
-
-### Option 1: Automatic Deployment
-1. Push your code to a GitHub repository
-2. Go to [vercel.com](https://vercel.com) → Add New Project
-3. Select your GitHub repository
-4. Vercel will automatically detect this is a Next.js project
-5. Update the build settings if needed:
-
-**Build & Development Settings:**
-```
-Build Command: next build
-Development Command: next dev
-Install Command: npm install
-Output Directory: Leave blank
-```
-
-### Option 2: Vercel CLI Link
-```bash
-# Link your local project to Vercel
-vercel link
-
-# Deploy and automatically connect to GitHub
-vercel git link
-```
-
-## Build Configuration
-
-### vercel.json (Current)
-Your project already includes a `vercel.json` file configured for Next.js. This is the current configuration:
-
-```json
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next",
-      "config": {
-        "serverless": true
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/"
-    }
-  ]
-}
-```
-
-### Custom Configuration (Optional)
-If you need to customize your configuration, create or update `vercel.json`:
-
-```json
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next",
-      "config": {
-        "serverless": true
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/"
-    }
-  ]
-}
-```
-
-## Database Configuration
-
-### Prisma Setup
-The application uses Prisma for database management. For production deployments:
-
-1. **Using PostgreSQL:**
-   ```bash
-   # In your Vercel environment variables:
-   DATABASE_URL="postgresql://username:password@host:port/database_name"
-   ```
-
-2. **Running Migrations:**
-   Vercel does not run Prisma migrations by default. Run `npx prisma migrate deploy` in CI or before promoting a deployment.
-
-### Alternative: PlanetScale, Supabase, or other managed databases
-These are recommended for production deployments over local Postgres instances.
-
-## Monitoring and Analytics
-
-### Vercel Analytics
-Enable Vercel Analytics for performance monitoring:
-1. Go to your project settings
-2. Navigate to Analytics
-3. Enable Analytics
-
-### Environment-Specific Behavior
-- Development: Uses the `DATABASE_URL` you set locally
-- Preview: Uses the preview environment `DATABASE_URL`
-- Production: Uses the production `DATABASE_URL`
-
-## Performance Optimization
-
-### Image Optimization
-Vercel automatically optimizes images via the Next.js Image component. No additional configuration needed.
-
-### Caching
-- Static assets are cached by default
-- API routes can implement custom caching headers
-- Consider using Redis for session or data caching
-
-### Edge Functions
-Future optimization opportunity: Deploy API routes to the edge for better performance.
+## Notes on Current Runtime Behavior
+- This repository currently includes Prisma-stubbed data access with service-level in-memory fallbacks.
+- If you deploy exactly as-is, key/conversation fallback data is not durable across process restarts.
+- For durable storage, configure DB-backed data access and `DATABASE_URL`.
 
 ## Troubleshooting
+### Build fails with auth/env errors
+- Ensure `NEXTAUTH_URL` is set.
+- Ensure `NEXTAUTH_SECRET` is set, especially when strict auth is enabled.
+- Ensure `API_KEY_ENCRYPTION_SEED` is set.
 
-### Common Issues and Solutions
+### Orchestration endpoint returns 503
+- Set `PYTHON_CORE_URL` to a reachable FastAPI service.
+- Confirm sidecar health and network accessibility from Vercel runtime.
 
-#### 1. Build Failures
-Check the build logs in your Vercel dashboard for specific error messages. Common issues:
-- Missing environment variables
-- Version conflicts
-- Dependencies not properly installed
+### API config routes return empty/no providers
+- Expected when no provider keys have been saved for the current user/guest identity.
 
-#### 2. Database Connection Issues
-- Ensure DATABASE_URL is correctly set
-- For production, avoid local file databases; use PostgreSQL or another managed database
-- Check that your database allows connections from Vercel's deployment regions
-
-#### 3. Authentication Problems
-- Verify NEXTAUTH_URL matches your deployment URL
-- Ensure NEXTAUTH_SECRET is set and consistent
-
-#### 4. LLM API Connection Issues
-- API keys are stored in user's browser localStorage (encrypted)
-- Users need to configure their own API keys via the Settings page
-- The application handles rate limiting and connection pooling
-
-#### 5. API Routes Not Working
-The application has API routes in `app/api/`. Ensure:
-- Routes are properly defined using the Next.js App Router
-- CORS is properly configured for client-side requests
-- Rate limiting is appropriately implemented
-
-### Debugging Steps
-1. Check Vercel deployment logs
-2. Verify all environment variables are set
-3. Use Vercel's preview deployments for testing
-4. Test locally with `vercel dev`
-5. Monitor network requests in browser dev tools
-
-## Security Considerations
-
-### API Key Security
-- API keys are encrypted before storage in localStorage
-- Never expose backend API keys to the client
-- Use Vercel environment variables for backend keys only
-
-### Authentication
-- Uses NextAuth.js for authentication
-- Secure cookies for session management
-- HTTPS enforced by Vercel by default
-
-### Data Protection
-- End-to-end encryption for sensitive data
-- Regular security audits recommended
-- Follow OWASP security guidelines
-
-## Rollback and Versioning
-
-### Rolling Back Deployments
-1. Go to your Vercel dashboard
-2. Navigate to your project
-3. Select "Deployments"
-4. Click "Rollback" on a previous deployment
-
-### Preview Deployments
-Each git branch push creates a preview deployment with a unique URL, allowing safe testing of changes.
-
-## Performance Monitoring
-
-### Vercel Speed Insights
-Enable Speed Insights to monitor Core Web Vitals:
-```bash
-# Add to package.json
-npm install @vercel/analytics
-```
-
-Then use in your app:
-```javascript
-import { Analytics } from '@vercel/analytics/react';
-
-// In your layout or component
-<Analytics />
-```
-
-### Error Tracking
-Vercel provides built-in error monitoring in the deployment logs. For more advanced tracking, consider integrating with Sentry or similar services.
-
-## Scaling Considerations
-
-### Traffic Scaling
-- Vercel automatically scales serverless functions
-- Use Vercel's deployment regions closest to your users
-- Consider edge caching for static content
-
-### Database Scaling
-- Plan for database scaling with your chosen provider
-- Implement connection pooling
-- Use read replicas if needed
-
-## Maintenance and Updates
-
-### Regular Maintenance
-- Update dependencies regularly
-- Monitor for security vulnerabilities
-- Review and update environment variables as needed
-- Check billing and usage regularly
-
-### Updating the Application
-1. Make changes in your local environment
-2. Test thoroughly
-3. Push to your git repository
-4. Vercel automatically deploys (if integrated) or use `vercel --prod`
-5. Verify deployment in the Vercel dashboard
-
-## Conclusion
-
-Your MultiLLM Chat Assistant should now be successfully deployed to Vercel. Remember to:
-
-- Keep environment variables secure and up to date
-- Monitor deployment logs for errors
-- Test the application functionality after each deployment
-- Update dependencies regularly
-- Plan for database scaling as usage grows
-
-For ongoing support, check the Vercel documentation and your project's logs regularly.
+## Related
+- `README.md`
+- `docs/DEPLOYMENT_GUIDE.md`
+- `ARCHITECTURE.md`
+- `PYTHON_INTEGRATION.md`

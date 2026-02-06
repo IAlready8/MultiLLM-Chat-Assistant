@@ -1,81 +1,94 @@
-## Architecture Overview
+# Architecture Overview
 
-### Goals
-- Deliver a fast, secure, multi‑LLM platform with a clean, modular codebase.
-- Keep a local‑first development experience while enabling a clear path to scale.
+## Goals
+- Provide a modular multi-LLM web app with clear separation between UI, API, auth, and provider integrations.
+- Support both strict authenticated usage and fast local demo/guest workflows.
+- Keep deployment paths simple (Vercel/Node) with optional Python orchestration.
 
-### Non‑Goals (for now)
-- Heavy agentic orchestration across distributed workers.
-- Vendor‑specific coupling that prevents easy provider swaps.
+## Core Stack
+- Frontend/App: Next.js 14 (App Router), React, TypeScript
+- UI: Tailwind CSS + Radix UI + CVA patterns
+- Auth: NextAuth (`lib/auth.ts`)
+- API: Next.js Route Handlers (`app/api/*`)
+- Data abstraction:
+  - Prisma-shaped client in `lib/prisma.ts`
+  - Service-layer fallbacks in memory for non-DB environments
+- Validation: Zod in API endpoints
+- Tests: Vitest (JS/TS), Pytest (optional Python side)
 
-## System Components
-- Web App: Next.js 14 (App Router) + TypeScript UI under `app/*`.
-- API Layer: Next.js Route Handlers under `app/api/*` (REST + streaming endpoints).
-- Data Layer: Prisma ORM with PostgreSQL, schema under `prisma/`.
-- Auth: NextAuth (OAuth + credentials); adapters configured via Prisma.
-- UI/Design System: Tailwind CSS, Radix UI primitives, CVA variants, tokens in `tailwind.config.ts` and `app/globals.css`.
-- Client/Server Utilities: `lib/*`, `services/*`, `hooks/*`, reusable UI in `components/ui/*`.
-- Python Core (optional): `src/core/llm_manager` — an async LLM manager with caching, provider abstraction, and tests.
-- CI/CD: Not configured in this repo; add a workflow if needed.
+## Repository Layout
+- `app/`: routes, layouts, pages, and API handlers
+- `components/`: reusable React components
+- `lib/`: auth, crypto, API clients, Prisma shim, utilities
+- `services/`: app/domain services (conversation, persona, analytics, provider access)
+- `prisma/`: schema and migrations
+- `src/core/`: optional Python orchestration service
 
-## High‑Level Flow
-1. User interacts with pages under `app/*` and UI components in `components/*`.
-2. Actions and API calls use `services/*` and `lib/*` to talk to `app/api/*` route handlers.
-3. API routes orchestrate provider calls (e.g., OpenAI) using provider clients in `services/llm-providers/*` and helpers in `lib/*`.
-4. Prisma persists entities (personas, analytics, auth) as defined in `prisma/schema.prisma`.
-5. Streaming endpoints send chunked responses back to the UI for responsive generation.
+## Runtime Architecture
+1. UI pages in `app/*` call route handlers in `app/api/*`.
+2. API handlers rely on `lib/api-auth.ts` for identity/session checks.
+3. Business logic executes in `services/*`.
+4. Provider key and conversation flows persist through service-layer stores:
+   - DB path when available
+   - In-memory fallback when DB delegates are unavailable
+5. LLM calls route through provider-aware handlers in `app/api/llm/*`.
 
-## Data Model (at a glance)
-- Auth: User, Account, Session (NextAuth tables via Prisma adapter).
-- App: Persona, Conversation/Message (if present), Analytics/Event entities.
-- Storage: PostgreSQL with migrations in `prisma/migrations/*`.
+## Authentication Model
+- Strict auth mode (`AUTH_REQUIRE_LOGIN=true`):
+  - Requires real login/session flows
+  - Enforces `NEXTAUTH_SECRET`
+- Guest/demo mode (`AUTH_REQUIRE_LOGIN=false`):
+  - Supports bypass/guest behavior for local development
+  - Allows non-account key setup and testing routes where enabled
 
-## LLM Provider Abstraction
-- Provider clients live in `services/llm-providers/*` (e.g., `openai-service.ts`).
-- A thin `api-client`/`api-service` layer normalizes requests, supports streaming, and records analytics.
-- `lib/secure-storage.ts` and `lib/crypto.ts` handle client‑side encrypted storage for API keys when used in the browser; server‑side reads occur only in route handlers.
+Primary files:
+- `lib/auth.ts`
+- `lib/api-auth.ts`
+- `lib/demo-account.ts`
+- `components/auth-guard.tsx`
 
-## Streaming
-- Endpoints under `app/api/llm/*` support streaming responses where the provider allows it.
-- UI consumes streamed chunks via callbacks to render token‑by‑token updates.
+## Data and Persistence
+Current code path in this repository uses a Prisma-compatible stub (`lib/prisma.ts`) in local/runtime contexts where DB access is not available.
 
-## Security
-- Secret management via environment variables (`.env.local`, see `.env.example`).
-- Keys are never bundled client‑side by design; client helpers encrypt at rest when needed (e.g., local API keys).
-- Authentication/authorization enforced in route handlers; add rate‑limiting and input validation during scale‑up.
+Service-layer fallbacks:
+- Provider config/key storage fallback: `lib/api-key-service.ts`
+- Conversation fallback: `services/conversation-service.db.ts`
 
-## Python Core Engine (src/core)
-- `src/core/` implements an async manager with provider interfaces, caching, and perf metrics.
-- Current status: Integrated as a FastAPI sidecar service running on port 8008, communicating with Next.js via API bridge.
-- Integration approach: Sidecar microservice (HTTP on localhost) that the Next.js API calls into.
-- Features:
-  - LLM request caching with LRU algorithm
-  - Concurrent processing of multiple provider requests
-  - Performance metrics and monitoring
-  - Provider failover and health checks
-  - Cost estimation per provider
-- Communication: Next.js API routes in `app/api/llm/*` proxy requests to the Python service.
+This keeps APIs functional in local/demo scenarios without requiring a running database.
 
-## Deployment
-- Build: `npm run build` (runs `prisma generate` via `prebuild`).
-- Migrations: `npx prisma migrate deploy` before starting the app.
-- Environment: `DATABASE_URL`, NextAuth secrets/URLs, provider API keys (see `.env.example`).
+## LLM and Orchestration
+- Chat/stream endpoints:
+  - `app/api/llm/chat/route.ts`
+  - `app/api/llm/stream/route.ts`
+- Optional orchestration bridge:
+  - `app/api/llm/orchestrate/route.ts`
+  - Proxies to Python core service (default `http://127.0.0.1:8008`)
 
-## Scaling Plan (Architecture)
-- Data: Add connection pooling and read replicas as needed.
-- Caching/State: Introduce Redis for rate‑limiting, session extensions, and job queues.
-- Workloads: Add a worker for long‑running tasks (e.g., analytics aggregation, batch inference).
-- Observability: Centralized logs, error tracking, and basic metrics (latency, throughput, tokens, provider error rates).
-- Resilience: Provider failover, circuit breakers, and exponential backoff in provider client calls.
-- Performance: Ensure streaming parity, debounce UI updates, and benchmark concurrent throughput.
+## Build and Delivery
+### Local Build
+- `npm run type-check`
+- `npm run lint`
+- `npm run build`
 
-## Known Gaps
-- Rate limiting is scoped to some endpoints; confirm coverage for all LLM routes.
-- CI is not configured; add lint/type-check/test/build workflows when needed.
-- Python core is not fully wired to the web app; confirm the integration path.
+### CI (GitHub Actions)
+Workflow: `.github/workflows/ci.yml`
+- Runs on push/PR to `main`
+- Performs type-check, lint, and build
+- Includes Prisma client generation step
 
-## References
-- Roadmap: `ROADMAP.md`
-- Design System: `DESIGN_SYSTEM.md`
-- Status: `STATUS_UPDATE.md`
-- Env: `.env.example`
+### Deploy
+- Vercel config: `vercel.json`
+- Deployment notes:
+  - `VERCEL_DEPLOYMENT.md`
+  - `docs/DEPLOYMENT_GUIDE.md`
+
+## Operational Notes
+- Python sidecar is optional. Core web app routes function without it except orchestration-specific features.
+- In-memory fallback data is process-local and non-durable.
+- For durable production behavior, use a database-backed implementation and production auth settings.
+
+## Related Docs
+- `README.md`
+- `DOCUMENTATION.md`
+- `PYTHON_INTEGRATION.md`
+- `.env.example`

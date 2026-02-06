@@ -2,6 +2,16 @@
 
 This documentation covers all the APIs, services, components, and hooks implemented in the MultiLLM Chat Assistant application.
 
+## Current Status
+
+- Source-of-truth for build, architecture, and deployment is:
+  - `README.md`
+  - `ARCHITECTURE.md`
+  - `VERCEL_DEPLOYMENT.md`
+  - `docs/DEPLOYMENT_GUIDE.md`
+- This file is a broad reference and still contains some legacy examples from earlier storage patterns.
+- When in doubt, prefer the route handlers in `app/api/*` and services in `lib/*` and `services/*`.
+
 ## Table of Contents
 1.  [API Client Services](#api-client-services)
 2.  [Secure Storage](#secure-storage)
@@ -265,200 +275,33 @@ async function encryptAndDecrypt() {
 
 ## 3. Conversation Management
 
-### `saveConversation(type, title, data)`
+Current conversation flows are API-driven through `lib/api-client.ts` and route handlers under `app/api/conversations/*`.
 
-Saves a conversation to the IndexedDB storage.
+### `apiClient.getConversations()`
 
-**Parameters:**
+Fetches conversation metadata for the current user/session.
 
-*   `type` (string): Conversation type ('multi-chat', 'goal-hub', 'comparison', 'pipeline')
-*   `title` (string): Conversation title
-*   `data` (any): Conversation data
+### `apiClient.getConversation(id)`
 
-**Returns:**
+Fetches full conversation details including message history.
 
-*   `Promise<string>`: ID of the saved conversation
+### `apiClient.createConversation({ title, messages })`
 
-**Example:**
+Creates a new conversation with initial messages.
 
-```typescript
-import { saveConversation } from "@/services/conversation-storage";
+### `apiClient.addMessages(id, messages)`
 
-async function saveCurrentChat(messages) {
-  const id = await saveConversation(
-    "multi-chat",
-    "Chat with GPT-4 and Claude",
-    { messages }
-  );
-  console.log(`Saved conversation with ID: ${id}`);
-}
-```
+Adds one or more messages to an existing conversation.
 
-### `getConversation(id)`
+### `apiClient.deleteConversation(id)`
 
-Retrieves a specific conversation by ID.
+Deletes a conversation.
 
-**Parameters:**
+### Backend Notes
 
-*   `id` (string): Conversation ID
-
-**Returns:**
-
-*   `Promise<Conversation | undefined>`: The conversation object or undefined if not found
-
-**Example:**
-
-```typescript
-import { getConversation } from "@/services/conversation-storage";
-
-async function loadConversation(id) {
-  const conversation = await getConversation(id);
-  if (conversation) {
-    console.log(`Loaded: ${conversation.title}`);
-    return conversation.data;
-  }
-  return null;
-}
-```
-
-### `getConversationsByType(type)`
-
-Retrieves all conversations of a specific type.
-
-**Parameters:**
-
-*   `type` (string): Conversation type
-
-**Returns:**
-
-*   `Promise<Conversation[]>`: Array of conversation objects
-
-**Example:**
-
-```typescript
-import { getConversationsByType } from "@/services/conversation-storage";
-
-async function loadAllMultiChats() {
-  const conversations = await getConversationsByType("multi-chat");
-  console.log(`Found ${conversations.length} multi-chats`);
-  return conversations;
-}
-```
-
-### `getAllConversations()`
-
-Retrieves all saved conversations.
-
-**Returns:**
-
-*   `Promise<Conversation[]>`: Array of all conversation objects
-
-**Example:**
-
-```typescript
-import { getAllConversations } from "@/services/conversation-storage";
-
-async function backupAllConversations() {
-  const allConversations = await getAllConversations();
-  const backup = JSON.stringify(allConversations);
-  // Save backup
-}
-```
-
-### `deleteConversation(id)`
-
-Deletes a conversation by ID.
-
-**Parameters:**
-
-*   `id` (string): Conversation ID
-
-**Returns:**
-
-*   `Promise<void>`
-
-**Example:**
-
-```typescript
-import { deleteConversation } from "@/services/conversation-storage";
-
-async function removeConversation(id) {
-  await deleteConversation(id);
-  console.log(`Conversation ${id} deleted`);
-}
-```
-
-### `updateConversation(id, updates)`
-
-Updates an existing conversation.
-
-**Parameters:**
-
-*   `id` (string): Conversation ID
-*   `updates` (object): Properties to update
-
-**Returns:**
-
-*   `Promise<void>`
-
-**Example:**
-
-```typescript
-import { updateConversation } from "@/services/conversation-storage";
-
-async function renameConversation(id, newTitle) {
-  await updateConversation(id, { title: newTitle });
-}
-```
-
-### `useConversation(type)`
-
-React hook for managing conversations of a specific type.
-
-**Parameters:**
-
-*   `type` (string): Conversation type
-
-**Returns:**
-
-*   Object with the following properties:
-    *   `conversations` (array): List of conversations
-    *   `isLoading` (boolean): Loading state
-    *   `error` (string | null): Error message if any
-    *   `saveConversation` (function): Save a new conversation
-    *   `updateConversation` (function): Update an existing conversation
-    *   `deleteConversation` (function): Delete a conversation
-    *   `refreshConversations` (function): Refresh the conversation list
-
-**Example:**
-
-```typescript
-import { useConversation } from "@/hooks/use-conversation";
-
-function ConversationList() {
-  const {
-    conversations,
-    isLoading,
-    error,
-    saveConversation,
-    deleteConversation
-  } = useConversation("multi-chat");
-  
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
-  
-  return (
-    <ul>
-      {conversations.map(conv => (
-        <li key={conv.id}>
-          {conv.title}
-          <button onClick={() => deleteConversation(conv.id)}>Delete</button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-```
+- Route handlers: `app/api/conversations/route.ts` and `app/api/conversations/[id]/route.ts`
+- Service implementation: `services/conversation-service.db.ts`
+- Fallback behavior: when DB delegates are unavailable, in-memory fallback storage is used.
 
 ## 4. Authentication
 
