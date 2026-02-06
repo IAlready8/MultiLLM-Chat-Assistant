@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BillingClient } from './billing-client'
-import { prisma } from '@/lib/prisma'
+import { getDemoAccountContext } from '@/lib/demo-account'
 
 // Define the type for subscription tier as string
 type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE';
@@ -13,22 +13,16 @@ type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE';
  */
 export default async function BillingPage() {
   const session = await auth()
-  if (!session?.user) {
+  const demoAccount = getDemoAccountContext()
+  const hasDemoBypassAccess = demoAccount.enabled && demoAccount.bypassAuth
+
+  if (!session?.user && !hasDemoBypassAccess) {
     redirect('/auth/signin?callbackUrl=/billing')
   }
 
-  // Get the user's subscription directly from the DB
-  const subscription = await prisma.subscription.findUnique({
-    where: {
-      userId: session.user.id,
-    },
-    select: {
-      tier: true,
-      stripeCurrentPeriodEnd: true,
-    },
-  })
-
-  const tier = subscription?.tier || 'FREE'
+  const tier: SubscriptionTier = hasDemoBypassAccess
+    ? 'ENTERPRISE'
+    : (session?.user?.tier as SubscriptionTier | undefined) || 'FREE'
 
   return (
     <div className="container mx-auto p-4">
@@ -44,8 +38,8 @@ export default async function BillingPage() {
         </CardHeader>
         <CardContent>
           <BillingClient
-            tier={tier as SubscriptionTier}
-            periodEnd={subscription?.stripeCurrentPeriodEnd?.toLocaleDateString() || null}
+            tier={tier}
+            periodEnd={null}
           />
         </CardContent>
       </Card>

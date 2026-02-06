@@ -1,7 +1,7 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { streamChatMessage } from '@/services/api-service'
 import { ProviderConfig } from '@/lib/config-schemas'
-import { auth } from '@/lib/auth'
+import { getAuthenticatedUser } from '@/lib/api-auth'
 import { configManager } from '@/lib/config-manager'
 
 interface LLMStreamRequest {
@@ -70,17 +70,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get authenticated user
-    const session = await auth()
-    if (!session?.user?.id) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
+    const authCheck = await getAuthenticatedUser()
+    if (authCheck instanceof NextResponse) return authCheck
 
     // Get provider config from server-side cache/database
-    const providerConfig = await configManager.getProviderConfig(session.user.id, provider)
+    const providerConfig = await configManager.getProviderConfig(authCheck.user.id, provider)
 
     if (!providerConfig || !providerConfig.apiKey) {
       return new Response(

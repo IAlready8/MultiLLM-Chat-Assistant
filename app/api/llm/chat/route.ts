@@ -1,7 +1,7 @@
-import { auth } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { errorManager, createErrorContext, LLMProviderError, NotImplementedError } from '@/lib/error-system';
 import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service';
+import { getAuthenticatedUser } from '@/lib/api-auth'
 
 // ===== Grok (X.AI) Provider Logic =====
 async function chatGrok(
@@ -411,11 +411,10 @@ const providerFactory = {
 // ===== Main POST Handler =====
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id) {
-            return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-        }
-        const userId = session.user.id;
+        const authCheck = await getAuthenticatedUser()
+        if (authCheck instanceof NextResponse) return authCheck
+        const { user } = authCheck
+        const userId = user.id
 
         const body = await req.json();
         const { provider = 'openai', messages, model, temperature, max_tokens, stream = true } = body;
