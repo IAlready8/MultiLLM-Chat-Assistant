@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Send, Bot, User, RotateCcw, Settings, Plus, X } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
+import type { Message as ConversationMessage } from '@/types/prisma'
 import Link from 'next/link'
 
 const SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'googleai', 'openrouter', 'grok'] as const
@@ -107,7 +108,7 @@ export default function MultiChatPage() {
       const conversation = await apiClient.getConversation(latest.id)
       setActiveConversationId(conversation.id)
 
-      const restoredMessages: Message[] = conversation.messages.map((msg) => ({
+      const restoredMessages: Message[] = conversation.messages.map((msg: ConversationMessage) => ({
         id: msg.id,
         role: msg.role as Message['role'],
         content: msg.content,
@@ -133,16 +134,17 @@ export default function MultiChatPage() {
   }, [toast])
 
   useEffect(() => {
-    if (status !== 'authenticated') {
-      if (status === 'unauthenticated') {
-        setIsLoadingHistory(false)
-      }
+    if (status === 'loading') {
       return
     }
 
     const load = async () => {
       await loadConfiguredProviders()
-      await loadLatestConversation()
+      if (status === 'authenticated') {
+        await loadLatestConversation()
+      } else {
+        setIsLoadingHistory(false)
+      }
     }
     void load()
   }, [loadConfiguredProviders, loadLatestConversation, status])
@@ -164,6 +166,10 @@ export default function MultiChatPage() {
   }
 
   const ensureConversation = async (userContent: string) => {
+    if (status !== 'authenticated') {
+      return null
+    }
+
     const userMessage = {
       role: 'user' as const,
       content: userContent,
@@ -315,14 +321,6 @@ export default function MultiChatPage() {
     }))
 
     const conversationId = await ensureConversation(userMessage.content)
-    if (!conversationId) {
-      setChatState(prev => ({
-        ...prev,
-        isLoading: false,
-        messages: prev.messages.filter(msg => !msg.id.startsWith('typing-'))
-      }))
-      return
-    }
 
     const instancePromises = chatState.activeInstances.map(instance => {
       const typingId = typingIds[instance.id]
@@ -347,7 +345,7 @@ export default function MultiChatPage() {
   const callInstance = async (
     instance: ModelInstance,
     messages: Message[],
-    conversationId: string,
+    conversationId: string | null,
     typingId: string
   ) => {
     try {
@@ -381,7 +379,7 @@ export default function MultiChatPage() {
         }
       )
 
-      if (fullContent.trim()) {
+      if (conversationId && fullContent.trim()) {
         await persistAssistantMessage(conversationId, provider, model, fullContent.trim())
       }
     } catch (error) {

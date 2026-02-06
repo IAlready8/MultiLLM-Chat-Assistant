@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { streamChatMessage } from '@/services/api-service'
-import { ProviderConfig } from '@/lib/config-schemas'
 import { getAuthenticatedUser } from '@/lib/api-auth'
-import { configManager } from '@/lib/config-manager'
+import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service'
+import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 
 interface LLMStreamRequest {
   provider: string;
@@ -31,14 +31,19 @@ function validateApiKeyFormat(provider: string, apiKey: string): boolean {
   }
 }
 
+type RateLimitConfig = {
+  requests: number
+  window: number
+}
+
 // Simple rate limiter using in-memory store
 const rateLimits = new Map<string, { count: number; resetTime: number }>();
 
-function checkRateLimit(provider: string, config: ProviderConfig): boolean {
+function checkRateLimit(provider: string, config: RateLimitConfig): boolean {
   const key = `rate_limit:${provider}`;
   const now = Date.now();
-  const windowMs = config.rateLimits.window;
-  const maxRequests = config.rateLimits.requests;
+  const windowMs = config.window;
+  const maxRequests = config.requests;
   
   const limitInfo = rateLimits.get(key);
   if (!limitInfo || now > limitInfo.resetTime) {
@@ -70,13 +75,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const authCheck = await getAuthenticatedUser()
+    const authCheck = await getAuthenticatedUser({ allowGuest: true })
     if (authCheck instanceof NextResponse) return authCheck
 
-    // Get provider config from server-side cache/database
-    const providerConfig = await configManager.getProviderConfig(authCheck.user.id, provider)
+    const [providerConfigs, apiKey] = await Promise.all([
+      getUserProviderConfigs(authCheck.user.id),
+      getUserApiKey(authCheck.user.id, provider),
+    ])
 
-    if (!providerConfig || !providerConfig.apiKey) {
+    const providerConfig = providerConfigs.find(config => config.provider === provider)
+
+    if (!apiKey) {
       return new Response(
         JSON.stringify({ error: `Provider ${provider} is not configured` }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
@@ -84,15 +93,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate API key format
-    if (!validateApiKeyFormat(provider, providerConfig.apiKey)) {
+    if (!validateApiKeyFormat(provider, apiKey)) {
       return new Response(
         JSON.stringify({ error: 'Invalid API key format for the selected provider' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
+    const settings = providerConfig?.settings || {}
+    const providerRateLimits = (settings.rateLimits as RateLimitConfig | undefined) ||
+      defaultRateLimits[provider as keyof typeof defaultRateLimits] ||
+      { requests: 60, window: 60000 }
+    const providerModels = (settings.models as string[] | undefined) ||
+      defaultProviderModels[provider as keyof typeof defaultProviderModels] ||
+      []
+
     // Check rate limits
-    if (!checkRateLimit(provider, providerConfig)) {
+    if (!checkRateLimit(provider, providerRateLimits)) {
       return new Response(
         JSON.stringify({ error: 'Rate limit exceeded' }),
         { status: 429, headers: { 'Content-Type': 'application/json' } }
@@ -120,7 +137,7 @@ export async function POST(request: NextRequest) {
             // Write chunk event
             writeEvent({ type: 'chunk', content: chunk })
           },
-          { model: model || providerConfig.models[0] }
+          { model: model || providerModels[0], userId: authCheck.user.id }
         )
         
         // Write done event when complete

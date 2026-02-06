@@ -6,7 +6,7 @@ import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
 export async function GET() {
-  const authCheck = await getAuthenticatedUser()
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -19,7 +19,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const authCheck = await getAuthenticatedUser()
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 

@@ -70,7 +70,7 @@ const testProviderKey = async (provider: string, apiKey: string) => {
 }
 
 export async function POST(request: NextRequest) {
-  const authCheck = await getAuthenticatedUser()
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
 
   const body = await request.json()

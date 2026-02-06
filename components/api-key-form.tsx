@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -19,7 +18,6 @@ const providers = [
 
 export default function ApiKeyForm() {
   const { toast } = useToast();
-  const { status } = useSession();
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [configuredProviders, setConfiguredProviders] = useState<string[]>([]);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
@@ -43,20 +41,10 @@ export default function ApiKeyForm() {
   }, [toast]);
 
   useEffect(() => {
-    if (status !== "authenticated") return;
     fetchConfiguredProviders();
-  }, [fetchConfiguredProviders, status]);
+  }, [fetchConfiguredProviders]);
 
   const handleSaveKey = async (providerId: string) => {
-    if (status !== "authenticated") {
-      toast({
-        title: "Sign in required",
-        description: "Please sign in to save API keys.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     const apiKey = apiKeys[providerId];
     if (!apiKey) {
       toast({
@@ -82,7 +70,7 @@ export default function ApiKeyForm() {
           if (testResponse.status === 401 || testResponse.status === 403) {
             toast({
               title: "Sign in required",
-              description: "Please sign in to verify and save API keys.",
+              description: "Sign in is required in strict auth mode. Disable strict mode to save guest keys.",
               variant: "destructive",
             });
             return;
@@ -118,7 +106,7 @@ export default function ApiKeyForm() {
         if (saveResponse.status === 401 || saveResponse.status === 403) {
           toast({
             title: "Sign in required",
-            description: "Please sign in again to save API keys.",
+            description: "Sign in is required in strict auth mode. Disable strict mode to save guest keys.",
             variant: "destructive",
           });
           return;
@@ -160,15 +148,6 @@ export default function ApiKeyForm() {
   };
 
   const handleClearKey = async (providerId: string) => {
-    if (status !== "authenticated") {
-      toast({
-        title: "Sign in required",
-        description: "Please sign in to update API keys.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setLoading(prev => ({ ...prev, [providerId]: true }));
     try {
       const response = await fetch('/api/config', {

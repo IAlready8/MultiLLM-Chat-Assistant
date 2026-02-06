@@ -411,7 +411,7 @@ const providerFactory = {
 // ===== Main POST Handler =====
 export async function POST(req: NextRequest) {
     try {
-        const authCheck = await getAuthenticatedUser()
+        const authCheck = await getAuthenticatedUser({ allowGuest: true })
         if (authCheck instanceof NextResponse) return authCheck
         const { user } = authCheck
         const userId = user.id

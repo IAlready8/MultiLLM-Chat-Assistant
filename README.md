@@ -73,6 +73,10 @@ To apply migrations:
 Fill these in `.env.local` (see `.env.example`):
 - `DATABASE_URL`, `NEXTAUTH_SECRET`, `SECURE_STORAGE_SECRET`, OAuth creds (`GOOGLE_*`, `GITHUB_*`), and provider keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_AI_API_KEY`, `OPENROUTER_API_KEY`).
 
+Auth modes:
+- Guest/dev mode (default): `AUTH_REQUIRE_LOGIN=false` allows saving provider keys without creating an account.
+- Strict real-auth mode: set `AUTH_REQUIRE_LOGIN=true` and `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=true`, then configure `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, OAuth credentials, and database-backed auth.
+
 ## Testing
 - Web (Vitest): `npm run test:run`, coverage with `npm run test:coverage`
 - Core (Pytest): `pip install -r requirements.txt && pytest` (optional)

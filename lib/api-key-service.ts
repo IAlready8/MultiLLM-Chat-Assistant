@@ -12,6 +12,15 @@ type FallbackRecord = {
 }
 
 const fallbackStore = new Map<string, Map<string, FallbackRecord>>()
+const fallbackWarnings = new Set<string>()
+
+const logFallbackWarning = (scope: string, error: unknown) => {
+  if (fallbackWarnings.has(scope)) {
+    return
+  }
+  fallbackWarnings.add(scope)
+  console.warn('Falling back to in-memory provider config store:', error)
+}
 
 const getFallbackUserStore = (userId: string) => {
   let store = fallbackStore.get(userId)
@@ -30,6 +39,9 @@ const toProviderConfig = (record: FallbackRecord): ProviderConfig => ({
   createdAt: record.createdAt,
   updatedAt: record.updatedAt,
 })
+
+const getFallbackRecord = (userId: string, provider: string) =>
+  getFallbackUserStore(userId).get(provider)
 
 // Server-side encryption key from environment
 const getEncryptionKey = async (): Promise<Uint8Array> => {
@@ -90,7 +102,7 @@ export async function storeUserApiKey(
       updatedAt: config.updatedAt,
     }
   } catch (error) {
-    console.warn('Falling back to in-memory provider config store:', error)
+    logFallbackWarning('storeUserApiKey', error)
     const store = getFallbackUserStore(userId)
     const now = new Date()
     const existing = store.get(provider)
@@ -126,8 +138,11 @@ export async function getUserApiKey(
       },
     })
   } catch (error) {
-    console.warn('Falling back to in-memory provider config store:', error)
-    const record = getFallbackUserStore(userId).get(provider)
+    logFallbackWarning('getUserApiKey', error)
+  }
+
+  if (!config) {
+    const record = getFallbackRecord(userId, provider)
     config = record
       ? { apiKey: record.apiKey, isActive: record.isActive }
       : null
@@ -150,8 +165,17 @@ export async function getUserApiKey(
  * Get all provider configurations for a user (without API keys)
  */
 export async function getUserProviderConfigs(userId: string): Promise<ProviderConfig[]> {
+  let configs: Array<{
+    id: string
+    provider: string
+    isActive: boolean
+    settings?: string | null
+    createdAt: Date
+    updatedAt: Date
+  }> = []
+
   try {
-    const configs = await prisma.providerConfig.findMany({
+    configs = await prisma.providerConfig.findMany({
       where: {
         userId,
         isActive: true,
@@ -164,23 +188,32 @@ export async function getUserProviderConfigs(userId: string): Promise<ProviderCo
         createdAt: true,
         updatedAt: true,
       },
-    })
+    }) as typeof configs
+  } catch (error) {
+    logFallbackWarning('getUserProviderConfigs', error)
+  }
 
-    return configs.map(config => ({
+  const merged = new Map<string, ProviderConfig>()
+
+  for (const config of configs) {
+    merged.set(config.provider, {
       id: config.id,
       provider: config.provider,
       isActive: config.isActive,
       settings: config.settings ? JSON.parse(config.settings) : undefined,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
-    }))
-  } catch (error) {
-    console.warn('Falling back to in-memory provider config store:', error)
-    const store = getFallbackUserStore(userId)
-    return Array.from(store.values())
-      .filter(config => config.isActive)
-      .map(toProviderConfig)
+    })
   }
+
+  for (const fallback of getFallbackUserStore(userId).values()) {
+    if (!fallback.isActive || merged.has(fallback.provider)) {
+      continue
+    }
+    merged.set(fallback.provider, toProviderConfig(fallback))
+  }
+
+  return Array.from(merged.values())
 }
 
 /**
@@ -203,17 +236,18 @@ export async function deleteUserProviderConfig(
       },
     })
   } catch (error) {
-    console.warn('Falling back to in-memory provider config store:', error)
-    const store = getFallbackUserStore(userId)
-    const existing = store.get(provider)
-    if (existing) {
-      store.set(provider, {
-        ...existing,
-        isActive: false,
-        apiKey: null,
-        updatedAt: new Date(),
-      })
-    }
+    logFallbackWarning('deleteUserProviderConfig', error)
+  }
+
+  const store = getFallbackUserStore(userId)
+  const existing = store.get(provider)
+  if (existing) {
+    store.set(provider, {
+      ...existing,
+      isActive: false,
+      apiKey: null,
+      updatedAt: new Date(),
+    })
   }
 }
 
@@ -235,8 +269,11 @@ export async function hasValidApiKey(
       },
     })
   } catch (error) {
-    console.warn('Falling back to in-memory provider config store:', error)
-    const record = getFallbackUserStore(userId).get(provider)
+    logFallbackWarning('hasValidApiKey', error)
+  }
+
+  if (!config) {
+    const record = getFallbackRecord(userId, provider)
     config = record
       ? { apiKey: record.apiKey, isActive: record.isActive }
       : null
@@ -254,7 +291,7 @@ export async function updateProviderSettings(
   settings: Record<string, any>
 ): Promise<ProviderConfig | null> {
   try {
-    const config = await prisma.providerConfig.updateMany({
+    const result = await prisma.providerConfig.updateMany({
       where: {
         userId,
         provider,
@@ -266,40 +303,39 @@ export async function updateProviderSettings(
       },
     })
 
-    if (config.count === 0) {
-      return null
-    }
-
-    const updated = await prisma.providerConfig.findUnique({
-      where: {
-        userId_provider: {
-          userId,
-          provider,
+    if (result.count > 0) {
+      const updated = await prisma.providerConfig.findUnique({
+        where: {
+          userId_provider: {
+            userId,
+            provider,
+          },
         },
-      },
-    })
+      })
 
-    if (!updated) return null
-
-    return {
-      id: updated.id,
-      provider: updated.provider,
-      isActive: updated.isActive,
-      settings: updated.settings ? JSON.parse(updated.settings) : undefined,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
+      if (updated) {
+        return {
+          id: updated.id,
+          provider: updated.provider,
+          isActive: updated.isActive,
+          settings: updated.settings ? JSON.parse(updated.settings) : undefined,
+          createdAt: updated.createdAt,
+          updatedAt: updated.updatedAt,
+        }
+      }
     }
   } catch (error) {
-    console.warn('Falling back to in-memory provider config store:', error)
-    const store = getFallbackUserStore(userId)
-    const existing = store.get(provider)
-    if (!existing || !existing.isActive) return null
-    const updated: FallbackRecord = {
-      ...existing,
-      settings: JSON.stringify(settings),
-      updatedAt: new Date(),
-    }
-    store.set(provider, updated)
-    return toProviderConfig(updated)
+    logFallbackWarning('updateProviderSettings', error)
   }
+
+  const store = getFallbackUserStore(userId)
+  const existing = store.get(provider)
+  if (!existing || !existing.isActive) return null
+  const updated: FallbackRecord = {
+    ...existing,
+    settings: JSON.stringify(settings),
+    updatedAt: new Date(),
+  }
+  store.set(provider, updated)
+  return toProviderConfig(updated)
 }

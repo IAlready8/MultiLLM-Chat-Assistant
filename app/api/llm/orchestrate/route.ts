@@ -26,7 +26,7 @@ const orchestrateRequestSchema = z.object({
  */
 export async function POST(req: Request) {
   // 1. Authenticate the user
-  const authCheck = await getAuthenticatedUser();
+  const authCheck = await getAuthenticatedUser({ allowGuest: true });
   if (authCheck instanceof NextResponse) return authCheck;
   // const { user } = authCheck // We have the user if we need to log their usage
 

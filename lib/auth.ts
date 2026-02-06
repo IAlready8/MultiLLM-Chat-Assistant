@@ -10,6 +10,7 @@ import {
   getDemoAccountContext,
   isDemoCredentials,
   isDemoEmail,
+  isStrictAuthRequired,
 } from '@/lib/demo-account'
 
 // Define the types for subscription tier and team role as strings
@@ -51,6 +52,27 @@ type InMemoryAuthUser = {
 const inMemoryAuthUsers = new Map<string, InMemoryAuthUser>()
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim()
+const strictAuth = isStrictAuthRequired()
+const resolveAuthSecret = (): string => {
+  const configuredSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
+
+  if (configuredSecret?.trim()) {
+    return configuredSecret.trim()
+  }
+
+  if (strictAuth) {
+    throw new Error('NEXTAUTH_SECRET is required when AUTH_REQUIRE_LOGIN=true')
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    // Keep a stable local secret so JWT session cookies remain decryptable between reloads.
+    return 'local-dev-nextauth-secret-change-before-production'
+  }
+
+  throw new Error('NEXTAUTH_SECRET is required in production')
+}
+
+const authSecret = resolveAuthSecret()
 
 const buildProviders = () => {
   const providers: NextAuthOptions['providers'] = []
@@ -187,7 +209,7 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user }) {
-      if (isDemoEmail(user?.email ?? token.email)) {
+      if (!strictAuth && isDemoEmail(user?.email ?? token.email)) {
         token.id = user?.id || token.id || token.sub || getDemoAccountContext().id
         token.role = 'OWNER'
         token.tier = 'ENTERPRISE'
@@ -230,7 +252,7 @@ export const authOptions: NextAuthOptions = {
     maxAge: 30 * 24 * 60 * 60, // 30 days
     updateAge: 24 * 60 * 60, // 24 hours - reduce session updates
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: authSecret,
 }
 
 // Export auth function for server-side session retrieval (NextAuth v4 pattern)

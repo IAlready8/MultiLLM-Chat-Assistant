@@ -14,43 +14,74 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const { status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
-  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
-  const [showContent, setShowContent] = useState(false);
+  const strictAuthEnabled = process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN === 'true';
+  const demoBypassEnabled = !strictAuthEnabled && (
+    process.env.NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH === 'true' ||
+    (
+      process.env.NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH === undefined &&
+      process.env.NODE_ENV !== 'production'
+    )
+  );
+  const [optimisticCycle, setOptimisticCycle] = useState<number | null>(null);
+  const [timeoutCycle, setTimeoutCycle] = useState<number | null>(null);
   const hasCheckedOnce = useRef(false);
+  const loadingCycleRef = useRef(0);
+  const [loadingCycle, setLoadingCycle] = useState(0);
 
   useEffect(() => {
+    if (demoBypassEnabled) {
+      return;
+    }
     if (status === "unauthenticated" && !pathname.startsWith("/auth")) {
       router.push(`/auth/signin?callbackUrl=${encodeURIComponent(pathname)}`);
     }
-  }, [status, router, pathname]);
+  }, [status, router, pathname, demoBypassEnabled]);
 
   useEffect(() => {
     if (status !== "loading") {
       hasCheckedOnce.current = true;
-      setLoadingTimedOut(false);
-      if (status === "authenticated" || pathname.startsWith("/auth")) {
-        setShowContent(true);
-      }
       return;
     }
+
+    const cycleId = loadingCycleRef.current + 1;
+    loadingCycleRef.current = cycleId;
+    setLoadingCycle(cycleId);
 
     // Show content after a brief delay even while loading (optimistic)
     // This allows page content to render while auth check happens in background
     const quickTimer = setTimeout(() => {
-      if (!hasCheckedOnce.current) {
-        setShowContent(true);
+      if (!hasCheckedOnce.current && loadingCycleRef.current === cycleId) {
+        setOptimisticCycle(cycleId);
       }
     }, 150);
 
-    const slowTimer = setTimeout(() => setLoadingTimedOut(true), 4000);
+    const slowTimer = setTimeout(() => {
+      if (loadingCycleRef.current === cycleId) {
+        setTimeoutCycle(cycleId);
+      }
+    }, 4000);
     return () => {
       clearTimeout(quickTimer);
       clearTimeout(slowTimer);
     };
-  }, [status, pathname]);
+  }, [status]);
+
+  const showContent =
+    status === "loading" &&
+    optimisticCycle !== null &&
+    optimisticCycle === loadingCycle;
+
+  const loadingTimedOut =
+    status === "loading" &&
+    timeoutCycle !== null &&
+    timeoutCycle === loadingCycle;
 
   // Auth pages always render immediately
   if (pathname.startsWith("/auth")) {
+    return <>{children}</>;
+  }
+
+  if (demoBypassEnabled) {
     return <>{children}</>;
   }
 
