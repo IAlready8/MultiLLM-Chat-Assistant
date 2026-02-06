@@ -11,15 +11,48 @@ type FallbackRecord = {
   updatedAt: Date
 }
 
-const fallbackStore = new Map<string, Map<string, FallbackRecord>>()
-const fallbackWarnings = new Set<string>()
+type GlobalApiKeyFallback = typeof globalThis & {
+  __multiLlmProviderFallbackStore?: Map<string, Map<string, FallbackRecord>>
+  __multiLlmProviderFallbackWarnings?: Set<string>
+  __multiLlmProviderDbUnavailable?: boolean
+}
+
+const fallbackGlobal = globalThis as GlobalApiKeyFallback
+
+const fallbackStore: Map<string, Map<string, FallbackRecord>> =
+  fallbackGlobal.__multiLlmProviderFallbackStore ??
+  (fallbackGlobal.__multiLlmProviderFallbackStore = new Map<
+    string,
+    Map<string, FallbackRecord>
+  >())
+const fallbackWarnings: Set<string> =
+  fallbackGlobal.__multiLlmProviderFallbackWarnings ??
+  (fallbackGlobal.__multiLlmProviderFallbackWarnings = new Set())
+
+const isDatabaseUnavailableError = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes('Database access for')
+
+const isDatabaseKnownUnavailable = () =>
+  fallbackGlobal.__multiLlmProviderDbUnavailable === true
+
+const markDatabaseUnavailableIfNeeded = (error: unknown) => {
+  if (isDatabaseUnavailableError(error)) {
+    fallbackGlobal.__multiLlmProviderDbUnavailable = true
+    return true
+  }
+  return false
+}
 
 const logFallbackWarning = (scope: string, error: unknown) => {
   if (fallbackWarnings.has(scope)) {
     return
   }
   fallbackWarnings.add(scope)
-  console.warn('Falling back to in-memory provider config store:', error)
+  const message =
+    error instanceof Error ? error.message : 'unknown database error'
+  console.warn(
+    `Falling back to in-memory provider config store for ${scope}: ${message}`
+  )
 }
 
 const getFallbackUserStore = (userId: string) => {
@@ -70,6 +103,27 @@ export async function storeUserApiKey(
   const encryptionKey = await getEncryptionKey()
   const encryptedApiKey = await aesGcmEncrypt(encryptionKey, apiKey)
 
+  const saveToFallback = () => {
+    const store = getFallbackUserStore(userId)
+    const now = new Date()
+    const existing = store.get(provider)
+    const record: FallbackRecord = {
+      id: existing?.id ?? `mem-${userId}-${provider}`,
+      provider,
+      apiKey: encryptedApiKey,
+      settings: settings ? JSON.stringify(settings) : null,
+      isActive: true,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    }
+    store.set(provider, record)
+    return toProviderConfig(record)
+  }
+
+  if (isDatabaseKnownUnavailable()) {
+    return saveToFallback()
+  }
+
   try {
     const config = await prisma.providerConfig.upsert({
       where: {
@@ -102,21 +156,10 @@ export async function storeUserApiKey(
       updatedAt: config.updatedAt,
     }
   } catch (error) {
-    logFallbackWarning('storeUserApiKey', error)
-    const store = getFallbackUserStore(userId)
-    const now = new Date()
-    const existing = store.get(provider)
-    const record: FallbackRecord = {
-      id: existing?.id ?? `mem-${userId}-${provider}`,
-      provider,
-      apiKey: encryptedApiKey,
-      settings: settings ? JSON.stringify(settings) : null,
-      isActive: true,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
+    if (!markDatabaseUnavailableIfNeeded(error)) {
+      logFallbackWarning('storeUserApiKey', error)
     }
-    store.set(provider, record)
-    return toProviderConfig(record)
+    return saveToFallback()
   }
 }
 
@@ -128,17 +171,22 @@ export async function getUserApiKey(
   provider: string
 ): Promise<string | null> {
   let config: { apiKey: string | null; isActive: boolean } | null = null
-  try {
-    config = await prisma.providerConfig.findUnique({
-      where: {
-        userId_provider: {
-          userId,
-          provider,
+
+  if (!isDatabaseKnownUnavailable()) {
+    try {
+      config = await prisma.providerConfig.findUnique({
+        where: {
+          userId_provider: {
+            userId,
+            provider,
+          },
         },
-      },
-    })
-  } catch (error) {
-    logFallbackWarning('getUserApiKey', error)
+      })
+    } catch (error) {
+      if (!markDatabaseUnavailableIfNeeded(error)) {
+        logFallbackWarning('getUserApiKey', error)
+      }
+    }
   }
 
   if (!config) {
@@ -174,23 +222,27 @@ export async function getUserProviderConfigs(userId: string): Promise<ProviderCo
     updatedAt: Date
   }> = []
 
-  try {
-    configs = await prisma.providerConfig.findMany({
-      where: {
-        userId,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        provider: true,
-        isActive: true,
-        settings: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    }) as typeof configs
-  } catch (error) {
-    logFallbackWarning('getUserProviderConfigs', error)
+  if (!isDatabaseKnownUnavailable()) {
+    try {
+      configs = await prisma.providerConfig.findMany({
+        where: {
+          userId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          provider: true,
+          isActive: true,
+          settings: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }) as typeof configs
+    } catch (error) {
+      if (!markDatabaseUnavailableIfNeeded(error)) {
+        logFallbackWarning('getUserProviderConfigs', error)
+      }
+    }
   }
 
   const merged = new Map<string, ProviderConfig>()
@@ -223,20 +275,24 @@ export async function deleteUserProviderConfig(
   userId: string,
   provider: string
 ): Promise<void> {
-  try {
-    await prisma.providerConfig.updateMany({
-      where: {
-        userId,
-        provider,
-      },
-      data: {
-        isActive: false,
-        apiKey: null,
-        updatedAt: new Date(),
-      },
-    })
-  } catch (error) {
-    logFallbackWarning('deleteUserProviderConfig', error)
+  if (!isDatabaseKnownUnavailable()) {
+    try {
+      await prisma.providerConfig.updateMany({
+        where: {
+          userId,
+          provider,
+        },
+        data: {
+          isActive: false,
+          apiKey: null,
+          updatedAt: new Date(),
+        },
+      })
+    } catch (error) {
+      if (!markDatabaseUnavailableIfNeeded(error)) {
+        logFallbackWarning('deleteUserProviderConfig', error)
+      }
+    }
   }
 
   const store = getFallbackUserStore(userId)
@@ -259,17 +315,22 @@ export async function hasValidApiKey(
   provider: string
 ): Promise<boolean> {
   let config: { apiKey: string | null; isActive: boolean } | null = null
-  try {
-    config = await prisma.providerConfig.findUnique({
-      where: {
-        userId_provider: {
-          userId,
-          provider,
+
+  if (!isDatabaseKnownUnavailable()) {
+    try {
+      config = await prisma.providerConfig.findUnique({
+        where: {
+          userId_provider: {
+            userId,
+            provider,
+          },
         },
-      },
-    })
-  } catch (error) {
-    logFallbackWarning('hasValidApiKey', error)
+      })
+    } catch (error) {
+      if (!markDatabaseUnavailableIfNeeded(error)) {
+        logFallbackWarning('hasValidApiKey', error)
+      }
+    }
   }
 
   if (!config) {
@@ -290,42 +351,46 @@ export async function updateProviderSettings(
   provider: string,
   settings: Record<string, any>
 ): Promise<ProviderConfig | null> {
-  try {
-    const result = await prisma.providerConfig.updateMany({
-      where: {
-        userId,
-        provider,
-        isActive: true,
-      },
-      data: {
-        settings: JSON.stringify(settings),
-        updatedAt: new Date(),
-      },
-    })
-
-    if (result.count > 0) {
-      const updated = await prisma.providerConfig.findUnique({
+  if (!isDatabaseKnownUnavailable()) {
+    try {
+      const result = await prisma.providerConfig.updateMany({
         where: {
-          userId_provider: {
-            userId,
-            provider,
-          },
+          userId,
+          provider,
+          isActive: true,
+        },
+        data: {
+          settings: JSON.stringify(settings),
+          updatedAt: new Date(),
         },
       })
 
-      if (updated) {
-        return {
-          id: updated.id,
-          provider: updated.provider,
-          isActive: updated.isActive,
-          settings: updated.settings ? JSON.parse(updated.settings) : undefined,
-          createdAt: updated.createdAt,
-          updatedAt: updated.updatedAt,
+      if (result.count > 0) {
+        const updated = await prisma.providerConfig.findUnique({
+          where: {
+            userId_provider: {
+              userId,
+              provider,
+            },
+          },
+        })
+
+        if (updated) {
+          return {
+            id: updated.id,
+            provider: updated.provider,
+            isActive: updated.isActive,
+            settings: updated.settings ? JSON.parse(updated.settings) : undefined,
+            createdAt: updated.createdAt,
+            updatedAt: updated.updatedAt,
+          }
         }
       }
+    } catch (error) {
+      if (!markDatabaseUnavailableIfNeeded(error)) {
+        logFallbackWarning('updateProviderSettings', error)
+      }
     }
-  } catch (error) {
-    logFallbackWarning('updateProviderSettings', error)
   }
 
   const store = getFallbackUserStore(userId)

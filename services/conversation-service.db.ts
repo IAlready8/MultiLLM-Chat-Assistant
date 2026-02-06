@@ -4,15 +4,48 @@ import { Conversation, Message, PrismaClient } from '@/types/prisma'
 type ConversationWithMessages = Conversation & { messages: Message[] }
 type NewMessageData = Omit<Message, 'id' | 'conversationId' | 'createdAt'>
 
-const fallbackConversations = new Map<string, Map<string, ConversationWithMessages>>()
-const fallbackWarnings = new Set<string>()
+type GlobalConversationFallback = typeof globalThis & {
+  __multiLlmConversationFallbackStore?: Map<string, Map<string, ConversationWithMessages>>
+  __multiLlmConversationFallbackWarnings?: Set<string>
+  __multiLlmConversationDbUnavailable?: boolean
+}
+
+const conversationGlobal = globalThis as GlobalConversationFallback
+
+const fallbackConversations: Map<string, Map<string, ConversationWithMessages>> =
+  conversationGlobal.__multiLlmConversationFallbackStore ??
+  (conversationGlobal.__multiLlmConversationFallbackStore = new Map<
+    string,
+    Map<string, ConversationWithMessages>
+  >())
+const fallbackWarnings: Set<string> =
+  conversationGlobal.__multiLlmConversationFallbackWarnings ??
+  (conversationGlobal.__multiLlmConversationFallbackWarnings = new Set())
+
+const isDatabaseUnavailableError = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes('Database access for')
+
+const isDatabaseKnownUnavailable = () =>
+  conversationGlobal.__multiLlmConversationDbUnavailable === true
+
+const markDatabaseUnavailableIfNeeded = (error: unknown) => {
+  if (isDatabaseUnavailableError(error)) {
+    conversationGlobal.__multiLlmConversationDbUnavailable = true
+    return true
+  }
+  return false
+}
 
 const logFallbackWarning = (scope: string, error: unknown) => {
   if (fallbackWarnings.has(scope)) {
     return
   }
   fallbackWarnings.add(scope)
-  console.warn('Falling back to in-memory conversation store:', error)
+  const message =
+    error instanceof Error ? error.message : 'unknown database error'
+  console.warn(
+    `Falling back to in-memory conversation store for ${scope}: ${message}`
+  )
 }
 
 const getFallbackUserStore = (userId: string) => {
@@ -50,6 +83,12 @@ export const ConversationService = {
    * Get all conversations (metadata only) for a user.
    */
   async getConversationsByUserId(userId: string): Promise<Conversation[]> {
+    if (isDatabaseKnownUnavailable()) {
+      return Array.from(getFallbackUserStore(userId).values())
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+        .map(toConversation)
+    }
+
     try {
       return await prisma.conversation.findMany({
         where: {
@@ -60,7 +99,9 @@ export const ConversationService = {
         },
       })
     } catch (error) {
-      logFallbackWarning('getConversationsByUserId', error)
+      if (!markDatabaseUnavailableIfNeeded(error)) {
+        logFallbackWarning('getConversationsByUserId', error)
+      }
       return Array.from(getFallbackUserStore(userId).values())
         .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
         .map(toConversation)
@@ -74,6 +115,11 @@ export const ConversationService = {
     id: string,
     userId: string
   ): Promise<ConversationWithMessages | null> {
+    if (isDatabaseKnownUnavailable()) {
+      const conversation = getFallbackUserStore(userId).get(id)
+      return conversation ? cloneConversation(conversation) : null
+    }
+
     try {
       const conversation = await prisma.conversation.findFirst({
         where: {
@@ -90,7 +136,9 @@ export const ConversationService = {
       })
       return conversation as unknown as ConversationWithMessages | null
     } catch (error) {
-      logFallbackWarning('getFullConversation', error)
+      if (!markDatabaseUnavailableIfNeeded(error)) {
+        logFallbackWarning('getFullConversation', error)
+      }
       const conversation = getFallbackUserStore(userId).get(id)
       return conversation ? cloneConversation(conversation) : null
     }
@@ -104,24 +152,13 @@ export const ConversationService = {
     title: string,
     messagesData: NewMessageData[]
   ): Promise<Conversation> {
-    try {
-      return await prisma.conversation.create({
-        data: {
-          userId: userId,
-          title: title,
-          messages: {
-            create: messagesData,
-          },
-        },
-      })
-    } catch (error) {
-      logFallbackWarning('createConversation', error)
+    const saveToFallback = () => {
       const now = new Date()
       const conversationId = createId('conversation')
-      const messages = messagesData.map((message) => ({
+      const messages = messagesData.map((message, index) => ({
         id: createId('message'),
         conversationId,
-        createdAt: now,
+        createdAt: new Date(now.getTime() + index),
         role: message.role,
         content: message.content,
         provider: message.provider ?? null,
@@ -140,6 +177,27 @@ export const ConversationService = {
       getFallbackUserStore(userId).set(conversationId, conversation)
       return toConversation(conversation)
     }
+
+    if (isDatabaseKnownUnavailable()) {
+      return saveToFallback()
+    }
+
+    try {
+      return await prisma.conversation.create({
+        data: {
+          userId: userId,
+          title: title,
+          messages: {
+            create: messagesData,
+          },
+        },
+      })
+    } catch (error) {
+      if (!markDatabaseUnavailableIfNeeded(error)) {
+        logFallbackWarning('createConversation', error)
+      }
+      return saveToFallback()
+    }
   },
 
   /**
@@ -150,6 +208,38 @@ export const ConversationService = {
     userId: string,
     messagesData: NewMessageData[]
   ): Promise<ConversationWithMessages | null> {
+    const saveToFallback = () => {
+      const store = getFallbackUserStore(userId)
+      const existingConversation = store.get(id)
+      if (!existingConversation) {
+        return null
+      }
+
+      const now = new Date()
+      const newMessages: Message[] = messagesData.map((message, index) => ({
+        id: createId('message'),
+        conversationId: id,
+        createdAt: new Date(now.getTime() + index),
+        role: message.role,
+        content: message.content,
+        provider: message.provider ?? null,
+        model: message.model ?? null,
+      }))
+
+      const updatedConversation: ConversationWithMessages = {
+        ...existingConversation,
+        updatedAt: now,
+        messages: [...existingConversation.messages, ...newMessages],
+      }
+
+      store.set(id, updatedConversation)
+      return cloneConversation(updatedConversation)
+    }
+
+    if (isDatabaseKnownUnavailable()) {
+      return saveToFallback()
+    }
+
     try {
       // Verify user owns the conversation
       const conversation = await prisma.conversation.findFirst({
@@ -173,32 +263,10 @@ export const ConversationService = {
 
       return this.getFullConversation(id, userId)
     } catch (error) {
-      logFallbackWarning('addMessages', error)
-      const store = getFallbackUserStore(userId)
-      const existingConversation = store.get(id)
-      if (!existingConversation) {
-        return null
+      if (!markDatabaseUnavailableIfNeeded(error)) {
+        logFallbackWarning('addMessages', error)
       }
-
-      const now = new Date()
-      const newMessages: Message[] = messagesData.map((message) => ({
-        id: createId('message'),
-        conversationId: id,
-        createdAt: now,
-        role: message.role,
-        content: message.content,
-        provider: message.provider ?? null,
-        model: message.model ?? null,
-      }))
-
-      const updatedConversation: ConversationWithMessages = {
-        ...existingConversation,
-        updatedAt: now,
-        messages: [...existingConversation.messages, ...newMessages],
-      }
-
-      store.set(id, updatedConversation)
-      return cloneConversation(updatedConversation)
+      return saveToFallback()
     }
   },
   
@@ -206,6 +274,10 @@ export const ConversationService = {
    * Delete a conversation and all its messages.
    */
   async deleteConversation(id: string, userId: string): Promise<boolean> {
+    if (isDatabaseKnownUnavailable()) {
+      return getFallbackUserStore(userId).delete(id)
+    }
+
     try {
       // Use a transaction to delete messages and conversation
       await prisma.$transaction(async (tx: PrismaClient) => {
@@ -229,7 +301,9 @@ export const ConversationService = {
       })
       return true
     } catch (error) {
-      logFallbackWarning('deleteConversation', error)
+      if (!markDatabaseUnavailableIfNeeded(error)) {
+        logFallbackWarning('deleteConversation', error)
+      }
       return getFallbackUserStore(userId).delete(id)
     }
   },
