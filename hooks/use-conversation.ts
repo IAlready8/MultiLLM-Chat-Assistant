@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Conversation, Message } from '@prisma/client'
+import { Conversation, Message } from '@/types/prisma'
 import { apiClient } from '@/lib/api-client'
 
 type FullConversation = Conversation & { messages: Message[] }
@@ -84,7 +84,7 @@ export const useConversation = () => {
         createdAt: new Date(),
       }))
       
-      setActiveConversation(prev =>
+      setActiveConversation((prev: FullConversation | null) =>
         prev ? { ...prev, messages: [...prev.messages, ...optimisticMessages] } : null
       )
 
@@ -124,7 +124,7 @@ export const useConversation = () => {
       // Rollback
       setConversationList(originalList)
     }
-  }, [activeConversation])
+  }, [activeConversation, conversationList])
   
   // 6. Clear active conversation (to go back to list view)
   const clearActiveConversation = useCallback(() => {

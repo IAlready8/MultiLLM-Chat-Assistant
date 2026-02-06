@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { Persona } from '@prisma/client'
+import { Persona } from '@/types/prisma'
 
 /**
  * This service provides all database operations for Personas,

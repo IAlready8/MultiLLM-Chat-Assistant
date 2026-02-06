@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Persona } from '@prisma/client'
+import { Persona } from '@/types/prisma'
 import { apiClient } from '@/lib/api-client'
 
 type NewPersona = Omit<Persona, 'id' | 'userId' | 'createdAt' | 'updatedAt'>

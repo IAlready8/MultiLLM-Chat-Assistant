@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import type { Analytics as AnalyticsRecord } from '@/types/prisma'
 
 export interface AnalyticsEvent {
   event: string;
@@ -41,7 +42,7 @@ export async function getAnalytics(userId?: string): Promise<UsageData[]> {
     // Process analytics data into usage format
     const usageMap = new Map<string, UsageData>();
 
-    analytics.forEach((event) => {
+    analytics.forEach((event: AnalyticsRecord) => {
       const payload = event.payload ? JSON.parse(event.payload as string) : {};
       const provider = payload?.provider || 'unknown';
       const existing = usageMap.get(provider) || {
@@ -91,7 +92,7 @@ export async function getDailyUsage(userId?: string, days: number = 7): Promise<
     // Group by date and provider
     const dailyMap = new Map<string, Map<string, UsageData>>();
 
-    analytics.forEach((event) => {
+    analytics.forEach((event: AnalyticsRecord) => {
       const date = event.createdAt.toISOString().split('T')[0];
       const payload = event.payload ? JSON.parse(event.payload as string) : {};
       const provider = payload?.provider || 'unknown';

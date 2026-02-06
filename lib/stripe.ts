@@ -11,7 +11,7 @@ export const isStripeConfigured = !!process.env.STRIPE_SECRET_KEY && !!process.e
 
 // Initialize Stripe client (uses placeholder during build if not configured)
 export const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2025-11-17.clover' as const, // Use a consistent API version
+  apiVersion: '2025-11-17.clover',
   typescript: true,
 })
 

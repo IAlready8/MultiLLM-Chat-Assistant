@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 export interface PersonaData {
   id: string;
   title: string;
-  description: string | null;
+  description?: string | null;
   prompt: string;
   createdAt: Date;
   updatedAt: Date;

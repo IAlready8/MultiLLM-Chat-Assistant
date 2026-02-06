@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { errorManager, createErrorContext, DatabaseError } from '@/lib/error-system';
-import type { User, Conversation, Message } from '@prisma/client';
+import type { User, Conversation, Message } from '@/types/prisma';
 
 type MessageInput = Omit<Message, 'id' | 'conversationId' | 'createdAt'>;
 
@@ -29,7 +29,7 @@ export class ConversationService {
     async createConversation(userId: User['id'], title: string, messages: MessageInput[]): Promise<Conversation & { messages: Message[] }> {
         const context = createErrorContext('/services/conversation-service/create', userId);
         try {
-            return await prisma.conversation.create({
+            const conversation = await prisma.conversation.create({
                 data: {
                     userId,
                     title,
@@ -41,6 +41,7 @@ export class ConversationService {
                     messages: true,
                 },
             });
+            return conversation as Conversation & { messages: Message[] };
         } catch (error) {
             const dbError = new DatabaseError('Failed to create conversation', context, error as Error);
             await errorManager.logError(dbError, context);
@@ -75,7 +76,7 @@ export class ConversationService {
     async getConversation(conversationId: Conversation['id']): Promise<(Conversation & { messages: Message[] }) | null> {
         const context = createErrorContext('/services/conversation-service/get', undefined, { conversationId });
         try {
-            return await prisma.conversation.findUnique({
+            const conversation = await prisma.conversation.findUnique({
                 where: { id: conversationId },
                 include: {
                     messages: {
@@ -83,6 +84,7 @@ export class ConversationService {
                     },
                 },
             });
+            return conversation as (Conversation & { messages: Message[] }) | null;
         } catch (error) {
             const dbError = new DatabaseError('Failed to retrieve conversation', context, error as Error);
             await errorManager.logError(dbError, context);

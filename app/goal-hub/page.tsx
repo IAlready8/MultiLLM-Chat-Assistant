@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -27,62 +27,53 @@ interface Task {
 }
 
 export default function GoalHubPage() {
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [activeGoal, setActiveGoal] = useState<Goal | null>(null)
-  const { toast } = useToast()
-  
-  // Mock data for goals - this would come from your API
-  useEffect(() => {
-    const mockGoals: Goal[] = [
-      {
-        id: 'goal-1',
-        title: 'Research Quantum Computing Applications',
-        description: 'Explore how quantum computing can be applied to LLM optimization',
-        status: 'in-progress',
-        progress: 65,
-        startDate: '2023-10-15',
-        endDate: '2024-01-15',
-        tasks: [
-          { id: 'task-1', title: 'Literature review', completed: true, dueDate: '2023-11-05' },
-          { id: 'task-2', title: 'Experiment design', completed: true, dueDate: '2023-11-20' },
-          { id: 'task-3', title: 'Initial testing', completed: false, dueDate: '2023-12-10' },
-          { id: 'task-4', title: 'Analysis', completed: false, dueDate: '2024-01-05' },
-        ]
-      },
-      {
-        id: 'goal-2',
-        title: 'Optimize LLM Response Times',
-        description: 'Reduce average response time by 30% through caching and model optimization',
-        status: 'not-started',
-        progress: 0,
-        startDate: '2023-11-01',
-        endDate: '2024-02-01',
-        tasks: [
-          { id: 'task-5', title: 'Baseline measurement', completed: false, dueDate: '2023-11-10' },
-          { id: 'task-6', title: 'Caching implementation', completed: false, dueDate: '2023-12-02' },
-          { id: 'task-7', title: 'Performance testing', completed: false, dueDate: '2024-01-12' },
-        ]
-      },
-      {
-        id: 'goal-3',
-        title: 'Improve Multi-Model Consistency',
-        description: 'Ensure consistent quality across different LLM providers',
-        status: 'completed',
-        progress: 100,
-        startDate: '2023-09-01',
-        endDate: '2023-12-01',
-        tasks: [
-          { id: 'task-8', title: 'Define quality metrics', completed: true },
-          { id: 'task-9', title: 'Create evaluation suite', completed: true },
-          { id: 'task-10', title: 'Testing and refinement', completed: true },
-        ]
-      }
-    ]
-    setGoals(mockGoals)
-    if (mockGoals.length > 0) {
-      setActiveGoal(mockGoals[0])
+  const goals = useMemo<Goal[]>(() => [
+    {
+      id: 'goal-1',
+      title: 'Research Quantum Computing Applications',
+      description: 'Explore how quantum computing can be applied to LLM optimization',
+      status: 'in-progress',
+      progress: 65,
+      startDate: '2023-10-15',
+      endDate: '2024-01-15',
+      tasks: [
+        { id: 'task-1', title: 'Literature review', completed: true, dueDate: '2023-11-05' },
+        { id: 'task-2', title: 'Experiment design', completed: true, dueDate: '2023-11-20' },
+        { id: 'task-3', title: 'Initial testing', completed: false, dueDate: '2023-12-10' },
+        { id: 'task-4', title: 'Analysis', completed: false, dueDate: '2024-01-05' },
+      ]
+    },
+    {
+      id: 'goal-2',
+      title: 'Optimize LLM Response Times',
+      description: 'Reduce average response time by 30% through caching and model optimization',
+      status: 'not-started',
+      progress: 0,
+      startDate: '2023-11-01',
+      endDate: '2024-02-01',
+      tasks: [
+        { id: 'task-5', title: 'Baseline measurement', completed: false, dueDate: '2023-11-10' },
+        { id: 'task-6', title: 'Caching implementation', completed: false, dueDate: '2023-12-02' },
+        { id: 'task-7', title: 'Performance testing', completed: false, dueDate: '2024-01-12' },
+      ]
+    },
+    {
+      id: 'goal-3',
+      title: 'Improve Multi-Model Consistency',
+      description: 'Ensure consistent quality across different LLM providers',
+      status: 'completed',
+      progress: 100,
+      startDate: '2023-09-01',
+      endDate: '2023-12-01',
+      tasks: [
+        { id: 'task-8', title: 'Define quality metrics', completed: true },
+        { id: 'task-9', title: 'Create evaluation suite', completed: true },
+        { id: 'task-10', title: 'Testing and refinement', completed: true },
+      ]
     }
-  }, [])
+  ], [])
+  const [activeGoal, setActiveGoal] = useState<Goal | null>(goals[0] ?? null)
+  const { toast } = useToast()
 
   const getStatusColor = (status: Goal['status']) => {
     switch (status) {

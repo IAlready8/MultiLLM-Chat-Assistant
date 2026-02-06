@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { Team } from '@prisma/client'
+import { Team } from '@/types/prisma'
 
 // Define the type for team role as string
 type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER';

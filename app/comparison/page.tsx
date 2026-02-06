@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -18,56 +18,49 @@ interface ModelComparison {
 }
 
 export default function ComparisonPage() {
-  const [comparisonData, setComparisonData] = useState<ModelComparison[]>([])
+  const comparisonData = useMemo<ModelComparison[]>(() => [
+    {
+      id: 'gpt-4-turbo',
+      name: 'GPT-4 Turbo',
+      provider: 'OpenAI',
+      responseTime: 850,
+      tokensPerSecond: 120,
+      accuracy: 94.5,
+      cost: 0.03,
+      usageCount: 124
+    },
+    {
+      id: 'claude-3-opus',
+      name: 'Claude 3 Opus',
+      provider: 'Anthropic',
+      responseTime: 1200,
+      tokensPerSecond: 95,
+      accuracy: 96.2,
+      cost: 0.015,
+      usageCount: 89
+    },
+    {
+      id: 'gemini-pro',
+      name: 'Gemini Pro',
+      provider: 'Google',
+      responseTime: 650,
+      tokensPerSecond: 140,
+      accuracy: 92.1,
+      cost: 0.001,
+      usageCount: 201
+    },
+    {
+      id: 'llama-2-70b',
+      name: 'Llama 2 70B',
+      provider: 'Meta',
+      responseTime: 1100,
+      tokensPerSecond: 75,
+      accuracy: 89.3,
+      cost: 0.002,
+      usageCount: 67
+    }
+  ], [])
   const [activeTab, setActiveTab] = useState('models')
-
-  // Mock data for comparison - this would come from your analytics API
-  useEffect(() => {
-    // This would typically fetch from your analytics endpoint
-    const mockData: ModelComparison[] = [
-      {
-        id: 'gpt-4-turbo',
-        name: 'GPT-4 Turbo',
-        provider: 'OpenAI',
-        responseTime: 850,
-        tokensPerSecond: 120,
-        accuracy: 94.5,
-        cost: 0.03,
-        usageCount: 124
-      },
-      {
-        id: 'claude-3-opus',
-        name: 'Claude 3 Opus',
-        provider: 'Anthropic',
-        responseTime: 1200,
-        tokensPerSecond: 95,
-        accuracy: 96.2,
-        cost: 0.015,
-        usageCount: 89
-      },
-      {
-        id: 'gemini-pro',
-        name: 'Gemini Pro',
-        provider: 'Google',
-        responseTime: 650,
-        tokensPerSecond: 140,
-        accuracy: 92.1,
-        cost: 0.001,
-        usageCount: 201
-      },
-      {
-        id: 'llama-2-70b',
-        name: 'Llama 2 70B',
-        provider: 'Meta',
-        responseTime: 1100,
-        tokensPerSecond: 75,
-        accuracy: 89.3,
-        cost: 0.002,
-        usageCount: 67
-      }
-    ]
-    setComparisonData(mockData)
-  }, [])
 
   const renderModelComparison = () => (
     <div className="space-y-6">

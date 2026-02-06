@@ -1,4 +1,4 @@
-import { Persona, Conversation, Message } from '@prisma/client'
+import { Persona, Conversation, Message } from '@/types/prisma'
 
 // --- Types ---
 type NewPersona = Omit<Persona, 'id' | 'userId' | 'createdAt' | 'updatedAt'>

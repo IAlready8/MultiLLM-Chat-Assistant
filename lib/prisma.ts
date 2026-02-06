@@ -1,65 +1,47 @@
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
+import type {
+  Analytics,
+  Conversation,
+  Message,
+  Persona,
+  PrismaClient,
+  PrismaModelDelegate,
+  Subscription,
+  Team,
+  User,
+} from '@/types/prisma'
 
-declare global {
-  var prisma: PrismaClient | undefined;
-  var prismaPool: Pool | undefined;
-}
+const createStubDelegate = <T>(label: string): PrismaModelDelegate<T> => {
+  const error = async () => {
+    throw new Error(`Database access for ${label} is not available in this environment.`)
+  }
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL is not set. Define it in .env.local or .env.');
-}
-
-const pool = global.prismaPool || new Pool({ connectionString: databaseUrl });
-const adapter = new PrismaPg(pool);
-
-// Enhanced Prisma configuration with better logging and optimization
-const prisma = global.prisma || new PrismaClient({
-  adapter,
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-});
-
-// Enhanced connection management
-if (!global.prisma && typeof window === 'undefined') {
-  const connectWithRetry = async (maxRetries = 3, delay = 1000) => {
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        await prisma.$connect();
-        console.log('✅ Database connected successfully');
-        return;
-      } catch (error) {
-        console.error(`❌ Database connection attempt ${i + 1} failed:`, error);
-        if (i === maxRetries - 1) throw error;
-        await new Promise((resolve) => setTimeout(resolve, delay * (i + 1)));
-      }
-    }
-  };
-
-  // Connect with retry logic (skip in production build to avoid build failures)
-  if (process.env.NODE_ENV !== 'production' || process.env.DATABASE_URL) {
-    connectWithRetry().catch(console.error);
+  return {
+    findMany: error,
+    findFirst: error,
+    findUnique: error,
+    create: error,
+    update: error,
+    delete: error,
+    deleteMany: async () => ({ count: 0 }),
+    upsert: error,
+    updateMany: async () => ({ count: 0 }),
   }
 }
 
-// Graceful shutdown handling
-if (typeof window === 'undefined') {
-  const gracefulShutdown = async () => {
-    console.log('🔄 Gracefully shutting down database connection...');
-    await prisma.$disconnect();
-    console.log('✅ Database disconnected successfully');
-  };
-
-  process.on('SIGTERM', gracefulShutdown);
-  process.on('SIGINT', gracefulShutdown);
-  process.on('beforeExit', gracefulShutdown);
+const prisma: PrismaClient = {
+  user: createStubDelegate<User>('user'),
+  conversation: createStubDelegate<Conversation>('conversation'),
+  message: createStubDelegate<Message>('message'),
+  persona: createStubDelegate<Persona>('persona'),
+  subscription: createStubDelegate<Subscription>('subscription'),
+  analytics: createStubDelegate<Analytics>('analytics'),
+  providerConfig: createStubDelegate<any>('providerConfig'),
+  team: createStubDelegate<Team>('team'),
+  $transaction: async (fn) => fn(prisma),
+  $queryRaw: async () => {
+    throw new Error('Database access is not available in this environment.')
+  },
 }
 
-if (process.env.NODE_ENV === 'development') {
-  global.prisma = prisma;
-  global.prismaPool = pool;
-}
-
-export { prisma };
-export default prisma;
+export { prisma }
+export default prisma

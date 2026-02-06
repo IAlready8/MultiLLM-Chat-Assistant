@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,8 +25,66 @@ type PersonaFormErrors = {
   prompt?: string;
 };
 
+const DEFAULT_PERSONAS: Persona[] = [
+  {
+    id: '1',
+    title: 'Helpful Assistant',
+    description: 'A friendly and informative assistant',
+    prompt: 'You are a helpful assistant. Always be polite and informative. Provide clear and concise answers to users\' questions.',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: '2',
+    title: 'Code Reviewer',
+    description: 'An expert code reviewer',
+    prompt: 'You are an expert code reviewer. Focus on code quality, performance, best practices, and potential bugs. Provide constructive feedback and suggestions for improvement.',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  {
+    id: '3',
+    title: 'Creative Writer',
+    description: 'A creative and imaginative writer',
+    prompt: 'You are a creative writer. Help users with their creative writing projects. Provide suggestions for plot, character development, dialogue, and style.',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }
+]
+
+const clonePersonas = (list: Persona[]): Persona[] =>
+  list.map((persona) => ({
+    ...persona,
+    createdAt: new Date(persona.createdAt),
+    updatedAt: new Date(persona.updatedAt)
+  }))
+
+const loadInitialPersonas = (): Persona[] => {
+  if (typeof window === 'undefined') {
+    return clonePersonas(DEFAULT_PERSONAS)
+  }
+
+  try {
+    const stored = localStorage.getItem('personas')
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      return parsed.map((persona: Persona) => ({
+        ...persona,
+        createdAt: new Date(persona.createdAt),
+        updatedAt: new Date(persona.updatedAt)
+      }))
+    }
+
+    localStorage.setItem('personas', JSON.stringify(DEFAULT_PERSONAS))
+    return clonePersonas(DEFAULT_PERSONAS)
+  } catch (error) {
+    console.error('Failed to load personas:', error)
+    return clonePersonas(DEFAULT_PERSONAS)
+  }
+}
+
 export default function PersonasPage() {
-  const [personas, setPersonas] = useState<Persona[]>([])
+  const [personas, setPersonas] = useState<Persona[]>(() => loadInitialPersonas())
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [formData, setFormData] = useState<Omit<Persona, 'id'>>({ 
@@ -51,7 +109,7 @@ export default function PersonasPage() {
     setFormErrors((prev) => ({ ...prev, [field]: undefined }))
   }
 
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const nextErrors: PersonaFormErrors = {}
 
     if (!formData.title.trim()) {
@@ -63,64 +121,10 @@ export default function PersonasPage() {
     }
 
     return nextErrors
-  }
+  }, [formData])
 
-  const loadPersonas = useCallback(() => {
-    try {
-      const stored = localStorage.getItem('personas')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        setPersonas(parsed.map((p: any) => ({
-          ...p,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt)
-        })))
-      } else {
-        // Create default personas
-        const defaults: Persona[] = [
-          {
-            id: '1',
-            title: 'Helpful Assistant',
-            description: 'A friendly and informative assistant',
-            prompt: 'You are a helpful assistant. Always be polite and informative. Provide clear and concise answers to users\' questions.',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          {
-            id: '2',
-            title: 'Code Reviewer',
-            description: 'An expert code reviewer',
-            prompt: 'You are an expert code reviewer. Focus on code quality, performance, best practices, and potential bugs. Provide constructive feedback and suggestions for improvement.',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          },
-          {
-            id: '3',
-            title: 'Creative Writer',
-            description: 'A creative and imaginative writer',
-            prompt: 'You are a creative writer. Help users with their creative writing projects. Provide suggestions for plot, character development, dialogue, and style.',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }
-        ]
-        setPersonas(defaults)
-        localStorage.setItem('personas', JSON.stringify(defaults))
-      }
-    } catch (error) {
-      console.error('Failed to load personas:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to load personas',
-        variant: 'destructive'
-      })
-    }
-  }, [toast])
 
-  useEffect(() => {
-    loadPersonas()
-  }, [loadPersonas])
-
-  const savePersonas = (updatedPersonas: Persona[]) => {
+  const savePersonas = useCallback((updatedPersonas: Persona[]) => {
     try {
       localStorage.setItem('personas', JSON.stringify(updatedPersonas))
       setPersonas(updatedPersonas)
@@ -132,9 +136,21 @@ export default function PersonasPage() {
         variant: 'destructive'
       })
     }
-  }
+  }, [toast])
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const resetForm = useCallback(() => {
+    setEditingPersona(null)
+    setFormData({ 
+      title: '', 
+      description: '', 
+      prompt: '',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    })
+    setFormErrors({})
+  }, [])
+
+  const handleFormSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault()
 
     const nextErrors = validateForm()
@@ -170,7 +186,7 @@ export default function PersonasPage() {
     
     resetForm()
     setIsDialogOpen(false)
-  }
+  }, [editingPersona, formData, personas, resetForm, savePersonas, validateForm])
 
   const handleEdit = (persona: Persona) => {
     setFormErrors({})
@@ -192,18 +208,6 @@ export default function PersonasPage() {
       title: 'Deleted',
       description: 'Persona deleted successfully'
     })
-  }
-
-  const resetForm = () => {
-    setEditingPersona(null)
-    setFormData({ 
-      title: '', 
-      description: '', 
-      prompt: '',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    })
-    setFormErrors({})
   }
 
   const openCreateDialog = () => {
