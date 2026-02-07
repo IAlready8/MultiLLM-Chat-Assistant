@@ -84,6 +84,39 @@ Key groups:
 - Vercel setup: `VERCEL_DEPLOYMENT.md`
 - General deployment notes: `docs/DEPLOYMENT_GUIDE.md`
 
+### Deploy Technique Used (Current Workflow)
+This is the exact command flow used to deploy without changing source files:
+
+1. Stage/commit/push current state:
+   - `git add -A`
+   - `git commit -m "chore: snapshot current working state"`
+   - If there are no file changes but you still want a new snapshot commit:
+     - `git commit --allow-empty -m "chore: maintain working snapshot"`
+   - `git push origin main`
+2. Create a Vercel preview deployment:
+   - `vercel deploy -y`
+3. If `vercel.json` references secrets with `@secret_name` and those secrets are missing, deploy with temporary overrides:
+   - Build-time (`-b`) and runtime (`-e`) values may both be required for frameworks that read env during build.
+   - Example:
+     - `vercel deploy -y -b NEXTAUTH_SECRET=... -b NEXTAUTH_URL=... -b API_KEY_ENCRYPTION_SEED=... -b DATABASE_URL=... -e NEXTAUTH_SECRET=... -e NEXTAUTH_URL=... -e API_KEY_ENCRYPTION_SEED=... -e DATABASE_URL=...`
+
+### Make Every Push To `main` Auto-Deploy
+Configure once in Vercel Project Settings:
+
+1. Connect this GitHub repository to the Vercel project.
+2. Set `Production Branch` to `main`.
+3. Add required environment variables in Vercel for both `Production` and `Preview`:
+   - `NEXTAUTH_SECRET`
+   - `NEXTAUTH_URL`
+   - `API_KEY_ENCRYPTION_SEED`
+   - `DATABASE_URL` (if your runtime/build path needs it)
+4. Fix secret wiring so deploys do not depend on CLI overrides:
+   - Option A: Create the Vercel secrets referenced in `vercel.json` (`@database_url`, `@nextauth_secret`, `@nextauth_url`, `@api_key_encryption_seed`).
+   - Option B: Remove secret references from `vercel.json` and manage env vars directly in Vercel settings.
+5. Ensure your Git author identity is valid and has access to the Vercel team/project (email must match an authorized member).
+
+After this setup, every `git push origin main` should trigger a production deployment automatically via Vercel Git integration.
+
 ## Additional Docs
 - `DOCUMENTATION.md`: API/services/components reference
 - `DESIGN_SYSTEM.md`: design tokens and UI conventions
