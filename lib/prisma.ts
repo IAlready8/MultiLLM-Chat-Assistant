@@ -1,6 +1,7 @@
 import type {
   Analytics,
   Conversation,
+  Goal,
   Message,
   Persona,
   PrismaClient,
@@ -33,6 +34,7 @@ const prisma: PrismaClient = {
   conversation: createStubDelegate<Conversation>('conversation'),
   message: createStubDelegate<Message>('message'),
   persona: createStubDelegate<Persona>('persona'),
+  goal: createStubDelegate<Goal>('goal'),
   subscription: createStubDelegate<Subscription>('subscription'),
   analytics: createStubDelegate<Analytics>('analytics'),
   providerConfig: createStubDelegate<any>('providerConfig'),

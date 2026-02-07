@@ -6,10 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Send, Bot, User, RotateCcw, Settings, Plus, X } from 'lucide-react'
+import { Send, Bot, User, RotateCcw, Settings, Plus, X, Trash2 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
-import type { Message as ConversationMessage } from '@/types/prisma'
+import type { Conversation, Message as ConversationMessage } from '@/types/prisma'
 import Link from 'next/link'
 
 const SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'googleai', 'openrouter', 'grok'] as const
@@ -55,6 +55,8 @@ export default function MultiChatPage() {
   })
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
+  const [conversationList, setConversationList] = useState<Conversation[]>([])
+  const [isLoadingConversationList, setIsLoadingConversationList] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const { toast } = useToast()
   const { status } = useSession()
@@ -64,6 +66,17 @@ export default function MultiChatPage() {
   const hasMessages = chatState.messages.length > 0
 
   const generateInstanceId = () => `instance-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+
+  const formatConversationTimestamp = (value: Date | string) => {
+    const timestamp = new Date(value)
+    if (Number.isNaN(timestamp.getTime())) return 'Unknown'
+    return timestamp.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
 
   const loadConfiguredProviders = useCallback(async () => {
     try {
@@ -99,29 +112,79 @@ export default function MultiChatPage() {
     }
   }, [toast])
 
-  const loadLatestConversation = useCallback(async () => {
-    try {
-      setIsLoadingHistory(true)
-      const conversations = await apiClient.getConversations()
-      if (conversations.length === 0) return
+  const refreshConversationList = useCallback(
+    async (options?: { silent?: boolean }) => {
+      try {
+        setIsLoadingConversationList(true)
+        const conversations = await apiClient.getConversations()
+        setConversationList(conversations)
+        return conversations
+      } catch (error) {
+        console.error('Failed to refresh conversation list:', error)
+        if (!options?.silent) {
+          toast({
+            title: 'Error',
+            description: 'Failed to load conversations.',
+            variant: 'destructive',
+          })
+        }
+        return [] as Conversation[]
+      } finally {
+        setIsLoadingConversationList(false)
+      }
+    },
+    [toast]
+  )
 
-      const latest = conversations[0]
-      const conversation = await apiClient.getConversation(latest.id)
-      setActiveConversationId(conversation.id)
-
-      const restoredMessages: Message[] = conversation.messages.map((msg: ConversationMessage) => ({
+  const hydrateConversationMessages = (conversation: {
+    id: string
+    messages: ConversationMessage[]
+  }) => {
+    const restoredMessages: Message[] = conversation.messages.map(
+      (msg: ConversationMessage) => ({
         id: msg.id,
         role: msg.role as Message['role'],
         content: msg.content,
         timestamp: new Date(msg.createdAt),
         provider: msg.provider ?? undefined,
-        model: msg.model ?? undefined
-      }))
+        model: msg.model ?? undefined,
+      })
+    )
 
-      setChatState(prev => ({
-        ...prev,
-        messages: restoredMessages
-      }))
+    setActiveConversationId(conversation.id)
+    setChatState(prev => ({
+      ...prev,
+      messages: restoredMessages,
+    }))
+  }
+
+  const touchConversation = useCallback((conversationId: string) => {
+    setConversationList(prev => {
+      const match = prev.find(item => item.id === conversationId)
+      if (!match) return prev
+
+      const updated: Conversation = {
+        ...match,
+        updatedAt: new Date(),
+      }
+
+      return [updated, ...prev.filter(item => item.id !== conversationId)]
+    })
+  }, [])
+
+  const loadLatestConversation = useCallback(async () => {
+    try {
+      setIsLoadingHistory(true)
+      const conversations = await refreshConversationList({ silent: true })
+      if (conversations.length === 0) {
+        setActiveConversationId(null)
+        setChatState(prev => ({ ...prev, messages: [] }))
+        return
+      }
+
+      const latest = conversations[0]
+      const conversation = await apiClient.getConversation(latest.id)
+      hydrateConversationMessages(conversation)
     } catch (error) {
       console.error('Failed to load conversation history:', error)
       toast({
@@ -132,7 +195,7 @@ export default function MultiChatPage() {
     } finally {
       setIsLoadingHistory(false)
     }
-  }, [toast])
+  }, [refreshConversationList, toast])
 
   useEffect(() => {
     if (status === 'loading') {
@@ -154,6 +217,44 @@ export default function MultiChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatState.messages])
+
+  const loadConversationById = async (conversationId: string) => {
+    try {
+      setIsLoadingHistory(true)
+      const conversation = await apiClient.getConversation(conversationId)
+      hydrateConversationMessages(conversation)
+    } catch (error) {
+      console.error('Failed to load conversation:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load selected conversation.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoadingHistory(false)
+    }
+  }
+
+  const deleteConversationById = async (conversationId: string) => {
+    try {
+      await apiClient.deleteConversation(conversationId)
+      setConversationList(prev =>
+        prev.filter(conversation => conversation.id !== conversationId)
+      )
+
+      if (activeConversationId === conversationId) {
+        setActiveConversationId(null)
+        setChatState(prev => ({ ...prev, messages: [] }))
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete conversation.',
+        variant: 'destructive',
+      })
+    }
+  }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setChatState(prev => ({ ...prev, input: e.target.value }))
@@ -182,6 +283,7 @@ export default function MultiChatPage() {
     try {
       if (activeConversationId) {
         await apiClient.addMessages(activeConversationId, [userMessage])
+        touchConversation(activeConversationId)
         return activeConversationId
       }
 
@@ -191,6 +293,10 @@ export default function MultiChatPage() {
         messages: [userMessage]
       })
       setActiveConversationId(newConversation.id)
+      setConversationList(prev => [
+        newConversation,
+        ...prev.filter(conversation => conversation.id !== newConversation.id),
+      ])
       return newConversation.id
     } catch (error) {
       console.error('Failed to save user message:', error)
@@ -218,6 +324,7 @@ export default function MultiChatPage() {
 
     try {
       await apiClient.addMessages(conversationId, [message])
+      touchConversation(conversationId)
     } catch (error) {
       console.error('Failed to save assistant message:', error)
       toast({
@@ -463,7 +570,7 @@ export default function MultiChatPage() {
               </div>
               <Button variant="outline" size="sm" onClick={clearChat} disabled={isBusy || !hasMessages}>
                 <RotateCcw className="h-4 w-4 mr-2" />
-                Clear
+                New Chat
               </Button>
               <Button variant="outline" size="sm" asChild>
                 <Link href="/settings" aria-label="Open settings">
@@ -591,6 +698,60 @@ export default function MultiChatPage() {
                           <option key={model} value={model}>{model}</option>
                         ))}
                       </select>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">
+                Recent Conversations ({conversationList.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                {isLoadingConversationList ? (
+                  <p className="text-xs text-muted-foreground">Loading conversations...</p>
+                ) : conversationList.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No saved conversations yet.
+                  </p>
+                ) : (
+                  conversationList.map(conversation => (
+                    <div
+                      key={conversation.id}
+                      className={`flex items-start gap-2 rounded-md border p-2 ${
+                        activeConversationId === conversation.id
+                          ? 'border-primary bg-primary/10'
+                          : 'bg-muted/20'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        className="flex-1 text-left"
+                        onClick={() => void loadConversationById(conversation.id)}
+                        disabled={isBusy}
+                      >
+                        <p className="truncate text-xs font-medium">
+                          {conversation.title || 'Untitled conversation'}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {formatConversationTimestamp(conversation.updatedAt)}
+                        </p>
+                      </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => void deleteConversationById(conversation.id)}
+                        disabled={isBusy}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   ))
                 )}

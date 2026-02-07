@@ -36,6 +36,13 @@ export interface Persona extends BaseModel {
   userId: string
 }
 
+export interface Goal extends BaseModel {
+  title: string
+  description?: string | null
+  status: string
+  userId: string
+}
+
 export interface Team extends BaseModel {
   name: string
 }
@@ -73,6 +80,7 @@ export interface PrismaClient {
   conversation: PrismaModelDelegate<Conversation>
   message: PrismaModelDelegate<Message>
   persona: PrismaModelDelegate<Persona>
+  goal: PrismaModelDelegate<Goal>
   subscription: PrismaModelDelegate<Subscription>
   analytics: PrismaModelDelegate<Analytics>
   providerConfig: PrismaModelDelegate<any>

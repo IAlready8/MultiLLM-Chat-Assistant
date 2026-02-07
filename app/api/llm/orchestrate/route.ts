@@ -19,6 +19,147 @@ const orchestrateRequestSchema = z.object({
   prompt: z.string(),
 });
 
+type OrchestrateRequest = z.infer<typeof orchestrateRequestSchema>
+
+type ChatResponsePayload = {
+  content?: string
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+  }
+}
+
+type ProviderResult = {
+  provider: string
+  model: string
+  content: string
+  prompt_tokens: number
+  completion_tokens: number
+  cost_usd: number
+  latency_ms: number
+}
+
+const COST_PER_1K_TOKENS: Record<string, number> = {
+  openai: 0.03,
+  anthropic: 0.015,
+  googleai: 0.001,
+  openrouter: 0.01,
+  grok: 0.02,
+}
+
+const estimatePromptTokens = (prompt: string): number =>
+  Math.max(1, Math.round(prompt.length / 4))
+
+const estimateCost = (provider: string, totalTokens: number): number => {
+  const rate = COST_PER_1K_TOKENS[provider] ?? 0.01
+  return (totalTokens / 1000) * rate
+}
+
+const toProviderResult = (
+  provider: string,
+  model: string,
+  payload: ChatResponsePayload,
+  latencyMs: number,
+  prompt: string
+): ProviderResult => {
+  const promptTokens =
+    payload.usage?.prompt_tokens ?? estimatePromptTokens(prompt)
+  const completionTokens =
+    payload.usage?.completion_tokens ??
+    Math.max(1, Math.round((payload.content || '').length / 4))
+  const totalTokens =
+    payload.usage?.total_tokens ?? promptTokens + completionTokens
+
+  return {
+    provider,
+    model,
+    content: payload.content || '',
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    cost_usd: estimateCost(provider, totalTokens),
+    latency_ms: latencyMs,
+  }
+}
+
+const resolveBaseUrl = (req: Request): string => {
+  const host = req.headers.get('host') || 'localhost:3000'
+  const forwardedProto = req.headers.get('x-forwarded-proto')
+  const protocol =
+    forwardedProto ||
+    (host.includes('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https')
+  return `${protocol}://${host}`
+}
+
+const runLocalFallbackOrchestration = async (
+  requestData: OrchestrateRequest,
+  req: Request
+): Promise<ProviderResult[]> => {
+  const baseUrl = resolveBaseUrl(req)
+  const cookieHeader = req.headers.get('cookie') || ''
+  const results: ProviderResult[] = []
+
+  for (const request of requestData.requests) {
+    const startedAt = Date.now()
+    const chatResponse = await fetch(`${baseUrl}/api/llm/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(cookieHeader ? { cookie: cookieHeader } : {}),
+      },
+      body: JSON.stringify({
+        provider: request.provider,
+        model: request.model,
+        stream: false,
+        messages: [
+          {
+            role: 'user',
+            content: request.prompt || requestData.prompt,
+          },
+        ],
+      }),
+    })
+
+    const latencyMs = Date.now() - startedAt
+    const fallbackPrompt = request.prompt || requestData.prompt
+
+    if (!chatResponse.ok) {
+      let errorMessage = `HTTP ${chatResponse.status}`
+      try {
+        const errorPayload = await chatResponse.json()
+        errorMessage = errorPayload?.error || errorPayload?.details || errorMessage
+      } catch {
+        // Ignore parsing errors and use status-based message
+      }
+
+      results.push({
+        provider: request.provider,
+        model: request.model,
+        content: `Provider request failed: ${errorMessage}`,
+        prompt_tokens: estimatePromptTokens(fallbackPrompt),
+        completion_tokens: 0,
+        cost_usd: 0,
+        latency_ms: latencyMs,
+      })
+      continue
+    }
+
+    const payload = (await chatResponse.json()) as ChatResponsePayload
+    results.push(
+      toProviderResult(
+        request.provider,
+        request.model,
+        payload,
+        latencyMs,
+        fallbackPrompt
+      )
+    )
+  }
+
+  return results
+}
+
 /**
  * This API route is the "bridge" to the Python service.
  * It authenticates the user, validates the request,
@@ -97,6 +238,15 @@ export async function POST(req: Request) {
         statusCode = 400; // Bad Request for other client errors
       }
 
+      // When Python is unavailable or unhealthy, use local fallback orchestration.
+      if (statusCode >= 502 || pythonResponse.status >= 500) {
+        const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
+        return NextResponse.json(fallbackResults, {
+          status: 200,
+          headers: { 'x-orchestration-fallback': 'local' },
+        })
+      }
+
       return NextResponse.json(
         {
           error: 'Python service error',
@@ -104,7 +254,7 @@ export async function POST(req: Request) {
           status: pythonResponse.status,
         },
         { status: statusCode }
-      );
+      )
     }
 
     const data = await pythonResponse.json();
@@ -113,17 +263,19 @@ export async function POST(req: Request) {
   } catch (error: any) {
     // Handle different types of errors
     if (error.name === 'AbortError') {
-      console.error('Request to Python service timed out');
-      return NextResponse.json(
-        { error: 'Request to orchestration service timed out' },
-        { status: 408 } // Request Timeout
-      );
+      console.error('Request to Python service timed out, using local fallback');
+      const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
+      return NextResponse.json(fallbackResults, {
+        status: 200,
+        headers: { 'x-orchestration-fallback': 'local-timeout' },
+      })
     } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      console.error('Network error connecting to Python service:', error.message);
-      return NextResponse.json(
-        { error: 'Unable to connect to orchestration service. Service may be down.' },
-        { status: 503 } // Service Unavailable
-      );
+      console.error('Network error connecting to Python service, using local fallback:', error.message);
+      const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
+      return NextResponse.json(fallbackResults, {
+        status: 200,
+        headers: { 'x-orchestration-fallback': 'local-network' },
+      })
     } else {
       console.error('Unexpected error connecting to Python service:', error);
       return NextResponse.json(

@@ -1,4 +1,4 @@
-import { Persona, Conversation, Message } from '@/types/prisma'
+import { Persona, Conversation, Message, Goal } from '@/types/prisma'
 
 // --- Types ---
 type NewPersona = Omit<Persona, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
@@ -7,6 +7,7 @@ type NewConversation = {
   title: string
   messages: NewMessage[]
 }
+type NewGoal = Omit<Goal, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
 
 // Types for Orchestration
 type ProviderRequest = {
@@ -27,6 +28,11 @@ type ProviderResponse = {
   completion_tokens: number
   cost_usd: number
   latency_ms: number
+}
+
+type OrchestrateResponseWithMeta = {
+  results: ProviderResponse[]
+  fallbackMode: string | null
 }
 
 // --- Helper ---
@@ -74,6 +80,35 @@ export const apiClient = {
     )
   },
 
+  // --- Goal API Calls ---
+  async getGoals(): Promise<Goal[]> {
+    return handleResponse(await fetch('/api/goals'))
+  },
+  async getGoal(id: string): Promise<Goal> {
+    return handleResponse(await fetch(`/api/goals/${id}`))
+  },
+  async createGoal(data: NewGoal): Promise<Goal> {
+    return handleResponse(
+      await fetch('/api/goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+    )
+  },
+  async updateGoal(id: string, data: Partial<NewGoal>): Promise<Goal> {
+    return handleResponse(
+      await fetch(`/api/goals/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+    )
+  },
+  async deleteGoal(id: string): Promise<void> {
+    await handleResponse(await fetch(`/api/goals/${id}`, { method: 'DELETE' }))
+  },
+
   // --- Conversation API Calls ---
   async getConversations(): Promise<Conversation[]> {
     return handleResponse(await fetch('/api/conversations'))
@@ -116,5 +151,18 @@ export const apiClient = {
         body: JSON.stringify(data),
       })
     )
+  },
+
+  async orchestrateWithMetadata(
+    data: OrchestrateRequest
+  ): Promise<OrchestrateResponseWithMeta> {
+    const response = await fetch('/api/llm/orchestrate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    const results = (await handleResponse(response)) as ProviderResponse[]
+    const fallbackMode = response.headers.get('x-orchestration-fallback')
+    return { results, fallbackMode }
   },
 }

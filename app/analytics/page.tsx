@@ -33,6 +33,23 @@ type UsageTrend = {
   tokens: number
 }
 
+type AnalyticsApiResponse = {
+  timeframe: '24h' | '7d' | '30d'
+  providerData: ProviderUsage[]
+  modelComparisonData: ModelComparison[]
+  usageTrends: UsageTrend[]
+  totalStats: {
+    totalRequests: number
+    totalTokens: number
+    totalErrors: number
+    avgResponseTime: number
+  }
+  meta?: {
+    source?: 'live' | 'empty'
+    eventCount?: number
+  }
+}
+
 export default function AnalyticsPage() {
   const [timeframe, setTimeframe] = useState<'24h' | '7d' | '30d'>('7d')
   const [loading, setLoading] = useState(true)
@@ -45,52 +62,34 @@ export default function AnalyticsPage() {
     totalErrors: 0,
     avgResponseTime: 0
   })
+  const [sourceLabel, setSourceLabel] = useState<'Live data' | 'No telemetry yet'>('Live data')
   const { toast } = useToast()
 
   const loadAnalyticsData = useCallback(async () => {
     setLoading(true)
     try {
-      // Simulated data generation (no artificial delay)
-      // Mock data based on timeframe
-      const mockProviderData: ProviderUsage[] = [
-        { provider: 'OpenAI', requests: 1250, tokens: 45000, errors: 3, avgResponseTime: 850 },
-        { provider: 'Anthropic', requests: 980, tokens: 38000, errors: 1, avgResponseTime: 1200 },
-        { provider: 'Google', requests: 750, tokens: 30000, errors: 2, avgResponseTime: 950 },
-        { provider: 'OpenRouter', requests: 520, tokens: 22000, errors: 5, avgResponseTime: 1100 }
-      ]
-      
-      const mockComparisonData: ModelComparison[] = [
-        { provider: 'GPT-4', factualAccuracy: 4.5, creativity: 4.2, helpfulness: 4.7, coherence: 4.8, conciseness: 3.9 },
-        { provider: 'Claude-3', factualAccuracy: 4.7, creativity: 4.5, helpfulness: 4.6, coherence: 4.9, conciseness: 4.2 },
-        { provider: 'Gemini', factualAccuracy: 4.3, creativity: 4.0, helpfulness: 4.4, coherence: 4.5, conciseness: 4.1 },
-        { provider: 'Llama', factualAccuracy: 3.8, creativity: 3.9, helpfulness: 4.0, coherence: 4.2, conciseness: 4.5 }
-      ]
-      
-      const mockTrends: UsageTrend[] = [
-        { date: 'Nov 1', requests: 120, tokens: 4500 },
-        { date: 'Nov 2', requests: 180, tokens: 6200 },
-        { date: 'Nov 3', requests: 95, tokens: 3800 },
-        { date: 'Nov 4', requests: 210, tokens: 7800 },
-        { date: 'Nov 5', requests: 165, tokens: 6100 }
-      ]
-      
-      // Calculate totals
-      const totals = mockProviderData.reduce((acc, curr) => {
-        return {
-          totalRequests: acc.totalRequests + curr.requests,
-          totalTokens: acc.totalTokens + curr.tokens,
-          totalErrors: acc.totalErrors + curr.errors,
-          avgResponseTime: acc.avgResponseTime + curr.avgResponseTime
+      const response = await fetch(`/api/analytics?timeframe=${timeframe}`, {
+        method: 'GET',
+        cache: 'no-store',
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to load analytics (${response.status})`)
+      }
+
+      const data = (await response.json()) as AnalyticsApiResponse
+      setProviderData(data.providerData || [])
+      setModelComparisonData(data.modelComparisonData || [])
+      setUsageTrends(data.usageTrends || [])
+      setTotalStats(
+        data.totalStats || {
+          totalRequests: 0,
+          totalTokens: 0,
+          totalErrors: 0,
+          avgResponseTime: 0,
         }
-      }, { totalRequests: 0, totalTokens: 0, totalErrors: 0, avgResponseTime: 0 })
-      
-      // Calculate average response time
-      totals.avgResponseTime = Math.round(totals.avgResponseTime / mockProviderData.length)
-      
-      setProviderData(mockProviderData)
-      setModelComparisonData(mockComparisonData)
-      setUsageTrends(mockTrends)
-      setTotalStats(totals)
+      )
+      setSourceLabel(data.meta?.source === 'empty' ? 'No telemetry yet' : 'Live data')
     } catch (error) {
       console.error('Failed to load analytics data:', error)
       toast({
@@ -101,11 +100,11 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [timeframe, toast])
 
   useEffect(() => {
     loadAnalyticsData()
-  }, [loadAnalyticsData, timeframe])
+  }, [loadAnalyticsData])
 
   const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444']
   const successRate = totalStats.totalRequests > 0
@@ -129,7 +128,7 @@ export default function AnalyticsPage() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
-            <Badge variant="secondary">Demo data</Badge>
+            <Badge variant="secondary">{sourceLabel}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
             Monitor usage, latency, and quality trends across providers.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { errorManager, createErrorContext, LLMProviderError, NotImplementedError } from '@/lib/error-system';
 import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service';
 import { getAuthenticatedUser } from '@/lib/api-auth'
+import { recordAnalyticsEvent } from '@/services/analytics-service'
 
 // ===== Grok (X.AI) Provider Logic =====
 async function chatGrok(
@@ -408,16 +409,62 @@ const providerFactory = {
     },
 };
 
+const estimatePromptTokens = (messages: any[]): number => {
+    const contentLength = messages.reduce((acc, message) => {
+        if (!message || typeof message.content !== 'string') return acc;
+        return acc + message.content.length;
+    }, 0);
+    return Math.max(1, Math.round(contentLength / 4));
+};
+
+const extractTotalTokens = (usage: any, fallbackTotal: number): number => {
+    if (usage && typeof usage.total_tokens === 'number') {
+        return usage.total_tokens;
+    }
+    if (usage && typeof usage.totalTokens === 'number') {
+        return usage.totalTokens;
+    }
+    const promptTokens =
+        (usage && typeof usage.prompt_tokens === 'number' && usage.prompt_tokens) ||
+        (usage && typeof usage.promptTokens === 'number' && usage.promptTokens) ||
+        0;
+    const completionTokens =
+        (usage && typeof usage.completion_tokens === 'number' && usage.completion_tokens) ||
+        (usage && typeof usage.completionTokens === 'number' && usage.completionTokens) ||
+        0;
+    const combined = promptTokens + completionTokens;
+    return combined > 0 ? combined : fallbackTotal;
+};
+
+const safeRecordEvent = async (event: {
+    event: string;
+    userId: string;
+    payload?: Record<string, unknown>;
+}) => {
+    try {
+        await recordAnalyticsEvent(event);
+    } catch (error) {
+        console.warn('Failed to record analytics event:', error);
+    }
+};
+
 // ===== Main POST Handler =====
 export async function POST(req: NextRequest) {
+    let analyticsUserId: string | null = null;
+    let analyticsProvider = 'unknown';
+    let analyticsModel = 'unknown';
+
     try {
         const authCheck = await getAuthenticatedUser({ allowGuest: true })
         if (authCheck instanceof NextResponse) return authCheck
         const { user } = authCheck
         const userId = user.id
+        analyticsUserId = userId
 
         const body = await req.json();
         const { provider = 'openai', messages, model, temperature, max_tokens, stream = true } = body;
+        analyticsProvider = provider;
+        analyticsModel = typeof model === 'string' && model.trim() ? model : 'default';
 
         if (!messages || !Array.isArray(messages) || messages.length === 0) {
             return new NextResponse(JSON.stringify({ error: 'Messages are required' }), { status: 400 });
@@ -454,9 +501,12 @@ export async function POST(req: NextRequest) {
         }
 
         if (stream) {
+            const streamStart = Date.now();
+            const promptTokens = estimatePromptTokens(messages);
             const readableStream = new ReadableStream({
                 async start(controller) {
                     try {
+                        let completionContent = '';
                         const generator = providerImplementation.stream(
                             requestPayload,
                             apiKey,
@@ -464,10 +514,41 @@ export async function POST(req: NextRequest) {
                             extraHeaders
                         );
                         for await (const chunk of generator) {
+                            completionContent += chunk;
                             controller.enqueue(new TextEncoder().encode(chunk));
                         }
+
+                        const completionTokens = Math.max(
+                            1,
+                            Math.round(completionContent.length / 4)
+                        );
+                        await safeRecordEvent({
+                            event: 'llm_request',
+                            userId,
+                            payload: {
+                                provider,
+                                model: analyticsModel,
+                                stream: true,
+                                prompt_tokens: promptTokens,
+                                completion_tokens: completionTokens,
+                                total_tokens: promptTokens + completionTokens,
+                                responseTime: Date.now() - streamStart,
+                            },
+                        });
+
                         controller.close();
                     } catch (error) {
+                        await safeRecordEvent({
+                            event: 'llm_error',
+                            userId,
+                            payload: {
+                                provider,
+                                model: analyticsModel,
+                                stream: true,
+                                responseTime: Date.now() - streamStart,
+                                message: error instanceof Error ? error.message : 'stream_error',
+                            },
+                        });
                         const context = createErrorContext('/api/llm/chat', userId, { provider });
                         await errorManager.logError(error as Error, context);
                         controller.error(error);
@@ -476,11 +557,42 @@ export async function POST(req: NextRequest) {
             });
             return new Response(readableStream, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
         } else {
+            const requestStart = Date.now();
             const result = await providerImplementation.chat(requestPayload, apiKey, baseUrl, extraHeaders);
+
+            const promptTokens = estimatePromptTokens(messages);
+            const totalTokens = extractTotalTokens(result?.usage, promptTokens);
+            const completionTokens = Math.max(0, totalTokens - promptTokens);
+
+            await safeRecordEvent({
+                event: 'llm_request',
+                userId,
+                payload: {
+                    provider,
+                    model: analyticsModel,
+                    stream: false,
+                    prompt_tokens: promptTokens,
+                    completion_tokens: completionTokens,
+                    total_tokens: totalTokens,
+                    responseTime: Date.now() - requestStart,
+                },
+            });
+
             return NextResponse.json(result);
         }
 
     } catch (error) {
+        if (analyticsUserId) {
+            await safeRecordEvent({
+                event: 'llm_error',
+                userId: analyticsUserId,
+                payload: {
+                    provider: analyticsProvider,
+                    model: analyticsModel,
+                    message: error instanceof Error ? error.message : 'request_error',
+                },
+            });
+        }
         const context = createErrorContext('/api/llm/chat');
         await errorManager.logError(error as Error, context);
         const errorMessage = error instanceof Error ? error.message : 'An internal server error occurred';
