@@ -7,6 +7,7 @@ import {
 } from '@/lib/demo-account'
 import { User } from '@/types/prisma'
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
 type GetAuthenticatedUserOptions = {
   allowGuest?: boolean
@@ -29,6 +30,17 @@ export async function getAuthenticatedUser(
 
   if (!strictAuth && demoAccount.enabled && demoAccount.bypassAuth) {
     return { user: createDemoUserRecord() }
+  }
+
+  if (allowGuest && !strictAuth) {
+    const cookieStore = cookies()
+    const hasSessionToken =
+      Boolean(cookieStore.get('next-auth.session-token')) ||
+      Boolean(cookieStore.get('__Secure-next-auth.session-token'))
+
+    if (!hasSessionToken) {
+      return { user: createGuestUserRecord() }
+    }
   }
 
   try {

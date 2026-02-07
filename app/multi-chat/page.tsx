@@ -58,6 +58,7 @@ export default function MultiChatPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const { toast } = useToast()
   const { status } = useSession()
+  const strictAuthEnabled = process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN === 'true'
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isBusy = chatState.isLoading || isLoadingHistory
   const hasMessages = chatState.messages.length > 0
@@ -140,14 +141,15 @@ export default function MultiChatPage() {
 
     const load = async () => {
       await loadConfiguredProviders()
-      if (status === 'authenticated') {
-        await loadLatestConversation()
-      } else {
+      if (strictAuthEnabled && status !== 'authenticated') {
         setIsLoadingHistory(false)
+        return
       }
+
+      await loadLatestConversation()
     }
     void load()
-  }, [loadConfiguredProviders, loadLatestConversation, status])
+  }, [loadConfiguredProviders, loadLatestConversation, status, strictAuthEnabled])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -166,7 +168,7 @@ export default function MultiChatPage() {
   }
 
   const ensureConversation = async (userContent: string) => {
-    if (status !== 'authenticated') {
+    if (strictAuthEnabled && status !== 'authenticated') {
       return null
     }
 

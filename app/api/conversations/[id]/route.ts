@@ -20,21 +20,29 @@ const addMessagesSchema = z.array(
  * Retrieves a single, full conversation with all messages.
  */
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { id: string } }
 ) {
-  const authCheck = await getAuthenticatedUser()
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const { id } = params
-  const conversation = await ConversationService.getFullConversation(id, user.id)
+  try {
+    const { id } = params
+    const conversation = await ConversationService.getFullConversation(id, user.id)
 
-  if (!conversation) {
-    return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+    if (!conversation) {
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+    }
+
+    return NextResponse.json(conversation)
+  } catch (error) {
+    console.error('Error loading conversation:', error)
+    return NextResponse.json(
+      { error: 'Failed to load conversation' },
+      { status: 500 }
+    )
   }
-
-  return NextResponse.json(conversation)
 }
 
 /**
@@ -45,36 +53,44 @@ export async function POST(
   req: Request,
   { params }: { params: { id: string } }
 ) {
-  const authCheck = await getAuthenticatedUser()
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const { id } = params
-  const body = await req.json()
-  const validation = addMessagesSchema.safeParse(body)
+  try {
+    const { id } = params
+    const body = await req.json()
+    const validation = addMessagesSchema.safeParse(body)
 
-  if (!validation.success) {
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid input', details: validation.error.flatten() },
+        { status: 400 }
+      )
+    }
+
+    // Map messages to match Prisma schema (strip out extra fields like cost/latency)
+    const prismaMessages = validation.data.map(({ role, content, provider, model }) => ({
+      role,
+      content,
+      provider: provider ?? null,
+      model: model ?? null,
+    }))
+
+    const updatedConversation = await ConversationService.addMessages(id, user.id, prismaMessages)
+
+    if (!updatedConversation) {
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+    }
+
+    return NextResponse.json(updatedConversation)
+  } catch (error) {
+    console.error('Error updating conversation:', error)
     return NextResponse.json(
-      { error: 'Invalid input', details: validation.error.flatten() },
-      { status: 400 }
+      { error: 'Failed to update conversation' },
+      { status: 500 }
     )
   }
-
-  // Map messages to match Prisma schema (strip out extra fields like cost/latency)
-  const prismaMessages = validation.data.map(({ role, content, provider, model }) => ({
-    role,
-    content,
-    provider: provider ?? null,
-    model: model ?? null,
-  }))
-
-  const updatedConversation = await ConversationService.addMessages(id, user.id, prismaMessages)
-
-  if (!updatedConversation) {
-    return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
-  }
-
-  return NextResponse.json(updatedConversation)
 }
 
 /**
@@ -82,19 +98,27 @@ export async function POST(
  * Deletes a conversation and all its messages.
  */
 export async function DELETE(
-  req: Request,
+  _req: Request,
   { params }: { params: { id: string } }
 ) {
-  const authCheck = await getAuthenticatedUser()
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const { id } = params
-  const success = await ConversationService.deleteConversation(id, user.id)
+  try {
+    const { id } = params
+    const success = await ConversationService.deleteConversation(id, user.id)
 
-  if (!success) {
-    return NextResponse.json({ error: 'Conversation not found or failed to delete' }, { status: 404 })
+    if (!success) {
+      return NextResponse.json({ error: 'Conversation not found or failed to delete' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true }, { status: 200 })
+  } catch (error) {
+    console.error('Error deleting conversation:', error)
+    return NextResponse.json(
+      { error: 'Failed to delete conversation' },
+      { status: 500 }
+    )
   }
-
-  return NextResponse.json({ success: true }, { status: 200 })
 }

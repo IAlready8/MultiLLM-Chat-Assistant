@@ -22,8 +22,29 @@ const fallbackWarnings: Set<string> =
   conversationGlobal.__multiLlmConversationFallbackWarnings ??
   (conversationGlobal.__multiLlmConversationFallbackWarnings = new Set())
 
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message
+  }
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as { message?: unknown }).message === 'string'
+  ) {
+    return (error as { message: string }).message
+  }
+  return ''
+}
+
 const isDatabaseUnavailableError = (error: unknown): boolean =>
-  error instanceof Error && error.message.includes('Database access for')
+  (() => {
+    const message = getErrorMessage(error)
+    return (
+      message.includes('Database access for') ||
+      message.includes('Database access is not available')
+    )
+  })()
 
 const isDatabaseKnownUnavailable = () =>
   conversationGlobal.__multiLlmConversationDbUnavailable === true
@@ -41,8 +62,7 @@ const logFallbackWarning = (scope: string, error: unknown) => {
     return
   }
   fallbackWarnings.add(scope)
-  const message =
-    error instanceof Error ? error.message : 'unknown database error'
+  const message = getErrorMessage(error) || 'unknown database error'
   console.warn(
     `Falling back to in-memory conversation store for ${scope}: ${message}`
   )

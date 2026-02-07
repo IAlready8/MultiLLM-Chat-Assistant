@@ -56,6 +56,18 @@ export const apiClient = {
       })
     )
   },
+  async updatePersona(
+    id: string,
+    data: Partial<NewPersona>
+  ): Promise<Persona> {
+    return handleResponse(
+      await fetch(`/api/personas/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+    )
+  },
   async deletePersona(id: string): Promise<void> {
     await handleResponse(
       await fetch(`/api/personas/${id}`, { method: 'DELETE' })

@@ -1,218 +1,229 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Plus, Edit, Trash2, Bot } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
+import { usePersonas } from '@/hooks/use-personas'
 
-// Define the Persona type since it's not available in config-schemas
-interface Persona {
-  id: string;
-  title: string;
-  description: string;
-  prompt: string;
-  createdAt: Date;
-  updatedAt: Date;
+type PersonaFormData = {
+  title: string
+  description: string
+  prompt: string
 }
 
 type PersonaFormErrors = {
-  title?: string;
-  prompt?: string;
-};
-
-const DEFAULT_PERSONAS: Persona[] = [
-  {
-    id: '1',
-    title: 'Helpful Assistant',
-    description: 'A friendly and informative assistant',
-    prompt: 'You are a helpful assistant. Always be polite and informative. Provide clear and concise answers to users\' questions.',
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: '2',
-    title: 'Code Reviewer',
-    description: 'An expert code reviewer',
-    prompt: 'You are an expert code reviewer. Focus on code quality, performance, best practices, and potential bugs. Provide constructive feedback and suggestions for improvement.',
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  {
-    id: '3',
-    title: 'Creative Writer',
-    description: 'A creative and imaginative writer',
-    prompt: 'You are a creative writer. Help users with their creative writing projects. Provide suggestions for plot, character development, dialogue, and style.',
-    createdAt: new Date(),
-    updatedAt: new Date()
-  }
-]
-
-const clonePersonas = (list: Persona[]): Persona[] =>
-  list.map((persona) => ({
-    ...persona,
-    createdAt: new Date(persona.createdAt),
-    updatedAt: new Date(persona.updatedAt)
-  }))
-
-const loadInitialPersonas = (): Persona[] => {
-  if (typeof window === 'undefined') {
-    return clonePersonas(DEFAULT_PERSONAS)
-  }
-
-  try {
-    const stored = localStorage.getItem('personas')
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      return parsed.map((persona: Persona) => ({
-        ...persona,
-        createdAt: new Date(persona.createdAt),
-        updatedAt: new Date(persona.updatedAt)
-      }))
-    }
-
-    localStorage.setItem('personas', JSON.stringify(DEFAULT_PERSONAS))
-    return clonePersonas(DEFAULT_PERSONAS)
-  } catch (error) {
-    console.error('Failed to load personas:', error)
-    return clonePersonas(DEFAULT_PERSONAS)
-  }
+  title?: string
+  prompt?: string
 }
 
+const INITIAL_FORM_DATA: PersonaFormData = {
+  title: '',
+  description: '',
+  prompt: '',
+}
+
+const STARTER_PERSONAS: PersonaFormData[] = [
+  {
+    title: 'Helpful Assistant',
+    description: 'A friendly and informative assistant',
+    prompt:
+      "You are a helpful assistant. Always be polite and informative. Provide clear and concise answers to users' questions.",
+  },
+  {
+    title: 'Code Reviewer',
+    description: 'An expert code reviewer',
+    prompt:
+      'You are an expert code reviewer. Focus on code quality, best practices, and potential bugs. Provide constructive, actionable feedback.',
+  },
+  {
+    title: 'Creative Writer',
+    description: 'A creative and imaginative writer',
+    prompt:
+      'You are a creative writing assistant. Help with plot ideas, character development, dialogue, and style with concrete suggestions.',
+  },
+]
+
 export default function PersonasPage() {
-  const [personas, setPersonas] = useState<Persona[]>(() => loadInitialPersonas())
-  const [editingPersona, setEditingPersona] = useState<Persona | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [formData, setFormData] = useState<Omit<Persona, 'id'>>({ 
-    title: '', 
-    description: '', 
-    prompt: '',
-    createdAt: new Date(),
-    updatedAt: new Date()
-  })
-  const [formErrors, setFormErrors] = useState<PersonaFormErrors>({})
+  const { personas, isLoading, error, createPersona, updatePersona, deletePersona } =
+    usePersonas()
   const { toast } = useToast()
+
+  const [editingPersonaId, setEditingPersonaId] = useState<string | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [formData, setFormData] = useState<PersonaFormData>(INITIAL_FORM_DATA)
+  const [formErrors, setFormErrors] = useState<PersonaFormErrors>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSeeding, setIsSeeding] = useState(false)
+
+  const editingPersona = useMemo(
+    () => personas.find((persona) => persona.id === editingPersonaId) ?? null,
+    [editingPersonaId, personas]
+  )
 
   const clearFormError = (field: keyof PersonaFormErrors, value: string) => {
     if (!formErrors[field]) {
       return
     }
-
     if (!value.trim()) {
       return
     }
-
     setFormErrors((prev) => ({ ...prev, [field]: undefined }))
   }
 
   const validateForm = useCallback(() => {
     const nextErrors: PersonaFormErrors = {}
-
     if (!formData.title.trim()) {
       nextErrors.title = 'Title is required.'
     }
-
     if (!formData.prompt.trim()) {
       nextErrors.prompt = 'System prompt is required.'
     }
-
     return nextErrors
-  }, [formData])
-
-
-  const savePersonas = useCallback((updatedPersonas: Persona[]) => {
-    try {
-      localStorage.setItem('personas', JSON.stringify(updatedPersonas))
-      setPersonas(updatedPersonas)
-    } catch (error) {
-      console.error('Failed to save personas:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to save personas',
-        variant: 'destructive'
-      })
-    }
-  }, [toast])
+  }, [formData.prompt, formData.title])
 
   const resetForm = useCallback(() => {
-    setEditingPersona(null)
-    setFormData({ 
-      title: '', 
-      description: '', 
-      prompt: '',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    })
+    setEditingPersonaId(null)
+    setFormData(INITIAL_FORM_DATA)
     setFormErrors({})
   }, [])
 
-  const handleFormSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault()
+  const handleFormSubmit = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault()
 
-    const nextErrors = validateForm()
-    if (Object.keys(nextErrors).length > 0) {
-      setFormErrors(nextErrors)
+      const nextErrors = validateForm()
+      if (Object.keys(nextErrors).length > 0) {
+        setFormErrors(nextErrors)
+        return
+      }
+
+      setIsSubmitting(true)
+      setFormErrors({})
+
+      try {
+        const payload = {
+          title: formData.title.trim(),
+          description: formData.description.trim() || null,
+          prompt: formData.prompt.trim(),
+        }
+
+        if (editingPersona) {
+          await updatePersona(editingPersona.id, payload)
+          toast({
+            title: 'Persona updated',
+            description: `${payload.title} was updated successfully.`,
+          })
+        } else {
+          await createPersona(payload)
+          toast({
+            title: 'Persona created',
+            description: `${payload.title} was created successfully.`,
+          })
+        }
+
+        resetForm()
+        setIsDialogOpen(false)
+      } catch (submitError) {
+        console.error('Failed to save persona:', submitError)
+        toast({
+          title: 'Save failed',
+          description: 'Could not save persona changes.',
+          variant: 'destructive',
+        })
+      } finally {
+        setIsSubmitting(false)
+      }
+    },
+    [createPersona, editingPersona, formData, resetForm, toast, updatePersona, validateForm]
+  )
+
+  const handleEdit = (personaId: string) => {
+    const persona = personas.find((item) => item.id === personaId)
+    if (!persona) {
       return
     }
 
-    setFormErrors({})
-    
-    if (editingPersona) {
-      // Update existing persona
-      const updatedPersonas = personas.map(p => 
-        p.id === editingPersona.id 
-          ? { 
-              ...formData, 
-              id: editingPersona.id,
-              updatedAt: new Date()
-            } 
-          : p
-      )
-      savePersonas(updatedPersonas)
-    } else {
-      // Create new persona
-      const newPersona: Persona = {
-        ...formData,
-        id: Date.now().toString(),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-      savePersonas([...personas, newPersona])
-    }
-    
-    resetForm()
-    setIsDialogOpen(false)
-  }, [editingPersona, formData, personas, resetForm, savePersonas, validateForm])
-
-  const handleEdit = (persona: Persona) => {
-    setFormErrors({})
-    setEditingPersona(persona)
+    setEditingPersonaId(persona.id)
     setFormData({
       title: persona.title,
-      description: persona.description,
+      description: persona.description ?? '',
       prompt: persona.prompt,
-      createdAt: persona.createdAt,
-      updatedAt: persona.updatedAt
     })
+    setFormErrors({})
     setIsDialogOpen(true)
   }
 
-  const handleDelete = (id: string) => {
-    const updatedPersonas = personas.filter(p => p.id !== id)
-    savePersonas(updatedPersonas)
-    toast({
-      title: 'Deleted',
-      description: 'Persona deleted successfully'
-    })
+  const handleDelete = async (personaId: string) => {
+    const persona = personas.find((item) => item.id === personaId)
+    if (!persona) {
+      return
+    }
+
+    const confirmed = window.confirm(`Delete "${persona.title}"?`)
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await deletePersona(personaId)
+      toast({
+        title: 'Persona deleted',
+        description: `${persona.title} was removed.`,
+      })
+    } catch (deleteError) {
+      console.error('Failed to delete persona:', deleteError)
+      toast({
+        title: 'Delete failed',
+        description: 'Could not delete this persona.',
+        variant: 'destructive',
+      })
+    }
   }
 
   const openCreateDialog = () => {
     resetForm()
     setIsDialogOpen(true)
+  }
+
+  const seedStarterPersonas = async () => {
+    setIsSeeding(true)
+    try {
+      for (const starter of STARTER_PERSONAS) {
+        await createPersona({
+          title: starter.title,
+          description: starter.description,
+          prompt: starter.prompt,
+        })
+      }
+
+      toast({
+        title: 'Starter personas added',
+        description: 'Default personas were created successfully.',
+      })
+    } catch (seedError) {
+      console.error('Failed to seed personas:', seedError)
+      toast({
+        title: 'Seed failed',
+        description: 'Could not create starter personas.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsSeeding(false)
+    }
   }
 
   return (
@@ -224,9 +235,10 @@ export default function PersonasPage() {
             <Badge variant="secondary">{personas.length} total</Badge>
           </div>
           <p className="text-muted-foreground">
-            Create and manage custom AI personas stored locally in your browser.
+            Create and manage reusable AI personas.
           </p>
         </div>
+
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={openCreateDialog}>
@@ -238,25 +250,24 @@ export default function PersonasPage() {
             <DialogHeader>
               <DialogTitle>{editingPersona ? 'Edit Persona' : 'Create New Persona'}</DialogTitle>
               <DialogDescription>
-                {editingPersona 
-                  ? 'Modify the details of your persona' 
-                  : 'Create a new persona with custom instructions'}
+                {editingPersona
+                  ? 'Modify this persona.'
+                  : 'Create a new persona with custom instructions.'}
               </DialogDescription>
             </DialogHeader>
-            
+
             <form onSubmit={handleFormSubmit} className="space-y-4" noValidate>
               <div className="space-y-2">
-                <label htmlFor="title" className="text-sm font-medium">Title</label>
+                <Label htmlFor="title">Title</Label>
                 <Input
                   id="title"
                   value={formData.title}
-                  onChange={(e) => {
-                    const value = e.target.value
+                  onChange={(event) => {
+                    const value = event.target.value
                     setFormData((prev) => ({ ...prev, title: value }))
                     clearFormError('title', value)
                   }}
                   placeholder="Persona title"
-                  required
                   aria-invalid={Boolean(formErrors.title)}
                   aria-describedby={formErrors.title ? 'persona-title-error' : undefined}
                 />
@@ -266,33 +277,31 @@ export default function PersonasPage() {
                   </p>
                 )}
               </div>
-              
+
               <div className="space-y-2">
-                <label htmlFor="description" className="text-sm font-medium">Description</label>
+                <Label htmlFor="description">Description</Label>
                 <Input
                   id="description"
                   value={formData.description}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    setFormData((prev) => ({ ...prev, description: value }))
-                  }}
-                  placeholder="Brief description of the persona"
+                  onChange={(event) =>
+                    setFormData((prev) => ({ ...prev, description: event.target.value }))
+                  }
+                  placeholder="Brief description"
                 />
               </div>
-              
+
               <div className="space-y-2">
-                <label htmlFor="prompt" className="text-sm font-medium">System Prompt</label>
+                <Label htmlFor="prompt">System Prompt</Label>
                 <Textarea
                   id="prompt"
                   value={formData.prompt}
-                  onChange={(e) => {
-                    const value = e.target.value
+                  onChange={(event) => {
+                    const value = event.target.value
                     setFormData((prev) => ({ ...prev, prompt: value }))
                     clearFormError('prompt', value)
                   }}
-                  placeholder="Enter the system prompt that defines the persona's behavior..."
+                  placeholder="Define how this persona should behave..."
                   rows={8}
-                  required
                   aria-invalid={Boolean(formErrors.prompt)}
                   aria-describedby={formErrors.prompt ? 'persona-prompt-error' : undefined}
                 />
@@ -302,17 +311,17 @@ export default function PersonasPage() {
                   </p>
                 )}
               </div>
-              
+
               <div className="flex justify-end space-x-2 pt-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setIsDialogOpen(false)}
-                >
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">
-                  {editingPersona ? 'Update Persona' : 'Create Persona'}
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting
+                    ? 'Saving...'
+                    : editingPersona
+                    ? 'Update Persona'
+                    : 'Create Persona'}
                 </Button>
               </div>
             </form>
@@ -320,18 +329,37 @@ export default function PersonasPage() {
         </Dialog>
       </div>
 
-      {personas.length === 0 ? (
+      {error && (
+        <Card className="border-destructive/50">
+          <CardContent className="py-4 text-sm text-destructive">
+            Failed to load personas: {error.message}
+          </CardContent>
+        </Card>
+      )}
+
+      {isLoading ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            Loading personas...
+          </CardContent>
+        </Card>
+      ) : personas.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <Bot className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Personas Created</h3>
+            <h3 className="text-lg font-medium mb-2">No Personas Yet</h3>
             <p className="text-muted-foreground mb-4">
-              Create your first persona to customize AI behavior for specific tasks
+              Create your first persona, or start with built-in templates.
             </p>
-            <Button onClick={openCreateDialog}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Your First Persona
-            </Button>
+            <div className="flex justify-center gap-2">
+              <Button onClick={openCreateDialog}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Persona
+              </Button>
+              <Button variant="outline" onClick={seedStarterPersonas} disabled={isSeeding}>
+                {isSeeding ? 'Adding...' : 'Load Starter Personas'}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -339,10 +367,12 @@ export default function PersonasPage() {
           {personas.map((persona) => (
             <Card key={persona.id} className="flex flex-col">
               <CardHeader>
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-3">
                   <div>
                     <CardTitle className="text-xl">{persona.title}</CardTitle>
-                    <CardDescription className="mt-1">{persona.description}</CardDescription>
+                    <CardDescription className="mt-1">
+                      {persona.description || 'No description provided.'}
+                    </CardDescription>
                   </div>
                   <Badge variant="secondary" className="self-start">
                     {new Date(persona.createdAt).toLocaleDateString()}
@@ -350,7 +380,7 @@ export default function PersonasPage() {
                 </div>
               </CardHeader>
               <CardContent className="flex-1">
-                <div className="text-sm text-muted-foreground mb-4 line-clamp-3">
+                <div className="text-sm text-muted-foreground mb-4 line-clamp-4">
                   {persona.prompt}
                 </div>
                 <div className="flex justify-between items-center">
@@ -358,16 +388,12 @@ export default function PersonasPage() {
                     Updated {new Date(persona.updatedAt).toLocaleDateString()}
                   </div>
                   <div className="flex space-x-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleEdit(persona)}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(persona.id)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button
+                      variant="destructive"
                       size="sm"
-                      variant="outline"
                       onClick={() => handleDelete(persona.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -379,37 +405,6 @@ export default function PersonasPage() {
           ))}
         </div>
       )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>How to Use Personas</CardTitle>
-          <CardDescription>
-            Personas allow you to customize AI behavior with specific instructions
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <h4 className="font-medium">1. Create Personas</h4>
-              <p className="text-sm text-muted-foreground">
-                Define custom instructions and behaviors for different AI assistants
-              </p>
-            </div>
-            <div className="space-y-2">
-              <h4 className="font-medium">2. Apply in Chats</h4>
-              <p className="text-sm text-muted-foreground">
-                Use personas in multi-LLM chats to get consistent behavior
-              </p>
-            </div>
-            <div className="space-y-2">
-              <h4 className="font-medium">3. Share & Reuse</h4>
-              <p className="text-sm text-muted-foreground">
-                Reuse personas across different conversations and projects
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

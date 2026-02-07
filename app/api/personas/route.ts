@@ -5,24 +5,47 @@ import { z } from 'zod'
 
 // Zod schema for persona validation
 const personaSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
+  name: z.string().min(1, 'Name is required').max(100).optional(),
+  title: z.string().min(1, 'Name is required').max(100).optional(),
   description: z.string().max(500).optional(),
-  systemPrompt: z.string().min(1, 'System prompt is required').max(5000),
+  systemPrompt: z.string().min(1, 'System prompt is required').max(5000).optional(),
+  prompt: z.string().min(1, 'System prompt is required').max(5000).optional(),
   provider: z.string().optional(),
   model: z.string().optional(),
+}).superRefine((value, context) => {
+  if (!(value.name ?? value.title)?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Name is required',
+      path: ['name'],
+    })
+  }
+
+  if (!(value.systemPrompt ?? value.prompt)?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'System prompt is required',
+      path: ['systemPrompt'],
+    })
+  }
 })
 
 /**
  * GET /api/personas
  * Retrieves all personas for the authenticated user.
  */
-export async function GET(req: Request) {
-  const authCheck = await getAuthenticatedUser()
+export async function GET(_req: Request) {
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const personas = await PersonaService.getPersonasByUserId(user.id)
-  return NextResponse.json(personas)
+  try {
+    const personas = await PersonaService.getPersonasByUserId(user.id)
+    return NextResponse.json(personas)
+  } catch (error) {
+    console.error('Error loading personas:', error)
+    return NextResponse.json({ error: 'Failed to load personas' }, { status: 500 })
+  }
 }
 
 /**
@@ -30,7 +53,7 @@ export async function GET(req: Request) {
  * Creates a new persona for the authenticated user.
  */
 export async function POST(req: Request) {
-  const authCheck = await getAuthenticatedUser()
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -46,10 +69,13 @@ export async function POST(req: Request) {
 
   try {
     // Map route fields to Prisma model fields
-    const { name, systemPrompt, description } = validation.data
+    const title = (validation.data.name ?? validation.data.title)?.trim() || ''
+    const prompt =
+      (validation.data.systemPrompt ?? validation.data.prompt)?.trim() || ''
+    const { description } = validation.data
     const personaData = {
-      title: name,
-      prompt: systemPrompt,
+      title,
+      prompt,
       description: description ?? null,
     }
     const newPersona = await PersonaService.createPersona(personaData, user.id)

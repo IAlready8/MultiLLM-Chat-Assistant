@@ -74,6 +74,26 @@ const resolveAuthSecret = (): string => {
 
 const authSecret = resolveAuthSecret()
 
+const authLogger: NonNullable<NextAuthOptions['logger']> = {
+  error(code, metadata) {
+    if (!strictAuth && code === 'JWT_SESSION_ERROR') {
+      return
+    }
+    console.error(`[next-auth][error][${code}]`, metadata ?? '')
+  },
+  warn(code) {
+    if (!strictAuth && (code === 'NEXTAUTH_URL' || code === 'NO_SECRET')) {
+      return
+    }
+    console.warn(`[next-auth][warn][${code}]`)
+  },
+  debug(code, metadata) {
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`[next-auth][debug][${code}]`, metadata ?? '')
+    }
+  },
+}
+
 const buildProviders = () => {
   const providers: NextAuthOptions['providers'] = []
 
@@ -201,6 +221,7 @@ const maybeAdapter = process.env.DATABASE_URL ? PrismaAdapter(prisma as any) : u
 
 export const authOptions: NextAuthOptions = {
   adapter: maybeAdapter,
+  logger: authLogger,
   providers: buildProviders(),
   pages: {
     signIn: '/auth/signin',

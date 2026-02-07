@@ -14,6 +14,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const { status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const signInUrl = `/auth/signin?callbackUrl=${encodeURIComponent(pathname)}`;
   const strictAuthEnabled = process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN === 'true';
   const demoBypassEnabled = !strictAuthEnabled && (
     process.env.NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH === 'true' ||
@@ -33,9 +34,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
       return;
     }
     if (status === "unauthenticated" && !pathname.startsWith("/auth")) {
-      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(pathname)}`);
+      router.replace(signInUrl);
     }
-  }, [status, router, pathname, demoBypassEnabled]);
+  }, [status, router, pathname, demoBypassEnabled, signInUrl]);
 
   useEffect(() => {
     if (status !== "loading") {
@@ -101,7 +102,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
               <p className="text-muted-foreground">You can continue to sign in or try again.</p>
             </div>
             <div className="flex items-center gap-3">
-              <Button onClick={() => router.push(`/auth/signin?callbackUrl=${encodeURIComponent(pathname)}`)}>
+              <Button onClick={() => router.replace(signInUrl)}>
                 Go to sign in
               </Button>
               <Button variant="outline" onClick={() => router.refresh()}>
@@ -129,6 +130,28 @@ export function AuthGuard({ children }: AuthGuardProps) {
     return <>{children}</>;
   }
 
-  // Unauthenticated - will redirect
+  if (status === "unauthenticated") {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="flex flex-col items-center space-y-6 p-8 text-center">
+          <div className="text-center space-y-2">
+            <h2 className="text-xl font-semibold">Redirecting to sign in</h2>
+            <p className="text-muted-foreground">
+              Your session is not active. Continue to sign in.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button onClick={() => router.replace(signInUrl)}>
+              Continue
+            </Button>
+            <Button variant="outline" onClick={() => router.refresh()}>
+              Retry
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return null;
 }

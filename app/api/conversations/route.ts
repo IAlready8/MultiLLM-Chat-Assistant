@@ -22,13 +22,21 @@ const createConvoSchema = z.object({
  * GET /api/conversations
  * Retrieves all conversations (metadata) for the authenticated user.
  */
-export async function GET(req: Request) {
-  const authCheck = await getAuthenticatedUser()
+export async function GET(_req: Request) {
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const conversations = await ConversationService.getConversationsByUserId(user.id)
-  return NextResponse.json(conversations)
+  try {
+    const conversations = await ConversationService.getConversationsByUserId(user.id)
+    return NextResponse.json(conversations)
+  } catch (error) {
+    console.error('Error loading conversations:', error)
+    return NextResponse.json(
+      { error: 'Failed to load conversations' },
+      { status: 500 }
+    )
+  }
 }
 
 /**
@@ -36,7 +44,7 @@ export async function GET(req: Request) {
  * Creates a new conversation and its first messages.
  */
 export async function POST(req: Request) {
-  const authCheck = await getAuthenticatedUser()
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 

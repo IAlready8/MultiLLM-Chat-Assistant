@@ -29,6 +29,16 @@ export default function SignInPage() {
   const searchParams = useSearchParams()
   const { data: session } = useSession()
   const [oauthProviders, setOauthProviders] = useState<ClientSafeProvider[]>([])
+  const strictAuthEnabled = process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN === 'true'
+  const demoEnabled = process.env.NEXT_PUBLIC_DEMO_ACCOUNT_ENABLED !== 'false'
+  const demoBypassEnabled =
+    !strictAuthEnabled &&
+    (process.env.NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH === 'true' ||
+      (process.env.NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH === undefined &&
+        process.env.NODE_ENV !== 'production'))
+  const demoEmail = process.env.NEXT_PUBLIC_DEMO_ACCOUNT_EMAIL || 'demo@local.dev'
+  const demoPassword =
+    process.env.NEXT_PUBLIC_DEMO_ACCOUNT_PASSWORD || 'demo12345'
 
   const callbackUrl = useMemo(() => {
     const callback = searchParams.get('callbackUrl')
@@ -80,6 +90,18 @@ export default function SignInPage() {
     }
 
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }))
+  }
+
+  const applyDemoCredentials = () => {
+    setFieldErrors({})
+    setIsSignUp(false)
+    setName('')
+    setEmail(demoEmail)
+    setPassword(demoPassword)
+    toast({
+      title: 'Demo credentials loaded',
+      description: 'Submit to sign in with the demo account.',
+    })
   }
 
   const validateFields = () => {
@@ -220,6 +242,37 @@ export default function SignInPage() {
         </CardHeader>
         <form onSubmit={handleSubmit} noValidate>
           <CardContent className="space-y-4">
+            {!strictAuthEnabled && demoEnabled && (
+              <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-2">
+                <p className="font-medium">Demo access is enabled</p>
+                <p className="text-muted-foreground">
+                  Use the demo account to continue testing without creating a new account.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={applyDemoCredentials}
+                    disabled={loading}
+                  >
+                    Use demo credentials
+                  </Button>
+                  {demoBypassEnabled && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(callbackUrl)}
+                      disabled={loading}
+                    >
+                      Continue as demo guest
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {isSignUp && (
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>

@@ -14,22 +14,23 @@ export const usePersonas = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
+  const fetchPersonas = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      const data = await apiClient.getPersonas()
+      setPersonas(data)
+      setError(null)
+    } catch (err) {
+      setError(err as Error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
   // 1. Initial Data Fetch
   useEffect(() => {
-    const fetchPersonas = async () => {
-      try {
-        setIsLoading(true)
-        const data = await apiClient.getPersonas()
-        setPersonas(data)
-        setError(null)
-      } catch (err) {
-        setError(err as Error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchPersonas()
-  }, [])
+    void fetchPersonas()
+  }, [fetchPersonas])
 
   // 2. Create Persona
   const createPersona = useCallback(async (newPersonaData: NewPersona) => {
@@ -52,6 +53,7 @@ export const usePersonas = () => {
           p.id === optimisticPersona.id ? createdPersona : p
         )
       )
+      setError(null)
     } catch (err) {
       setError(err as Error)
       // Rollback optimistic update
@@ -59,7 +61,41 @@ export const usePersonas = () => {
     }
   }, [])
 
-  // 3. Delete Persona
+  // 3. Update Persona
+  const updatePersona = useCallback(async (
+    id: string,
+    updates: Partial<NewPersona>
+  ) => {
+    const originalPersonas = [...personas]
+    const now = new Date()
+
+    setPersonas((prev) =>
+      prev.map((persona) =>
+        persona.id === id
+          ? {
+              ...persona,
+              ...updates,
+              updatedAt: now,
+            }
+          : persona
+      )
+    )
+
+    try {
+      const updatedPersona = await apiClient.updatePersona(id, updates)
+      setPersonas((prev) =>
+        prev.map((persona) =>
+          persona.id === id ? updatedPersona : persona
+        )
+      )
+      setError(null)
+    } catch (err) {
+      setError(err as Error)
+      setPersonas(originalPersonas)
+    }
+  }, [personas])
+
+  // 4. Delete Persona
   const deletePersona = useCallback(async (id: string) => {
     const originalPersonas = [...personas]
     // Optimistic update
@@ -68,6 +104,7 @@ export const usePersonas = () => {
     try {
       // Real API call
       await apiClient.deletePersona(id)
+      setError(null)
     } catch (err) {
       setError(err as Error)
       // Rollback optimistic update
@@ -79,8 +116,9 @@ export const usePersonas = () => {
     personas,
     isLoading,
     error,
+    refreshPersonas: fetchPersonas,
     createPersona,
+    updatePersona,
     deletePersona,
-    // Note: updatePersona would follow the same optimistic pattern
   }
 }
