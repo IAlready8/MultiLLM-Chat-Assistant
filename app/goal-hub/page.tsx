@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import {
   AlertCircle,
+  Calendar,
   CheckCircle,
   Clock,
   Plus,
@@ -20,6 +21,11 @@ import {
 import { useToast } from '@/components/ui/use-toast'
 import { useGoals } from '@/hooks/use-goals'
 import type { Goal } from '@/types/prisma'
+import {
+  encodeGoalDescription,
+  parseGoalDetails,
+  type GoalSubtask,
+} from '@/lib/goal-metadata'
 
 type GoalStatus = 'not-started' | 'in-progress' | 'completed' | 'delayed'
 
@@ -83,6 +89,21 @@ const getStatusIcon = (status: GoalStatus) => {
 const statusLabel = (status: GoalStatus) =>
   STATUS_OPTIONS.find((item) => item.value === status)?.label ?? 'Not started'
 
+type EnrichedGoal = Goal & {
+  status: GoalStatus
+  plainDescription: string | null
+  dueDate: string | null
+  subtasks: GoalSubtask[]
+  progress: number
+  completedSubtasks: number
+}
+
+const createSubtaskId = () =>
+  `subtask-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+
+const formatDueDate = (value: string) =>
+  new Date(`${value}T00:00:00`).toLocaleDateString()
+
 export default function GoalHubPage() {
   const { goals, isLoading, error, refreshGoals, createGoal, updateGoal, deleteGoal } =
     useGoals()
@@ -91,7 +112,10 @@ export default function GoalHubPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newDescription, setNewDescription] = useState('')
+  const [newDueDate, setNewDueDate] = useState('')
   const [newStatus, setNewStatus] = useState<GoalStatus>('not-started')
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
+  const [newSubtasks, setNewSubtasks] = useState<GoalSubtask[]>([])
   const [activeGoalId, setActiveGoalId] = useState<string>('')
   const [savingGoal, setSavingGoal] = useState(false)
   const [deletingGoal, setDeletingGoal] = useState(false)
@@ -101,7 +125,21 @@ export default function GoalHubPage() {
       goals.map((goal) => ({
         ...goal,
         status: normalizeStatus(goal.status),
-      })),
+        ...parseGoalDetails(goal.description),
+      }))
+      .map((goal) => {
+        const completedSubtasks = goal.subtasks.filter((subtask) => subtask.completed).length
+        const hasSubtasks = goal.subtasks.length > 0
+        const progress = hasSubtasks
+          ? Math.round((completedSubtasks / goal.subtasks.length) * 100)
+          : statusProgress[goal.status]
+
+        return {
+          ...goal,
+          completedSubtasks,
+          progress,
+        } as EnrichedGoal
+      }),
     [goals]
   )
 
@@ -124,18 +162,27 @@ export default function GoalHubPage() {
 
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [editDueDate, setEditDueDate] = useState('')
   const [editStatus, setEditStatus] = useState<GoalStatus>('not-started')
+  const [editSubtaskTitle, setEditSubtaskTitle] = useState('')
+  const [editSubtasks, setEditSubtasks] = useState<GoalSubtask[]>([])
 
   useEffect(() => {
     if (!activeGoal) {
       setEditTitle('')
       setEditDescription('')
+      setEditDueDate('')
       setEditStatus('not-started')
+      setEditSubtaskTitle('')
+      setEditSubtasks([])
       return
     }
     setEditTitle(activeGoal.title)
-    setEditDescription(activeGoal.description || '')
+    setEditDescription(activeGoal.plainDescription || '')
+    setEditDueDate(activeGoal.dueDate || '')
     setEditStatus(activeGoal.status)
+    setEditSubtasks(activeGoal.subtasks)
+    setEditSubtaskTitle('')
   }, [activeGoal])
 
   const stats = useMemo(() => {
@@ -153,7 +200,7 @@ export default function GoalHubPage() {
       totalGoals > 0
         ? Math.round(
             normalizedGoals.reduce(
-              (sum, goal) => sum + statusProgress[goal.status],
+              (sum, goal) => sum + goal.progress,
               0
             ) / totalGoals
           )
@@ -161,10 +208,14 @@ export default function GoalHubPage() {
 
     const nextFocusGoal = normalizedGoals
       .filter((goal) => goal.status !== 'completed')
-      .sort(
-        (a, b) =>
-          new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
-      )[0]
+      .sort((a, b) => {
+        const dueA = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY
+        const dueB = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY
+        if (dueA !== dueB) {
+          return dueA - dueB
+        }
+        return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
+      })[0]
 
     return {
       totalGoals,
@@ -179,8 +230,63 @@ export default function GoalHubPage() {
   const resetCreateForm = () => {
     setNewTitle('')
     setNewDescription('')
+    setNewDueDate('')
     setNewStatus('not-started')
+    setNewSubtaskTitle('')
+    setNewSubtasks([])
     setShowCreateForm(false)
+  }
+
+  const addNewSubtask = () => {
+    const title = newSubtaskTitle.trim()
+    if (!title) return
+    setNewSubtasks((current) => [
+      ...current,
+      { id: createSubtaskId(), title, completed: false },
+    ])
+    setNewSubtaskTitle('')
+  }
+
+  const removeNewSubtask = (subtaskId: string) => {
+    setNewSubtasks((current) =>
+      current.filter((subtask) => subtask.id !== subtaskId)
+    )
+  }
+
+  const toggleNewSubtask = (subtaskId: string) => {
+    setNewSubtasks((current) =>
+      current.map((subtask) =>
+        subtask.id === subtaskId
+          ? { ...subtask, completed: !subtask.completed }
+          : subtask
+      )
+    )
+  }
+
+  const addEditSubtask = () => {
+    const title = editSubtaskTitle.trim()
+    if (!title) return
+    setEditSubtasks((current) => [
+      ...current,
+      { id: createSubtaskId(), title, completed: false },
+    ])
+    setEditSubtaskTitle('')
+  }
+
+  const removeEditSubtask = (subtaskId: string) => {
+    setEditSubtasks((current) =>
+      current.filter((subtask) => subtask.id !== subtaskId)
+    )
+  }
+
+  const toggleEditSubtask = (subtaskId: string) => {
+    setEditSubtasks((current) =>
+      current.map((subtask) =>
+        subtask.id === subtaskId
+          ? { ...subtask, completed: !subtask.completed }
+          : subtask
+      )
+    )
   }
 
   const handleCreateGoal = async (event: React.FormEvent) => {
@@ -195,9 +301,16 @@ export default function GoalHubPage() {
     }
 
     try {
+      const encodedDescription = encodeGoalDescription(
+        newDescription.trim() || null,
+        {
+          dueDate: newDueDate || null,
+          subtasks: newSubtasks,
+        }
+      )
       const created = await createGoal({
         title: newTitle.trim(),
-        description: newDescription.trim() || null,
+        description: encodedDescription,
         status: newStatus,
       })
       setActiveGoalId(created.id)
@@ -229,9 +342,16 @@ export default function GoalHubPage() {
 
     setSavingGoal(true)
     try {
+      const encodedDescription = encodeGoalDescription(
+        editDescription.trim() || null,
+        {
+          dueDate: editDueDate || null,
+          subtasks: editSubtasks,
+        }
+      )
       await updateGoal(activeGoal.id, {
         title: editTitle.trim(),
-        description: editDescription.trim() || null,
+        description: encodedDescription,
         status: editStatus,
       })
       toast({
@@ -325,6 +445,14 @@ export default function GoalHubPage() {
                 placeholder="Goal description (optional)"
                 rows={3}
               />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Due date</p>
+                <Input
+                  type="date"
+                  value={newDueDate}
+                  onChange={(event) => setNewDueDate(event.target.value)}
+                />
+              </div>
               <select
                 value={newStatus}
                 onChange={(event) => setNewStatus(event.target.value as GoalStatus)}
@@ -336,6 +464,61 @@ export default function GoalHubPage() {
                   </option>
                 ))}
               </select>
+              <div className="space-y-2 rounded-md border p-3">
+                <p className="text-sm font-medium">Subtasks</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={newSubtaskTitle}
+                    onChange={(event) => setNewSubtaskTitle(event.target.value)}
+                    placeholder="Add subtask"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        addNewSubtask()
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" onClick={addNewSubtask}>
+                    Add
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {newSubtasks.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No subtasks yet.</p>
+                  ) : (
+                    newSubtasks.map((subtask) => (
+                      <div
+                        key={subtask.id}
+                        className="flex items-center justify-between gap-2 rounded border p-2"
+                      >
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={subtask.completed}
+                            onChange={() => toggleNewSubtask(subtask.id)}
+                          />
+                          <span
+                            className={
+                              subtask.completed ? 'line-through text-muted-foreground' : ''
+                            }
+                          >
+                            {subtask.title}
+                          </span>
+                        </label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => removeNewSubtask(subtask.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <Button type="submit">Create Goal</Button>
                 <Button type="button" variant="outline" onClick={resetCreateForm}>
@@ -397,7 +580,9 @@ export default function GoalHubPage() {
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               {stats.nextFocusGoal
-                ? `Updated ${new Date(stats.nextFocusGoal.updatedAt).toLocaleDateString()}`
+                ? stats.nextFocusGoal.dueDate
+                  ? `Due ${formatDueDate(stats.nextFocusGoal.dueDate)}`
+                  : `Updated ${new Date(stats.nextFocusGoal.updatedAt).toLocaleDateString()}`
                 : 'Create a goal to get started'}
             </p>
           </CardContent>
@@ -453,14 +638,28 @@ export default function GoalHubPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-                    {goal.description || 'No description provided.'}
+                    {goal.plainDescription || 'No description provided.'}
                   </p>
 
                   <div className="mb-2 flex justify-between text-sm">
                     <span>Progress</span>
-                    <span>{statusProgress[goal.status]}%</span>
+                    <span>{goal.progress}%</span>
                   </div>
-                  <Progress value={statusProgress[goal.status]} className="h-2 mb-3" />
+                  <Progress value={goal.progress} className="h-2 mb-3" />
+
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    {goal.dueDate ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        Due {formatDueDate(goal.dueDate)}
+                      </span>
+                    ) : null}
+                    {goal.subtasks.length > 0 ? (
+                      <span>
+                        Subtasks: {goal.completedSubtasks}/{goal.subtasks.length}
+                      </span>
+                    ) : null}
+                  </div>
 
                   <p className="text-xs text-muted-foreground">
                     Updated {new Date(goal.updatedAt).toLocaleDateString()}
@@ -491,6 +690,14 @@ export default function GoalHubPage() {
                     placeholder="Goal description"
                     rows={4}
                   />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Due date</p>
+                    <Input
+                      type="date"
+                      value={editDueDate}
+                      onChange={(event) => setEditDueDate(event.target.value)}
+                    />
+                  </div>
                   <select
                     value={editStatus}
                     onChange={(event) => setEditStatus(event.target.value as GoalStatus)}
@@ -503,20 +710,93 @@ export default function GoalHubPage() {
                     ))}
                   </select>
 
-                  <div className="grid gap-4 md:grid-cols-3">
+                  <div className="grid gap-4 md:grid-cols-4">
                     <div>
                       <p className="text-sm text-muted-foreground">Current Status</p>
                       <p className="font-medium">{statusLabel(editStatus)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Derived Progress</p>
-                      <p className="font-medium">{statusProgress[editStatus]}%</p>
+                      <p className="font-medium">
+                        {editSubtasks.length > 0
+                          ? Math.round(
+                              (editSubtasks.filter((subtask) => subtask.completed).length /
+                                editSubtasks.length) *
+                                100
+                            )
+                          : statusProgress[editStatus]}
+                        %
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Due Date</p>
+                      <p className="font-medium">
+                        {editDueDate ? formatDueDate(editDueDate) : 'Not set'}
+                      </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Last Updated</p>
                       <p className="font-medium">
                         {new Date(activeGoal.updatedAt).toLocaleString()}
                       </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-md border p-3">
+                    <p className="text-sm font-medium">Subtasks</p>
+                    <div className="flex gap-2">
+                      <Input
+                        value={editSubtaskTitle}
+                        onChange={(event) => setEditSubtaskTitle(event.target.value)}
+                        placeholder="Add subtask"
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            addEditSubtask()
+                          }
+                        }}
+                      />
+                      <Button type="button" variant="outline" onClick={addEditSubtask}>
+                        Add
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {editSubtasks.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No subtasks yet.</p>
+                      ) : (
+                        editSubtasks.map((subtask) => (
+                          <div
+                            key={subtask.id}
+                            className="flex items-center justify-between gap-2 rounded border p-2"
+                          >
+                            <label className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={subtask.completed}
+                                onChange={() => toggleEditSubtask(subtask.id)}
+                              />
+                              <span
+                                className={
+                                  subtask.completed
+                                    ? 'line-through text-muted-foreground'
+                                    : ''
+                                }
+                              >
+                                {subtask.title}
+                              </span>
+                            </label>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => removeEditSubtask(subtask.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 

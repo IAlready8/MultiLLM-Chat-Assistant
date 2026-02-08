@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Bot, Play, Plus, RotateCcw, Square, Target, X } from 'lucide-react'
+import { Bot, Play, Plus, RotateCcw, Square, Target, Trash2, X } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
+import type { Conversation, Message as PersistedMessage } from '@/types/prisma'
 
 const SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'googleai', 'openrouter', 'grok'] as const
 
@@ -193,12 +194,41 @@ const deriveConversationTitle = (goal: string) => {
   return `Roundtable: ${trimmed.length > maxLength ? `${base}...` : base}`
 }
 
+const ROUNDTABLE_TITLE_PREFIX = 'Roundtable:'
+
+const formatConversationTimestamp = (value: Date | string) => {
+  const timestamp = new Date(value)
+  if (Number.isNaN(timestamp.getTime())) return 'Unknown'
+  return timestamp.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+const parseGoalContent = (content: string) => content.replace(/^goal:\s*/i, '').trim()
+
+const parseAgentMessage = (message: PersistedMessage) => {
+  const prefixed = message.content.match(/^([^:\n]{1,80}):\s*([\s\S]*)$/)
+  const parsedAgentName = prefixed?.[1]?.trim()
+  const parsedContent = prefixed?.[2]?.trim()
+  return {
+    agentName: parsedAgentName || undefined,
+    content: parsedContent || message.content,
+  }
+}
+
 export default function AIRoundtablePage() {
   const { toast } = useToast()
   const stableIdBase = useId()
   const [goal, setGoal] = useState('')
   const [maxTurns, setMaxTurns] = useState(6)
   const [messages, setMessages] = useState<RoundtableMessage[]>([])
+  const [conversationList, setConversationList] = useState<Conversation[]>([])
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
+  const [isLoadingConversationList, setIsLoadingConversationList] = useState(false)
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false)
   const [agents, setAgents] = useState<AgentConfig[]>(() =>
     buildAgentsForProviders([], (index) => `${stableIdBase}-${index + 1}`)
   )
@@ -209,6 +239,7 @@ export default function AIRoundtablePage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const isRunningRef = useRef(false)
+  const isBusy = isRunning || isLoadingConversation
 
   const loadConfiguredProviders = useCallback(async () => {
     try {
@@ -246,9 +277,127 @@ export default function AIRoundtablePage() {
     }
   }, [toast])
 
+  const refreshConversationList = useCallback(
+    async (options?: { silent?: boolean }) => {
+      try {
+        setIsLoadingConversationList(true)
+        const conversations = await apiClient.getConversations()
+        const roundtableConversations = conversations.filter(conversation =>
+          conversation.title.startsWith(ROUNDTABLE_TITLE_PREFIX)
+        )
+        setConversationList(roundtableConversations)
+        return roundtableConversations
+      } catch (error) {
+        console.error('Failed to load roundtable conversations:', error)
+        if (!options?.silent) {
+          toast({
+            title: 'Error',
+            description: 'Failed to load roundtable history.',
+            variant: 'destructive',
+          })
+        }
+        setConversationList([])
+        return [] as Conversation[]
+      } finally {
+        setIsLoadingConversationList(false)
+      }
+    },
+    [toast]
+  )
+
+  const touchConversation = useCallback((conversationId: string) => {
+    setConversationList(prev => {
+      const match = prev.find(item => item.id === conversationId)
+      if (!match) return prev
+
+      const updated: Conversation = {
+        ...match,
+        updatedAt: new Date(),
+      }
+
+      return [updated, ...prev.filter(item => item.id !== conversationId)]
+    })
+  }, [])
+
+  const hydrateRoundtableFromConversation = useCallback(
+    (conversation: { id: string; messages: PersistedMessage[] }) => {
+      const sortedMessages = [...conversation.messages].sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      )
+
+      const firstUserMessage = sortedMessages.find(
+        message => message.role === 'user'
+      )
+      const goalText = firstUserMessage
+        ? parseGoalContent(firstUserMessage.content)
+        : ''
+
+      const transcript: RoundtableMessage[] = []
+      if (goalText) {
+        transcript.push({
+          id: `${conversation.id}-goal`,
+          kind: 'goal',
+          content: goalText,
+          timestamp: new Date(firstUserMessage?.createdAt || new Date()),
+        })
+      }
+
+      for (const message of sortedMessages) {
+        if (message.role !== 'assistant') continue
+        const parsed = parseAgentMessage(message)
+        transcript.push({
+          id: message.id,
+          kind: 'agent',
+          content: parsed.content,
+          timestamp: new Date(message.createdAt),
+          agentName: parsed.agentName,
+          provider: message.provider ?? undefined,
+          model: message.model ?? undefined,
+        })
+      }
+
+      setGoal(goalText)
+      setMessages(transcript)
+      setStatusMessage({
+        type: 'info',
+        text: 'Loaded roundtable conversation.',
+      })
+      setActiveConversationId(conversation.id)
+    },
+    []
+  )
+
+  const loadConversationById = useCallback(
+    async (conversationId: string) => {
+      try {
+        setIsLoadingConversation(true)
+        const conversation = await apiClient.getConversation(conversationId)
+        hydrateRoundtableFromConversation(conversation)
+      } catch (error) {
+        console.error('Failed to load roundtable conversation:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to load roundtable conversation.',
+          variant: 'destructive',
+        })
+      } finally {
+        setIsLoadingConversation(false)
+      }
+    },
+    [hydrateRoundtableFromConversation, toast]
+  )
+
   useEffect(() => {
-    void loadConfiguredProviders()
-  }, [loadConfiguredProviders])
+    const initialize = async () => {
+      await loadConfiguredProviders()
+      const conversations = await refreshConversationList({ silent: true })
+      if (conversations.length > 0) {
+        await loadConversationById(conversations[0].id)
+      }
+    }
+    void initialize()
+  }, [loadConfiguredProviders, loadConversationById, refreshConversationList])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -294,6 +443,27 @@ export default function AIRoundtablePage() {
   const resetRoundtable = () => {
     setMessages([])
     setStatusMessage(null)
+    setActiveConversationId(null)
+  }
+
+  const deleteConversationById = async (conversationId: string) => {
+    try {
+      await apiClient.deleteConversation(conversationId)
+      setConversationList(prev =>
+        prev.filter(conversation => conversation.id !== conversationId)
+      )
+      if (activeConversationId === conversationId) {
+        resetRoundtable()
+        setGoal('')
+      }
+    } catch (error) {
+      console.error('Failed to delete roundtable conversation:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete roundtable conversation.',
+        variant: 'destructive',
+      })
+    }
   }
 
   const stopRoundtable = () => {
@@ -319,7 +489,12 @@ export default function AIRoundtablePage() {
           }
         ]
       })
-      return newConversation.id
+      setActiveConversationId(newConversation.id)
+      setConversationList(prev => [
+        newConversation,
+        ...prev.filter(conversation => conversation.id !== newConversation.id),
+      ])
+      return newConversation
     } catch (error) {
       console.error('Failed to create roundtable conversation:', error)
       toast({
@@ -347,6 +522,7 @@ export default function AIRoundtablePage() {
           model: agent.model || null
         }
       ])
+      touchConversation(conversationId)
     } catch (error) {
       console.error('Failed to save assistant message:', error)
       toast({
@@ -423,13 +599,14 @@ export default function AIRoundtablePage() {
     isRunningRef.current = true
     setStatusMessage({ type: 'info', text: 'Roundtable running...' })
 
-    const conversationId = await createConversation(trimmedGoal)
-    if (!conversationId) {
+    const conversation = await createConversation(trimmedGoal)
+    if (!conversation) {
       setIsRunning(false)
       isRunningRef.current = false
       setStatusMessage({ type: 'error', text: 'Failed to start a new roundtable conversation.' })
       return
     }
+    const conversationId = conversation.id
 
     abortControllerRef.current = new AbortController()
     let workingMessages: RoundtableMessage[] = []
@@ -557,9 +734,9 @@ export default function AIRoundtablePage() {
                   </Badge>
                 ))}
               </div>
-              <Button variant="outline" size="sm" onClick={resetRoundtable} disabled={isRunning}>
+              <Button variant="outline" size="sm" onClick={resetRoundtable} disabled={isBusy}>
                 <RotateCcw className="h-4 w-4 mr-2" />
-                Reset
+                New Thread
               </Button>
             </div>
           </div>
@@ -621,7 +798,7 @@ export default function AIRoundtablePage() {
                   onChange={handleGoalChange}
                   placeholder="Describe the objective for the AI conversation..."
                   className="min-h-[90px]"
-                  disabled={isRunning}
+                  disabled={isBusy}
                 />
               </div>
               <div className="space-y-1">
@@ -632,7 +809,7 @@ export default function AIRoundtablePage() {
                   max={30}
                   value={maxTurns}
                   onChange={handleMaxTurnsChange}
-                  disabled={isRunning}
+                  disabled={isBusy}
                 />
                 <p className="text-xs text-muted-foreground">Each turn is one agent response.</p>
               </div>
@@ -650,7 +827,7 @@ export default function AIRoundtablePage() {
                 </div>
               )}
               <div className="flex gap-2">
-                <Button onClick={startRoundtable} disabled={isRunning}>
+                <Button onClick={startRoundtable} disabled={isBusy}>
                   <Play className="h-4 w-4 mr-2" />
                   Start
                 </Button>
@@ -659,6 +836,71 @@ export default function AIRoundtablePage() {
                   Stop
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">
+                Recent Threads ({conversationList.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="max-h-[220px] space-y-2 overflow-y-auto">
+                {isLoadingConversationList || isLoadingConversation ? (
+                  <p className="text-xs text-muted-foreground">
+                    Loading roundtable history...
+                  </p>
+                ) : conversationList.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No roundtable threads yet.
+                  </p>
+                ) : (
+                  conversationList.map(conversation => (
+                    <div
+                      key={conversation.id}
+                      className={`flex items-start gap-2 rounded-md border p-2 ${
+                        activeConversationId === conversation.id
+                          ? 'border-primary bg-primary/10'
+                          : 'bg-muted/20'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        className="flex-1 text-left"
+                        onClick={() => void loadConversationById(conversation.id)}
+                        disabled={isBusy}
+                      >
+                        <p className="truncate text-xs font-medium">
+                          {conversation.title || 'Untitled roundtable'}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {formatConversationTimestamp(conversation.updatedAt)}
+                        </p>
+                      </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => void deleteConversationById(conversation.id)}
+                        disabled={isBusy}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => void refreshConversationList()}
+                disabled={isBusy}
+              >
+                Refresh History
+              </Button>
             </CardContent>
           </Card>
 
@@ -674,7 +916,7 @@ export default function AIRoundtablePage() {
                     variant="outline"
                     size="sm"
                     onClick={() => addAgent(provider)}
-                    disabled={isRunning}
+                    disabled={isBusy}
                     className="text-xs capitalize"
                   >
                     <Plus className="h-3 w-3 mr-1" />
@@ -701,13 +943,13 @@ export default function AIRoundtablePage() {
                           value={agent.name}
                           onChange={(e) => updateAgent(agent.id, { name: e.target.value })}
                           className="text-xs"
-                          disabled={isRunning}
+                          disabled={isBusy}
                         />
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => removeAgent(agent.id)}
-                          disabled={isRunning}
+                          disabled={isBusy}
                           className="h-6 w-6 p-0"
                         >
                           <X className="h-3 w-3" />
@@ -720,7 +962,7 @@ export default function AIRoundtablePage() {
                         value={agent.model}
                         onChange={(e) => updateAgent(agent.id, { model: e.target.value })}
                         className="w-full p-1.5 border rounded text-xs bg-background"
-                        disabled={isRunning}
+                        disabled={isBusy}
                       >
                         {AVAILABLE_MODELS[agent.provider]?.map(model => (
                           <option key={model} value={model}>{model}</option>
@@ -731,7 +973,7 @@ export default function AIRoundtablePage() {
                         onChange={(e) => updateAgent(agent.id, { systemPrompt: e.target.value })}
                         placeholder="System instructions for this agent..."
                         className="min-h-[80px] text-xs"
-                        disabled={isRunning}
+                        disabled={isBusy}
                       />
                     </div>
                   ))

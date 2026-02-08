@@ -17,7 +17,7 @@ const goalStatusSchema = z.enum([
 
 const createGoalSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(160),
-  description: z.string().max(2000).optional(),
+  description: z.string().max(10000).optional(),
   status: goalStatusSchema.optional(),
 })
 

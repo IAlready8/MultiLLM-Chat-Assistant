@@ -18,7 +18,7 @@ const goalStatusSchema = z.enum([
 const updateGoalSchema = z
   .object({
     title: z.string().trim().min(1).max(160).optional(),
-    description: z.string().max(2000).nullable().optional(),
+    description: z.string().max(10000).nullable().optional(),
     status: goalStatusSchema.optional(),
   })
   .refine(
