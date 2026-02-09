@@ -41,6 +41,25 @@ const listFallbackPersonas = (userId: string): Persona[] =>
     .map(clonePersona)
     .sort((a, b) => a.title.localeCompare(b.title))
 
+const mergePersonasById = (
+  dbPersonas: Persona[],
+  fallbackPersonasForUser: Persona[]
+): Persona[] => {
+  const merged = new Map<string, Persona>()
+
+  for (const persona of fallbackPersonasForUser) {
+    merged.set(persona.id, clonePersona(persona))
+  }
+
+  for (const persona of dbPersonas) {
+    merged.set(persona.id, persona)
+  }
+
+  return Array.from(merged.values()).sort((a, b) =>
+    a.title.localeCompare(b.title)
+  )
+}
+
 export const PersonaService = {
   async getPersonasByUserId(userId: string): Promise<Persona[]> {
     if (db.isKnownUnavailable()) {
@@ -48,7 +67,7 @@ export const PersonaService = {
     }
 
     try {
-      return await prisma.persona.findMany({
+      const personas = await prisma.persona.findMany({
         where: {
           userId,
         },
@@ -56,6 +75,13 @@ export const PersonaService = {
           title: 'asc',
         },
       })
+
+      const fallback = listFallbackPersonas(userId)
+      if (fallback.length === 0) {
+        return personas
+      }
+
+      return mergePersonasById(personas, fallback)
     } catch (error) {
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('getPersonasByUserId', 'persona', error)
@@ -71,12 +97,19 @@ export const PersonaService = {
     }
 
     try {
-      return await prisma.persona.findFirst({
+      const persona = await prisma.persona.findFirst({
         where: {
           id,
           userId,
         },
       })
+
+      if (persona) {
+        return persona
+      }
+
+      const fallbackPersona = getFallbackUserStore(userId).get(id)
+      return fallbackPersona ? clonePersona(fallbackPersona) : null
     } catch (error) {
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('getPersonaById', 'persona', error)
@@ -159,7 +192,7 @@ export const PersonaService = {
       })
 
       if (!existingPersona) {
-        return null
+        return saveToFallback()
       }
 
       return await prisma.persona.update({
@@ -190,7 +223,7 @@ export const PersonaService = {
       })
 
       if (!existingPersona) {
-        return false
+        return getFallbackUserStore(userId).delete(id)
       }
 
       await prisma.persona.delete({

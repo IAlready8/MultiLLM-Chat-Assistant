@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,13 +9,22 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { ClientSafeProvider, getProviders, signIn, signOut, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Github, Mail, Lock, User } from 'lucide-react'
+import { Github, Loader2, Lock, Mail, User } from 'lucide-react'
 
 type SignInErrors = {
   name?: string
   email?: string
   password?: string
 }
+
+type GuestMigrationCounts = {
+  goals: number
+  providerConfigs: number
+  conversations: number
+  personas: number
+}
+
+type MigrationState = 'idle' | 'running' | 'failed' | 'succeeded'
 
 export default function SignInPage() {
   const [email, setEmail] = useState('')
@@ -24,6 +33,9 @@ export default function SignInPage() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<SignInErrors>({})
+  const [migrationState, setMigrationState] = useState<MigrationState>('idle')
+  const [migrationError, setMigrationError] = useState<string | null>(null)
+  const [migrationCounts, setMigrationCounts] = useState<GuestMigrationCounts | null>(null)
   const { toast } = useToast()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -39,11 +51,18 @@ export default function SignInPage() {
   const demoEmail = process.env.NEXT_PUBLIC_DEMO_ACCOUNT_EMAIL || 'demo@local.dev'
   const demoPassword =
     process.env.NEXT_PUBLIC_DEMO_ACCOUNT_PASSWORD || 'demo12345'
+  const guestUserId = process.env.NEXT_PUBLIC_GUEST_USER_ID || 'guest-local-user'
+  const shouldAttemptGuestMigration = !strictAuthEnabled
 
   const callbackUrl = useMemo(() => {
     const callback = searchParams.get('callbackUrl')
     return callback && callback.startsWith('/') ? callback : '/'
   }, [searchParams])
+
+  const postAuthUpgrade = useMemo(
+    () => searchParams.get('postAuth') === '1',
+    [searchParams]
+  )
 
   useEffect(() => {
     const loadProviders = async () => {
@@ -64,6 +83,107 @@ export default function SignInPage() {
       setOauthProviders([])
     })
   }, [])
+
+  const runGuestMigration = useCallback(async () => {
+    if (!shouldAttemptGuestMigration) {
+      return true
+    }
+
+    setMigrationState('running')
+    setMigrationError(null)
+
+    let lastError = 'Failed to migrate guest data.'
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await fetch('/api/auth/upgrade-guest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ guestUserId }),
+        })
+
+        if (response.status === 401 && attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 200))
+          continue
+        }
+
+        const payload = await response.json().catch(() => null)
+        if (!response.ok) {
+          lastError =
+            typeof payload?.error === 'string'
+              ? payload.error
+              : 'Failed to migrate guest data.'
+          throw new Error(lastError)
+        }
+
+        const counts: GuestMigrationCounts = {
+          goals: Number(payload?.counts?.goals ?? 0),
+          providerConfigs: Number(payload?.counts?.providerConfigs ?? 0),
+          conversations: Number(payload?.counts?.conversations ?? 0),
+          personas: Number(payload?.counts?.personas ?? 0),
+        }
+
+        const total =
+          counts.goals +
+          counts.providerConfigs +
+          counts.conversations +
+          counts.personas
+
+        setMigrationCounts(counts)
+        setMigrationState('succeeded')
+
+        if (total > 0) {
+          toast({
+            title: 'Guest data migrated',
+            description: `Moved ${total} item(s) to your account.`,
+          })
+        }
+
+        return true
+      } catch (error) {
+        if (error instanceof Error && error.message.trim()) {
+          lastError = error.message
+        }
+      }
+    }
+
+    setMigrationState('failed')
+    setMigrationError(lastError)
+    toast({
+      title: 'Guest data migration failed',
+      description: `${lastError} You can retry now.`,
+      variant: 'destructive',
+    })
+    return false
+  }, [guestUserId, shouldAttemptGuestMigration, toast])
+
+  useEffect(() => {
+    if (!session?.user?.id || !postAuthUpgrade) {
+      return
+    }
+
+    if (migrationState === 'running' || migrationState === 'succeeded') {
+      return
+    }
+
+    let isCancelled = false
+    runGuestMigration().then((ok) => {
+      if (ok && !isCancelled) {
+        router.replace(callbackUrl)
+      }
+    })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [
+    session?.user?.id,
+    postAuthUpgrade,
+    migrationState,
+    callbackUrl,
+    router,
+    runGuestMigration,
+  ])
 
   const resolveSignInError = (error: string) => {
     switch (error) {
@@ -154,11 +274,30 @@ export default function SignInPage() {
           variant: 'destructive'
         })
       } else {
-        toast({
-          title: 'Success',
-          description: isSignUp ? 'Account created successfully!' : 'Signed in successfully!'
-        })
-        router.push(result?.url ?? callbackUrl)
+        let migrationOk = true
+        if (shouldAttemptGuestMigration) {
+          migrationOk = await runGuestMigration()
+        }
+
+        if (migrationOk) {
+          toast({
+            title: 'Success',
+            description: isSignUp
+              ? 'Account created successfully!'
+              : 'Signed in successfully!',
+          })
+        } else {
+          toast({
+            title: 'Signed in',
+            description:
+              'Authentication succeeded, but guest data migration needs attention.',
+            variant: 'destructive',
+          })
+        }
+
+        if (migrationOk) {
+          router.push(result?.url ?? callbackUrl)
+        }
       }
     } catch (error) {
       console.error('Sign in error:', error)
@@ -175,7 +314,11 @@ export default function SignInPage() {
   const handleSocialSignIn = async (providerId: string, providerName: string) => {
     setLoading(true)
     try {
-      const result = await signIn(providerId, { callbackUrl })
+      const socialCallbackUrl = shouldAttemptGuestMigration
+        ? `/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}&postAuth=1`
+        : callbackUrl
+
+      const result = await signIn(providerId, { callbackUrl: socialCallbackUrl })
       if (result?.error) {
         toast({
           title: 'Error',
@@ -196,6 +339,12 @@ export default function SignInPage() {
   }
 
   if (session) {
+    const totalMigrated =
+      (migrationCounts?.goals ?? 0) +
+      (migrationCounts?.providerConfigs ?? 0) +
+      (migrationCounts?.conversations ?? 0) +
+      (migrationCounts?.personas ?? 0)
+
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -207,14 +356,45 @@ export default function SignInPage() {
             <CardDescription>
               You are already signed in as {session.user?.email}
             </CardDescription>
+            {migrationState === 'running' && (
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-2 pt-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Migrating guest data...
+              </p>
+            )}
+            {migrationState === 'failed' && (
+              <p className="text-xs text-destructive pt-2">
+                {migrationError || 'Guest data migration failed.'}
+              </p>
+            )}
+            {migrationState === 'succeeded' && totalMigrated > 0 && (
+              <p className="text-xs text-emerald-600 pt-2">
+                Migrated {totalMigrated} item(s) from guest mode.
+              </p>
+            )}
           </CardHeader>
           <CardFooter className="flex flex-col space-y-2">
-            <Button 
+            <Button
               className="w-full" 
               onClick={() => router.push(callbackUrl)}
+              disabled={migrationState === 'running'}
             >
               Go to Dashboard
             </Button>
+            {migrationState === 'failed' && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={async () => {
+                  const ok = await runGuestMigration()
+                  if (ok) {
+                    router.push(callbackUrl)
+                  }
+                }}
+              >
+                Retry Data Migration
+              </Button>
+            )}
             <Button 
               variant="outline" 
               className="w-full" 
