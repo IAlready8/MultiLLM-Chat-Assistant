@@ -10,6 +10,106 @@ interface LLMStreamRequest {
   model?: string;
 }
 
+type StreamRouteError = {
+  status: number
+  code: string
+  error: string
+}
+
+const jsonErrorResponse = (status: number, error: string, code: string) =>
+  new Response(
+    JSON.stringify({ error, code }),
+    { status, headers: { 'Content-Type': 'application/json' } }
+  )
+
+const parseStatusFromMessage = (message: string): number | null => {
+  const match = message.match(/\bHTTP\s+(\d{3})\b/i)
+  if (!match) return null
+  const status = Number(match[1])
+  return Number.isFinite(status) ? status : null
+}
+
+const classifyStreamError = (error: unknown): StreamRouteError => {
+  if (error instanceof SyntaxError) {
+    return {
+      status: 400,
+      code: 'INVALID_JSON',
+      error: 'Request body must be valid JSON',
+    }
+  }
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : 'Streaming request failed'
+  const lower = message.toLowerCase()
+  const upstreamStatus = parseStatusFromMessage(message)
+
+  if (upstreamStatus === 401 || upstreamStatus === 403) {
+    return {
+      status: 401,
+      code: 'PROVIDER_AUTH_ERROR',
+      error: 'Provider rejected the configured API key',
+    }
+  }
+
+  if (upstreamStatus === 429) {
+    return {
+      status: 429,
+      code: 'RATE_LIMITED',
+      error: 'Provider rate limit reached, please retry shortly',
+    }
+  }
+
+  if (
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('abort')
+  ) {
+    return {
+      status: 504,
+      code: 'PROVIDER_TIMEOUT',
+      error: 'Provider request timed out',
+    }
+  }
+
+  if (
+    lower.includes('fetch failed') ||
+    lower.includes('network') ||
+    lower.includes('econnrefused') ||
+    lower.includes('enotfound') ||
+    lower.includes('eai_again')
+  ) {
+    return {
+      status: 503,
+      code: 'NETWORK_ERROR',
+      error: 'Failed to reach upstream provider',
+    }
+  }
+
+  if (upstreamStatus !== null && upstreamStatus >= 500) {
+    return {
+      status: 503,
+      code: 'PROVIDER_UNAVAILABLE',
+      error: 'Provider is currently unavailable',
+    }
+  }
+
+  if (upstreamStatus !== null && upstreamStatus >= 400) {
+    return {
+      status: 400,
+      code: 'PROVIDER_REQUEST_ERROR',
+      error: message,
+    }
+  }
+
+  return {
+    status: 500,
+    code: 'INTERNAL_ERROR',
+    error: message,
+  }
+}
+
 // Simple validation function for API key format
 function validateApiKeyFormat(provider: string, apiKey: string): boolean {
   if (!apiKey || typeof apiKey !== 'string') {
@@ -22,7 +122,7 @@ function validateApiKeyFormat(provider: string, apiKey: string): boolean {
       return apiKey.startsWith('sk-') && apiKey.length > 20;
     case 'anthropic':
       return apiKey.startsWith('sk-ant-') && apiKey.length > 20;
-    case 'google':
+    case 'googleai':
       return apiKey.length > 30 && !apiKey.includes(' ');
     case 'openrouter':
       return apiKey.startsWith('sk-or-') && apiKey.length > 20;
@@ -39,11 +139,15 @@ type RateLimitConfig = {
 // Simple rate limiter using in-memory store
 const rateLimits = new Map<string, { count: number; resetTime: number }>();
 
-function checkRateLimit(provider: string, config: RateLimitConfig): boolean {
-  const key = `rate_limit:${provider}`;
+function checkRateLimit(userId: string, provider: string, config: RateLimitConfig): boolean {
+  const key = `rate_limit:${userId}:${provider}`;
   const now = Date.now();
   const windowMs = config.window;
   const maxRequests = config.requests;
+
+  if (maxRequests < 1) {
+    return false
+  }
   
   const limitInfo = rateLimits.get(key);
   if (!limitInfo || now > limitInfo.resetTime) {
@@ -64,19 +168,35 @@ function checkRateLimit(provider: string, config: RateLimitConfig): boolean {
 export async function POST(request: NextRequest) {
   try {
     // Get request data
-    const body: LLMStreamRequest = await request.json()
-    const { provider, messages, model } = body
+    let body: LLMStreamRequest
+    try {
+      body = await request.json()
+    } catch {
+      return jsonErrorResponse(400, 'Request body must be valid JSON', 'INVALID_JSON')
+    }
+
+    const providerRaw = body?.provider
+    const messages = body?.messages
+    const model = body?.model
 
     // Validate request
-    if (!provider || !messages || !Array.isArray(messages) || messages.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'Provider and messages are required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      )
+    if (
+      typeof providerRaw !== 'string' ||
+      providerRaw.trim().length === 0 ||
+      !messages ||
+      !Array.isArray(messages) ||
+      messages.length === 0
+    ) {
+      return jsonErrorResponse(400, 'Provider and messages are required', 'VALIDATION_ERROR')
     }
+    const provider = providerRaw.trim().toLowerCase()
 
     const authCheck = await getAuthenticatedUser({ allowGuest: true })
     if (authCheck instanceof NextResponse) return authCheck
+
+    if (!defaultProviderModels[provider as keyof typeof defaultProviderModels]) {
+      return jsonErrorResponse(400, `Provider '${provider}' not supported`, 'PROVIDER_UNSUPPORTED')
+    }
 
     const [providerConfigs, apiKey] = await Promise.all([
       getUserProviderConfigs(authCheck.user.id),
@@ -85,18 +205,16 @@ export async function POST(request: NextRequest) {
 
     const providerConfig = providerConfigs.find(config => config.provider === provider)
 
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: `Provider ${provider} is not configured` }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      )
+    if (!providerConfig || !apiKey) {
+      return jsonErrorResponse(400, `Provider ${provider} is not configured`, 'PROVIDER_NOT_CONFIGURED')
     }
 
     // Validate API key format
     if (!validateApiKeyFormat(provider, apiKey)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid API key format for the selected provider' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      return jsonErrorResponse(
+        400,
+        'Invalid API key format for the selected provider',
+        'PROVIDER_KEY_FORMAT_INVALID'
       )
     }
 
@@ -109,11 +227,8 @@ export async function POST(request: NextRequest) {
       []
 
     // Check rate limits
-    if (!checkRateLimit(provider, providerRateLimits)) {
-      return new Response(
-        JSON.stringify({ error: 'Rate limit exceeded' }),
-        { status: 429, headers: { 'Content-Type': 'application/json' } }
-      )
+    if (!checkRateLimit(authCheck.user.id, provider, providerRateLimits)) {
+      return jsonErrorResponse(429, 'Rate limit exceeded', 'RATE_LIMITED')
     }
 
     // Create a transform stream for NDJSON
@@ -143,10 +258,12 @@ export async function POST(request: NextRequest) {
         // Write done event when complete
         await writeEvent({ type: 'done' })
       } catch (error: any) {
+        const mappedError = classifyStreamError(error)
         // Write error event if something goes wrong
         await writeEvent({
           type: 'error',
-          error: error.message || 'Streaming error occurred',
+          error: mappedError.error,
+          code: mappedError.code,
           details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         })
       } finally {
@@ -168,13 +285,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Streaming API error:', error)
-
-    return new Response(
-      JSON.stringify({
-        error: error.message || 'Internal server error',
-        ...(process.env.NODE_ENV === 'development' && { type: error.constructor?.name })
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+    const mappedError = classifyStreamError(error)
+    return jsonErrorResponse(mappedError.status, mappedError.error, mappedError.code)
   }
 }

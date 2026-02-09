@@ -4,6 +4,125 @@ import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service';
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 
+type ChatRouteError = {
+    status: number;
+    code: string;
+    error: string;
+};
+
+const getUpstreamErrorMessage = async (response: Response): Promise<string> => {
+    const errorBody = await response.json().catch(() => ({} as Record<string, any>));
+    const detail =
+        errorBody?.error?.message ||
+        errorBody?.message ||
+        errorBody?.detail;
+    return detail ? `HTTP ${response.status}: ${detail}` : `HTTP ${response.status}`;
+};
+
+const jsonErrorResponse = (status: number, error: string, code: string) =>
+    new NextResponse(
+        JSON.stringify({ error, code }),
+        { status, headers: { 'Content-Type': 'application/json' } }
+    );
+
+const parseStatusFromMessage = (message: string): number | null => {
+    const match = message.match(/\bHTTP\s+(\d{3})\b/i);
+    if (!match) {
+        return null;
+    }
+    const status = Number(match[1]);
+    return Number.isFinite(status) ? status : null;
+};
+
+const mapErrorToResponse = (error: unknown): ChatRouteError => {
+    if (error instanceof SyntaxError) {
+        return {
+            status: 400,
+            code: 'INVALID_JSON',
+            error: 'Request body must be valid JSON',
+        };
+    }
+
+    if (error instanceof NotImplementedError) {
+        return {
+            status: 501,
+            code: 'FEATURE_NOT_IMPLEMENTED',
+            error: error.userMessage || 'This feature is not yet available.',
+        };
+    }
+
+    const message =
+        error instanceof Error
+            ? error.message
+            : 'An internal server error occurred';
+    const lowerMessage = message.toLowerCase();
+    const upstreamStatus = parseStatusFromMessage(message);
+
+    if (upstreamStatus === 401 || upstreamStatus === 403) {
+        return {
+            status: 401,
+            code: 'PROVIDER_AUTH_ERROR',
+            error: 'Provider rejected the configured API key',
+        };
+    }
+
+    if (upstreamStatus === 429) {
+        return {
+            status: 429,
+            code: 'RATE_LIMITED',
+            error: 'Provider rate limit reached, please retry shortly',
+        };
+    }
+
+    if (upstreamStatus !== null && upstreamStatus >= 500) {
+        return {
+            status: 503,
+            code: 'PROVIDER_UNAVAILABLE',
+            error: 'Provider is currently unavailable',
+        };
+    }
+
+    if (
+        lowerMessage.includes('timeout') ||
+        lowerMessage.includes('timed out') ||
+        lowerMessage.includes('abort')
+    ) {
+        return {
+            status: 504,
+            code: 'PROVIDER_TIMEOUT',
+            error: 'Provider request timed out',
+        };
+    }
+
+    if (
+        lowerMessage.includes('fetch failed') ||
+        lowerMessage.includes('network') ||
+        lowerMessage.includes('econnrefused') ||
+        lowerMessage.includes('enotfound') ||
+        lowerMessage.includes('eai_again')
+    ) {
+        return {
+            status: 503,
+            code: 'NETWORK_ERROR',
+            error: 'Failed to reach upstream provider',
+        };
+    }
+
+    if (upstreamStatus !== null && upstreamStatus >= 400) {
+        return {
+            status: 400,
+            code: 'PROVIDER_REQUEST_ERROR',
+            error: message,
+        };
+    }
+
+    return {
+        status: 500,
+        code: 'INTERNAL_ERROR',
+        error: message,
+    };
+};
+
 // ===== Grok (X.AI) Provider Logic =====
 async function chatGrok(
     request: any,
@@ -28,8 +147,8 @@ async function chatGrok(
     });
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new LLMProviderError('grok', errorBody.error?.message || `HTTP ${response.status}`, createErrorContext('/api/llm/chat', request.userId, { streaming: false }));
+        const providerError = await getUpstreamErrorMessage(response);
+        throw new LLMProviderError('grok', providerError, createErrorContext('/api/llm/chat', request.userId, { streaming: false }));
     }
     const data = await response.json();
     return { content: data.choices[0].message?.content || '', finish_reason: data.choices[0].finish_reason, usage: data.usage };
@@ -57,8 +176,8 @@ async function* streamGrok(
     });
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new LLMProviderError('grok', errorBody.error?.message || `HTTP ${response.status}`, createErrorContext('/api/llm/chat', request.userId, { streaming: true }));
+        const providerError = await getUpstreamErrorMessage(response);
+        throw new LLMProviderError('grok', providerError, createErrorContext('/api/llm/chat', request.userId, { streaming: true }));
     }
 
     if (!response.body) throw new LLMProviderError('grok', 'No response body received', createErrorContext('/api/llm/chat', request.userId));
@@ -119,8 +238,8 @@ async function chatAnthropic(
     });
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new LLMProviderError('anthropic', errorBody.error?.message || `HTTP ${response.status}`, createErrorContext('/api/llm/chat', request.userId, { streaming: false }));
+        const providerError = await getUpstreamErrorMessage(response);
+        throw new LLMProviderError('anthropic', providerError, createErrorContext('/api/llm/chat', request.userId, { streaming: false }));
     }
     const data = await response.json();
     return {
@@ -165,8 +284,8 @@ async function* streamAnthropic(
     });
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new LLMProviderError('anthropic', errorBody.error?.message || `HTTP ${response.status}`, createErrorContext('/api/llm/chat', request.userId, { streaming: true }));
+        const providerError = await getUpstreamErrorMessage(response);
+        throw new LLMProviderError('anthropic', providerError, createErrorContext('/api/llm/chat', request.userId, { streaming: true }));
     }
 
     if (!response.body) throw new LLMProviderError('anthropic', 'No response body received', createErrorContext('/api/llm/chat', request.userId));
@@ -229,8 +348,8 @@ async function chatGoogleAI(
     });
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new LLMProviderError('googleai', errorBody.error?.message || `HTTP ${response.status}`, createErrorContext('/api/llm/chat', request.userId, { streaming: false }));
+        const providerError = await getUpstreamErrorMessage(response);
+        throw new LLMProviderError('googleai', providerError, createErrorContext('/api/llm/chat', request.userId, { streaming: false }));
     }
     const data = await response.json();
     return {
@@ -274,8 +393,8 @@ async function* streamGoogleAI(
     });
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new LLMProviderError('googleai', errorBody.error?.message || `HTTP ${response.status}`, createErrorContext('/api/llm/chat', request.userId, { streaming: true }));
+        const providerError = await getUpstreamErrorMessage(response);
+        throw new LLMProviderError('googleai', providerError, createErrorContext('/api/llm/chat', request.userId, { streaming: true }));
     }
 
     if (!response.body) throw new LLMProviderError('googleai', 'No response body received', createErrorContext('/api/llm/chat', request.userId));
@@ -327,8 +446,8 @@ async function chatOpenAI(
     });
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new LLMProviderError('openai', errorBody.error?.message || `HTTP ${response.status}`, createErrorContext('/api/llm/chat', request.userId, { streaming: false }));
+        const providerError = await getUpstreamErrorMessage(response);
+        throw new LLMProviderError('openai', providerError, createErrorContext('/api/llm/chat', request.userId, { streaming: false }));
     }
     const data = await response.json();
     return { content: data.choices[0].message?.content || '', finish_reason: data.choices[0].finish_reason, usage: data.usage };
@@ -356,8 +475,8 @@ async function* streamOpenAI(
     });
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new LLMProviderError('openai', errorBody.error?.message || `HTTP ${response.status}`, createErrorContext('/api/llm/chat', request.userId, { streaming: true }));
+        const providerError = await getUpstreamErrorMessage(response);
+        throw new LLMProviderError('openai', providerError, createErrorContext('/api/llm/chat', request.userId, { streaming: true }));
     }
 
     if (!response.body) throw new LLMProviderError('openai', 'No response body received', createErrorContext('/api/llm/chat', request.userId));
@@ -462,28 +581,32 @@ export async function POST(req: NextRequest) {
         analyticsUserId = userId
 
         const body = await req.json();
-        const { provider = 'openai', messages, model, temperature, max_tokens, stream = true } = body;
+        const { provider: providerRaw = 'openai', messages, model, temperature, max_tokens, stream = true } = body;
+        if (typeof providerRaw !== 'string' || providerRaw.trim().length === 0) {
+            return jsonErrorResponse(400, 'Provider is required', 'VALIDATION_ERROR');
+        }
+        const provider = providerRaw.trim().toLowerCase();
         analyticsProvider = provider;
         analyticsModel = typeof model === 'string' && model.trim() ? model : 'default';
 
         if (!messages || !Array.isArray(messages) || messages.length === 0) {
-            return new NextResponse(JSON.stringify({ error: 'Messages are required' }), { status: 400 });
+            return jsonErrorResponse(400, 'Messages are required', 'VALIDATION_ERROR');
         }
 
         const providerImplementation = providerFactory[provider as keyof typeof providerFactory];
         if (!providerImplementation) {
-            return new NextResponse(JSON.stringify({ error: `Provider '${provider}' not supported` }), { status: 400 });
+            return jsonErrorResponse(400, `Provider '${provider}' not supported`, 'PROVIDER_UNSUPPORTED');
         }
 
         const providerConfigs = await getUserProviderConfigs(userId);
         const providerConfig = providerConfigs.find(config => config.provider === provider);
         if (!providerConfig) {
-            return new NextResponse(JSON.stringify({ error: `Provider ${provider} not configured` }), { status: 400 });
+            return jsonErrorResponse(400, `Provider ${provider} not configured`, 'PROVIDER_NOT_CONFIGURED');
         }
 
         const apiKey = await getUserApiKey(userId, provider);
         if (!apiKey) {
-            return new NextResponse(JSON.stringify({ error: `Failed to retrieve API key for ${provider}` }), { status: 500 });
+            return jsonErrorResponse(400, `Provider ${provider} not configured`, 'PROVIDER_NOT_CONFIGURED');
         }
         const requestPayload = { messages, model, temperature, max_tokens, userId };
         // Parse settings JSON for baseUrl if available
@@ -595,7 +718,7 @@ export async function POST(req: NextRequest) {
         }
         const context = createErrorContext('/api/llm/chat');
         await errorManager.logError(error as Error, context);
-        const errorMessage = error instanceof Error ? error.message : 'An internal server error occurred';
-        return new NextResponse(JSON.stringify({ error: errorMessage }), { status: 500 });
+        const mapped = mapErrorToResponse(error);
+        return jsonErrorResponse(mapped.status, mapped.error, mapped.code);
     }
 }

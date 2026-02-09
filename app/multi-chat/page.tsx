@@ -335,6 +335,45 @@ export default function MultiChatPage() {
     }
   }
 
+  type ProviderRequestError = Error & {
+    code?: string
+    status?: number
+  }
+
+  const createProviderRequestError = (
+    message: string,
+    status?: number,
+    code?: string
+  ): ProviderRequestError => {
+    const error = new Error(message) as ProviderRequestError
+    error.status = status
+    error.code = code
+    return error
+  }
+
+  const toProviderDisplayError = (error: ProviderRequestError): string => {
+    if (error.code === 'PROVIDER_NOT_CONFIGURED') {
+      return 'No API key is configured for this provider. Add it in Settings.'
+    }
+    if (error.code === 'PROVIDER_AUTH_ERROR') {
+      return 'The saved API key was rejected. Please update it in Settings.'
+    }
+    if (error.code === 'RATE_LIMITED' || error.status === 429) {
+      return 'Rate limit reached. Please wait a moment and retry.'
+    }
+    if (error.code === 'PROVIDER_TIMEOUT' || error.status === 504) {
+      return 'The provider timed out. Try again or switch models.'
+    }
+    if (
+      error.code === 'PROVIDER_UNAVAILABLE' ||
+      error.code === 'NETWORK_ERROR' ||
+      error.status === 503
+    ) {
+      return 'Provider temporarily unavailable. Please retry shortly.'
+    }
+    return error.message || 'Failed to get response from provider'
+  }
+
   const streamProviderResponse = async (
     provider: string,
     messages: Array<{ role: Message['role']; content: string }>,
@@ -349,15 +388,22 @@ export default function MultiChatPage() {
 
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}`
+      let errorCode: string | undefined
       try {
         const errorBody = await response.json()
         errorMessage = errorBody?.error || errorMessage
+        errorCode =
+          typeof errorBody?.code === 'string' ? errorBody.code : undefined
       } catch {}
-      throw new Error(errorMessage)
+      throw createProviderRequestError(errorMessage, response.status, errorCode)
     }
 
     if (!response.body) {
-      throw new Error('No response body received')
+      throw createProviderRequestError(
+        'No response body received',
+        502,
+        'EMPTY_RESPONSE_BODY'
+      )
     }
 
     const reader = response.body.getReader()
@@ -493,13 +539,15 @@ export default function MultiChatPage() {
       }
     } catch (error) {
       console.error(`Error calling instance ${instance.provider}/${instance.model}:`, error)
+      const providerError = error as ProviderRequestError
+      const displayError = toProviderDisplayError(providerError)
 
       setChatState(prev => {
         const updatedMessages = prev.messages.map(msg => {
           if (msg.id === typingId) {
             return {
               ...msg,
-              content: `Error: ${(error as Error).message || 'Failed to get response'}`,
+              content: `Error: ${displayError}`,
               timestamp: new Date()
             }
           }
@@ -510,7 +558,7 @@ export default function MultiChatPage() {
 
       toast({
         title: 'Provider Error',
-        description: `Failed to get response from ${instance.provider}/${instance.model}: ${(error as Error).message || 'Unknown error'}`,
+        description: `Failed to get response from ${instance.provider}/${instance.model}: ${displayError}`,
         variant: 'destructive'
       })
     }
