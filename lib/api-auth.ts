@@ -13,6 +13,24 @@ type GetAuthenticatedUserOptions = {
   allowGuest?: boolean
 }
 
+// Tracks whether we've already logged a session error to avoid log spam
+let sessionErrorLogged = false
+
+const isJwtDecryptionError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false
+  const name = error.name.toLowerCase()
+  const message = error.message.toLowerCase()
+  return (
+    name.includes('jwt') ||
+    name.includes('jwe') ||
+    message.includes('jwt') ||
+    message.includes('decrypt') ||
+    message.includes('jwe') ||
+    message.includes('invalid compact jwe') ||
+    message.includes('decryption operation failed')
+  )
+}
+
 /**
  * A helper function to get the authenticated user from a server-side API request.
  * Encapsulates the logic for checking the session and returning a 401 response.
@@ -46,7 +64,7 @@ export async function getAuthenticatedUser(
   try {
     const session = await auth()
     if (session?.user?.id) {
-      // We can cast here because our NextAuth config ensures user.id exists
+      sessionErrorLogged = false
       return { user: session.user as unknown as User }
     }
 
@@ -56,7 +74,28 @@ export async function getAuthenticatedUser(
 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   } catch (error) {
-    console.error('Failed to read session:', error)
+    // JWT decryption failures (e.g., rotated secret, corrupted cookie)
+    // are auth problems, not server errors — treat as "no session"
+    if (isJwtDecryptionError(error)) {
+      if (!sessionErrorLogged) {
+        sessionErrorLogged = true
+        console.warn(
+          'Session token could not be decrypted (likely rotated secret or legacy cookie). Treating as unauthenticated.'
+        )
+      }
+
+      if (allowGuest) {
+        return { user: createGuestUserRecord() }
+      }
+
+      return NextResponse.json({ error: 'Session expired' }, { status: 401 })
+    }
+
+    // Other errors (DB down, network issues, etc.)
+    if (!sessionErrorLogged) {
+      sessionErrorLogged = true
+      console.error('Failed to read session:', error)
+    }
 
     if (allowGuest) {
       return { user: createGuestUserRecord() }

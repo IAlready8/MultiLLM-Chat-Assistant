@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { Goal } from '@/types/prisma'
+import { createDbAvailabilityTracker, getOrCreateUserStore } from '@/lib/db-fallback'
 
 export type GoalStatus = 'not-started' | 'in-progress' | 'completed' | 'delayed'
 
@@ -8,8 +9,6 @@ type GoalUpdateData = Partial<Omit<Goal, 'id' | 'userId' | 'createdAt' | 'update
 
 type GlobalGoalFallback = typeof globalThis & {
   __multiLlmGoalFallbackStore?: Map<string, Map<string, Goal>>
-  __multiLlmGoalFallbackWarnings?: Set<string>
-  __multiLlmGoalDbUnavailable?: boolean
 }
 
 const goalGlobal = globalThis as GlobalGoalFallback
@@ -18,9 +17,7 @@ const fallbackGoals: Map<string, Map<string, Goal>> =
   goalGlobal.__multiLlmGoalFallbackStore ??
   (goalGlobal.__multiLlmGoalFallbackStore = new Map<string, Map<string, Goal>>())
 
-const fallbackWarnings: Set<string> =
-  goalGlobal.__multiLlmGoalFallbackWarnings ??
-  (goalGlobal.__multiLlmGoalFallbackWarnings = new Set<string>())
+const db = createDbAvailabilityTracker()
 
 const statusAliases: Record<string, GoalStatus> = {
   pending: 'not-started',
@@ -63,57 +60,8 @@ const createGoalId = () => {
   return `goal-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message
-  }
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'message' in error &&
-    typeof (error as { message?: unknown }).message === 'string'
-  ) {
-    return (error as { message: string }).message
-  }
-  return ''
-}
-
-const isDatabaseUnavailableError = (error: unknown): boolean => {
-  const message = getErrorMessage(error)
-  return (
-    message.includes('Database access for') ||
-    message.includes('Database access is not available')
-  )
-}
-
-const isDatabaseKnownUnavailable = () =>
-  goalGlobal.__multiLlmGoalDbUnavailable === true
-
-const markDatabaseUnavailableIfNeeded = (error: unknown) => {
-  if (isDatabaseUnavailableError(error)) {
-    goalGlobal.__multiLlmGoalDbUnavailable = true
-    return true
-  }
-  return false
-}
-
-const logFallbackWarning = (scope: string, error: unknown) => {
-  if (fallbackWarnings.has(scope)) {
-    return
-  }
-  fallbackWarnings.add(scope)
-  const message = getErrorMessage(error) || 'unknown database error'
-  console.warn(`Falling back to in-memory goal store for ${scope}: ${message}`)
-}
-
-const getFallbackUserStore = (userId: string) => {
-  let store = fallbackGoals.get(userId)
-  if (!store) {
-    store = new Map<string, Goal>()
-    fallbackGoals.set(userId, store)
-  }
-  return store
-}
+const getFallbackUserStore = (userId: string) =>
+  getOrCreateUserStore(fallbackGoals, userId)
 
 const listFallbackGoals = (userId: string): Goal[] =>
   Array.from(getFallbackUserStore(userId).values())
@@ -122,7 +70,7 @@ const listFallbackGoals = (userId: string): Goal[] =>
 
 export const GoalService = {
   async getGoalsByUserId(userId: string): Promise<Goal[]> {
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return listFallbackGoals(userId)
     }
 
@@ -133,15 +81,15 @@ export const GoalService = {
       })
       return goals.map((goal) => withNormalizedStatus(goal))
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('getGoalsByUserId', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('getGoalsByUserId', 'goal', error)
       }
       return listFallbackGoals(userId)
     }
   },
 
   async getGoalById(id: string, userId: string): Promise<Goal | null> {
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       const goal = getFallbackUserStore(userId).get(id)
       return goal ? cloneGoal(goal) : null
     }
@@ -152,8 +100,8 @@ export const GoalService = {
       })
       return goal ? withNormalizedStatus(goal) : null
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('getGoalById', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('getGoalById', 'goal', error)
       }
       const goal = getFallbackUserStore(userId).get(id)
       return goal ? cloneGoal(goal) : null
@@ -176,7 +124,7 @@ export const GoalService = {
       return cloneGoal(goal)
     }
 
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return saveToFallback()
     }
 
@@ -191,8 +139,8 @@ export const GoalService = {
       })
       return withNormalizedStatus(created)
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('createGoal', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('createGoal', 'goal', error)
       }
       return saveToFallback()
     }
@@ -228,7 +176,7 @@ export const GoalService = {
       return cloneGoal(updated)
     }
 
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return saveToFallback()
     }
 
@@ -256,15 +204,15 @@ export const GoalService = {
 
       return withNormalizedStatus(updated)
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('updateGoal', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('updateGoal', 'goal', error)
       }
       return saveToFallback()
     }
   },
 
   async deleteGoal(id: string, userId: string): Promise<boolean> {
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return getFallbackUserStore(userId).delete(id)
     }
 
@@ -282,8 +230,8 @@ export const GoalService = {
       })
       return true
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('deleteGoal', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('deleteGoal', 'goal', error)
       }
       return getFallbackUserStore(userId).delete(id)
     }

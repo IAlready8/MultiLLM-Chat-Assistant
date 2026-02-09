@@ -1,13 +1,12 @@
 import { prisma } from '@/lib/prisma'
 import { Conversation, Message, PrismaClient } from '@/types/prisma'
+import { createDbAvailabilityTracker, getOrCreateUserStore } from '@/lib/db-fallback'
 
 type ConversationWithMessages = Conversation & { messages: Message[] }
 type NewMessageData = Omit<Message, 'id' | 'conversationId' | 'createdAt'>
 
 type GlobalConversationFallback = typeof globalThis & {
   __multiLlmConversationFallbackStore?: Map<string, Map<string, ConversationWithMessages>>
-  __multiLlmConversationFallbackWarnings?: Set<string>
-  __multiLlmConversationDbUnavailable?: boolean
 }
 
 const conversationGlobal = globalThis as GlobalConversationFallback
@@ -18,64 +17,11 @@ const fallbackConversations: Map<string, Map<string, ConversationWithMessages>> 
     string,
     Map<string, ConversationWithMessages>
   >())
-const fallbackWarnings: Set<string> =
-  conversationGlobal.__multiLlmConversationFallbackWarnings ??
-  (conversationGlobal.__multiLlmConversationFallbackWarnings = new Set())
 
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message
-  }
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'message' in error &&
-    typeof (error as { message?: unknown }).message === 'string'
-  ) {
-    return (error as { message: string }).message
-  }
-  return ''
-}
+const db = createDbAvailabilityTracker()
 
-const isDatabaseUnavailableError = (error: unknown): boolean =>
-  (() => {
-    const message = getErrorMessage(error)
-    return (
-      message.includes('Database access for') ||
-      message.includes('Database access is not available')
-    )
-  })()
-
-const isDatabaseKnownUnavailable = () =>
-  conversationGlobal.__multiLlmConversationDbUnavailable === true
-
-const markDatabaseUnavailableIfNeeded = (error: unknown) => {
-  if (isDatabaseUnavailableError(error)) {
-    conversationGlobal.__multiLlmConversationDbUnavailable = true
-    return true
-  }
-  return false
-}
-
-const logFallbackWarning = (scope: string, error: unknown) => {
-  if (fallbackWarnings.has(scope)) {
-    return
-  }
-  fallbackWarnings.add(scope)
-  const message = getErrorMessage(error) || 'unknown database error'
-  console.warn(
-    `Falling back to in-memory conversation store for ${scope}: ${message}`
-  )
-}
-
-const getFallbackUserStore = (userId: string) => {
-  let store = fallbackConversations.get(userId)
-  if (!store) {
-    store = new Map<string, ConversationWithMessages>()
-    fallbackConversations.set(userId, store)
-  }
-  return store
-}
+const getFallbackUserStore = (userId: string) =>
+  getOrCreateUserStore(fallbackConversations, userId)
 
 const createId = (prefix: string) => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -103,7 +49,7 @@ export const ConversationService = {
    * Get all conversations (metadata only) for a user.
    */
   async getConversationsByUserId(userId: string): Promise<Conversation[]> {
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return Array.from(getFallbackUserStore(userId).values())
         .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
         .map(toConversation)
@@ -119,8 +65,8 @@ export const ConversationService = {
         },
       })
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('getConversationsByUserId', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('getConversationsByUserId', 'conversation', error)
       }
       return Array.from(getFallbackUserStore(userId).values())
         .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
@@ -135,7 +81,7 @@ export const ConversationService = {
     id: string,
     userId: string
   ): Promise<ConversationWithMessages | null> {
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       const conversation = getFallbackUserStore(userId).get(id)
       return conversation ? cloneConversation(conversation) : null
     }
@@ -156,8 +102,8 @@ export const ConversationService = {
       })
       return conversation as unknown as ConversationWithMessages | null
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('getFullConversation', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('getFullConversation', 'conversation', error)
       }
       const conversation = getFallbackUserStore(userId).get(id)
       return conversation ? cloneConversation(conversation) : null
@@ -198,7 +144,7 @@ export const ConversationService = {
       return toConversation(conversation)
     }
 
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return saveToFallback()
     }
 
@@ -213,8 +159,8 @@ export const ConversationService = {
         },
       })
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('createConversation', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('createConversation', 'conversation', error)
       }
       return saveToFallback()
     }
@@ -256,7 +202,7 @@ export const ConversationService = {
       return cloneConversation(updatedConversation)
     }
 
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return saveToFallback()
     }
 
@@ -283,8 +229,8 @@ export const ConversationService = {
 
       return this.getFullConversation(id, userId)
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('addMessages', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('addMessages', 'conversation', error)
       }
       return saveToFallback()
     }
@@ -294,7 +240,7 @@ export const ConversationService = {
    * Delete a conversation and all its messages.
    */
   async deleteConversation(id: string, userId: string): Promise<boolean> {
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return getFallbackUserStore(userId).delete(id)
     }
 
@@ -321,8 +267,8 @@ export const ConversationService = {
       })
       return true
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('deleteConversation', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('deleteConversation', 'conversation', error)
       }
       return getFallbackUserStore(userId).delete(id)
     }

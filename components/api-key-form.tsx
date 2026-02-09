@@ -5,23 +5,51 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { Eye, EyeOff, CheckCircle } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Clock,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { providerRegistry } from "@/lib/provider-registry";
 
-const providers = [
-  { id: "openai", name: "OpenAI", placeholder: "sk-..." },
-  { id: "openrouter", name: "OpenRouter", placeholder: "sk-or-v1-..." },
-  { id: "anthropic", name: "Claude (Anthropic)", placeholder: "sk-ant-..." },
-  { id: "googleai", name: "Google AI", placeholder: "AIza..." },
-  { id: "grok", name: "Grok (xAI)", placeholder: "xai-..." },
-];
+const providers = providerRegistry;
+
+type HealthStatus = "ok" | "invalid" | "unreachable" | "rate_limited" | "provider_error" | "format" | "unknown";
+
+interface ProviderHealth {
+  status: HealthStatus;
+  message: string;
+  latencyMs?: number;
+  checkedAt: number;
+}
+
+const STATUS_CONFIG: Record<
+  HealthStatus,
+  { icon: typeof CheckCircle; color: string; label: string }
+> = {
+  ok: { icon: CheckCircle, color: "text-green-500", label: "Connected" },
+  invalid: { icon: XCircle, color: "text-red-500", label: "Invalid" },
+  unreachable: { icon: AlertTriangle, color: "text-orange-500", label: "Unreachable" },
+  rate_limited: { icon: Clock, color: "text-yellow-500", label: "Rate Limited" },
+  provider_error: { icon: AlertTriangle, color: "text-orange-500", label: "Provider Error" },
+  format: { icon: XCircle, color: "text-red-500", label: "Bad Format" },
+  unknown: { icon: AlertTriangle, color: "text-gray-400", label: "Unknown" },
+};
 
 export default function ApiKeyForm() {
   const { toast } = useToast();
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [configuredProviders, setConfiguredProviders] = useState<string[]>([]);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [testing, setTesting] = useState<Record<string, boolean>>({});
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const [healthStatus, setHealthStatus] = useState<Record<string, ProviderHealth>>({});
 
   const fetchConfiguredProviders = useCallback(async () => {
     try {
@@ -44,6 +72,55 @@ export default function ApiKeyForm() {
     fetchConfiguredProviders();
   }, [fetchConfiguredProviders]);
 
+  const testSavedKey = useCallback(async (providerId: string) => {
+    setTesting(prev => ({ ...prev, [providerId]: true }));
+    try {
+      const response = await fetch('/api/test-api-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: providerId, testSaved: true }),
+      });
+
+      if (!response.ok) {
+        setHealthStatus(prev => ({
+          ...prev,
+          [providerId]: {
+            status: "unknown",
+            message: "Health check unavailable.",
+            checkedAt: Date.now(),
+          },
+        }));
+        return;
+      }
+
+      const result = await response.json();
+      const status: HealthStatus = result.valid
+        ? "ok"
+        : (result.reason as HealthStatus) || "unknown";
+
+      setHealthStatus(prev => ({
+        ...prev,
+        [providerId]: {
+          status,
+          message: result.message,
+          latencyMs: result.latencyMs,
+          checkedAt: Date.now(),
+        },
+      }));
+    } catch {
+      setHealthStatus(prev => ({
+        ...prev,
+        [providerId]: {
+          status: "unreachable",
+          message: "Could not reach health check endpoint.",
+          checkedAt: Date.now(),
+        },
+      }));
+    } finally {
+      setTesting(prev => ({ ...prev, [providerId]: false }));
+    }
+  }, []);
+
   const handleSaveKey = async (providerId: string) => {
     const apiKey = apiKeys[providerId];
     if (!apiKey) {
@@ -59,7 +136,6 @@ export default function ApiKeyForm() {
     try {
       let verificationWarning: string | null = null;
       try {
-        // First, optionally test the key to provide feedback to the user
         const testResponse = await fetch('/api/test-api-key', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -79,7 +155,7 @@ export default function ApiKeyForm() {
         } else {
           const testResult = await testResponse.json();
           if (!testResult.valid) {
-            if (testResult.reason === "unverified" || testResult.reason === "provider_error") {
+            if (testResult.reason === "rate_limited" || testResult.reason === "provider_error" || testResult.reason === "unreachable") {
               verificationWarning = testResult.message || "Unable to verify key right now.";
             } else {
               toast({
@@ -91,11 +167,10 @@ export default function ApiKeyForm() {
             }
           }
         }
-      } catch (error) {
+      } catch {
         verificationWarning = "Could not verify this key right now. Saving without verification.";
       }
 
-      // If the test passes, save the key to the secure backend
       const saveResponse = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -133,7 +208,15 @@ export default function ApiKeyForm() {
         });
       }
       setConfiguredProviders(prev => [...new Set([...prev, providerId])]);
-      setApiKeys(prev => ({ ...prev, [providerId]: "" })); // Clear input field after save
+      setApiKeys(prev => ({ ...prev, [providerId]: "" }));
+
+      // Clear old health status and re-test the saved key
+      setHealthStatus(prev => {
+        const next = { ...prev };
+        delete next[providerId];
+        return next;
+      });
+      testSavedKey(providerId);
 
     } catch (error) {
       console.error("Error saving API key:", error);
@@ -153,7 +236,7 @@ export default function ApiKeyForm() {
       const response = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: providerId, apiKey: "" }), // Send empty key to clear
+        body: JSON.stringify({ provider: providerId, apiKey: "" }),
       });
 
       if (!response.ok) {
@@ -166,6 +249,11 @@ export default function ApiKeyForm() {
       });
       setConfiguredProviders(prev => prev.filter(p => p !== providerId));
       setApiKeys(prev => ({ ...prev, [providerId]: "" }));
+      setHealthStatus(prev => {
+        const next = { ...prev };
+        delete next[providerId];
+        return next;
+      });
     } catch (error) {
       console.error("Error clearing API key:", error);
       toast({
@@ -182,18 +270,71 @@ export default function ApiKeyForm() {
     setShowKeys(prev => ({ ...prev, [providerId]: !prev[providerId] }));
   };
 
+  const renderHealthBadge = (providerId: string) => {
+    const health = healthStatus[providerId];
+    const isTesting = testing[providerId];
+    const isConfigured = configuredProviders.includes(providerId);
+
+    if (isTesting) {
+      return (
+        <Badge variant="secondary" className="flex items-center gap-1">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Testing...
+        </Badge>
+      );
+    }
+
+    if (!isConfigured) return null;
+
+    if (!health) {
+      return (
+        <Badge variant="secondary" className="flex items-center gap-1">
+          <CheckCircle className="h-3 w-3 text-green-500" />
+          Saved
+        </Badge>
+      );
+    }
+
+    const config = STATUS_CONFIG[health.status] || STATUS_CONFIG.unknown;
+    const Icon = config.icon;
+
+    return (
+      <div className="flex items-center gap-2">
+        <Badge
+          variant="secondary"
+          className="flex items-center gap-1"
+          title={health.message}
+        >
+          <Icon className={`h-3 w-3 ${config.color}`} />
+          {config.label}
+          {health.latencyMs !== undefined && health.latencyMs > 0 && (
+            <span className="text-xs text-muted-foreground ml-1">
+              {health.latencyMs}ms
+            </span>
+          )}
+        </Badge>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={() => testSavedKey(providerId)}
+          disabled={isTesting}
+          title="Re-check connection"
+        >
+          <RefreshCw className="h-3 w-3" />
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {providers.map((provider) => (
         <div key={provider.id}>
           <div className="flex items-center justify-between mb-1">
             <Label htmlFor={`${provider.id}-api-key`}>{provider.name} API Key</Label>
-            {configuredProviders.includes(provider.id) && (
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <CheckCircle className="h-3 w-3 text-green-500" />
-                Saved
-              </Badge>
-            )}
+            {renderHealthBadge(provider.id)}
           </div>
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -202,7 +343,7 @@ export default function ApiKeyForm() {
                 type={showKeys[provider.id] ? "text" : "password"}
                 value={apiKeys[provider.id] || ""}
                 onChange={(e) => setApiKeys(prev => ({ ...prev, [provider.id]: e.target.value }))}
-                placeholder={configuredProviders.includes(provider.id) ? "••••••••••••••••••••••" : provider.placeholder}
+                placeholder={configuredProviders.includes(provider.id) ? "Key saved. Enter new key to replace." : provider.placeholder}
                 className="pr-10"
               />
               <Button
@@ -224,6 +365,21 @@ export default function ApiKeyForm() {
             >
               {loading[provider.id] ? "Saving..." : "Save"}
             </Button>
+            {configuredProviders.includes(provider.id) && !healthStatus[provider.id] && (
+              <Button
+                onClick={() => testSavedKey(provider.id)}
+                disabled={testing[provider.id]}
+                variant="outline"
+                size="sm"
+                title="Test saved API key"
+              >
+                {testing[provider.id] ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Test"
+                )}
+              </Button>
+            )}
             <Button
               onClick={() => handleClearKey(provider.id)}
               disabled={loading[provider.id] || !configuredProviders.includes(provider.id)}

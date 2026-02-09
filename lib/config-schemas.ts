@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { providerRegistry, supportedProviderIds, type ProviderMeta } from './provider-registry'
 
 // Provider Configuration Schemas
 export const providerConfigSchema = z.object({
@@ -105,6 +106,10 @@ export interface ProviderValidationResult {
   data?: ProviderConfig
   errors?: z.ZodError
 }
+
+// Provider Metadata (re-exported for compatibility)
+export type { ProviderMeta }
+export { providerRegistry, supportedProviderIds }
 
 // Default Configurations
 export const defaultProviderModels = {

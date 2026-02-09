@@ -1,5 +1,6 @@
 import prisma from './prisma'
 import { deriveKey, aesGcmEncrypt, aesGcmDecrypt } from './crypto'
+import { createDbAvailabilityTracker, getOrCreateUserStore } from './db-fallback'
 
 type FallbackRecord = {
   id: string
@@ -13,8 +14,6 @@ type FallbackRecord = {
 
 type GlobalApiKeyFallback = typeof globalThis & {
   __multiLlmProviderFallbackStore?: Map<string, Map<string, FallbackRecord>>
-  __multiLlmProviderFallbackWarnings?: Set<string>
-  __multiLlmProviderDbUnavailable?: boolean
 }
 
 const fallbackGlobal = globalThis as GlobalApiKeyFallback
@@ -25,64 +24,13 @@ const fallbackStore: Map<string, Map<string, FallbackRecord>> =
     string,
     Map<string, FallbackRecord>
   >())
-const fallbackWarnings: Set<string> =
-  fallbackGlobal.__multiLlmProviderFallbackWarnings ??
-  (fallbackGlobal.__multiLlmProviderFallbackWarnings = new Set())
 
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message
-  }
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'message' in error &&
-    typeof (error as { message?: unknown }).message === 'string'
-  ) {
-    return (error as { message: string }).message
-  }
-  return ''
-}
+const db = createDbAvailabilityTracker()
 
-const isDatabaseUnavailableError = (error: unknown): boolean =>
-  (() => {
-    const message = getErrorMessage(error)
-    return (
-      message.includes('Database access for') ||
-      message.includes('Database access is not available')
-    )
-  })()
+const getFallbackUserStore = (userId: string) =>
+  getOrCreateUserStore(fallbackStore, userId)
 
-const isDatabaseKnownUnavailable = () =>
-  fallbackGlobal.__multiLlmProviderDbUnavailable === true
-
-const markDatabaseUnavailableIfNeeded = (error: unknown) => {
-  if (isDatabaseUnavailableError(error)) {
-    fallbackGlobal.__multiLlmProviderDbUnavailable = true
-    return true
-  }
-  return false
-}
-
-const logFallbackWarning = (scope: string, error: unknown) => {
-  if (fallbackWarnings.has(scope)) {
-    return
-  }
-  fallbackWarnings.add(scope)
-  const message = getErrorMessage(error) || 'unknown database error'
-  console.warn(
-    `Falling back to in-memory provider config store for ${scope}: ${message}`
-  )
-}
-
-const getFallbackUserStore = (userId: string) => {
-  let store = fallbackStore.get(userId)
-  if (!store) {
-    store = new Map<string, FallbackRecord>()
-    fallbackStore.set(userId, store)
-  }
-  return store
-}
+const peekFallbackUserStore = (userId: string) => fallbackStore.get(userId)
 
 const toProviderConfig = (record: FallbackRecord): ProviderConfig => ({
   id: record.id,
@@ -94,7 +42,7 @@ const toProviderConfig = (record: FallbackRecord): ProviderConfig => ({
 })
 
 const getFallbackRecord = (userId: string, provider: string) =>
-  getFallbackUserStore(userId).get(provider)
+  peekFallbackUserStore(userId)?.get(provider)
 
 // Server-side encryption key from environment
 const getEncryptionKey = async (): Promise<Uint8Array> => {
@@ -140,7 +88,7 @@ export async function storeUserApiKey(
     return toProviderConfig(record)
   }
 
-  if (isDatabaseKnownUnavailable()) {
+  if (db.isKnownUnavailable()) {
     return saveToFallback()
   }
 
@@ -176,8 +124,8 @@ export async function storeUserApiKey(
       updatedAt: config.updatedAt,
     }
   } catch (error) {
-    if (!markDatabaseUnavailableIfNeeded(error)) {
-      logFallbackWarning('storeUserApiKey', error)
+    if (!db.markUnavailableIfNeeded(error)) {
+      db.logWarningOnce('storeUserApiKey', 'provider config', error)
     }
     return saveToFallback()
   }
@@ -192,7 +140,7 @@ export async function getUserApiKey(
 ): Promise<string | null> {
   let config: { apiKey: string | null; isActive: boolean } | null = null
 
-  if (!isDatabaseKnownUnavailable()) {
+  if (!db.isKnownUnavailable()) {
     try {
       config = await prisma.providerConfig.findUnique({
         where: {
@@ -203,8 +151,8 @@ export async function getUserApiKey(
         },
       })
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('getUserApiKey', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('getUserApiKey', 'provider config', error)
       }
     }
   }
@@ -242,7 +190,7 @@ export async function getUserProviderConfigs(userId: string): Promise<ProviderCo
     updatedAt: Date
   }> = []
 
-  if (!isDatabaseKnownUnavailable()) {
+  if (!db.isKnownUnavailable()) {
     try {
       configs = await prisma.providerConfig.findMany({
         where: {
@@ -259,8 +207,8 @@ export async function getUserProviderConfigs(userId: string): Promise<ProviderCo
         },
       }) as typeof configs
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('getUserProviderConfigs', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('getUserProviderConfigs', 'provider config', error)
       }
     }
   }
@@ -278,7 +226,7 @@ export async function getUserProviderConfigs(userId: string): Promise<ProviderCo
     })
   }
 
-  for (const fallback of getFallbackUserStore(userId).values()) {
+  for (const fallback of peekFallbackUserStore(userId)?.values() ?? []) {
     if (!fallback.isActive || merged.has(fallback.provider)) {
       continue
     }
@@ -295,7 +243,7 @@ export async function deleteUserProviderConfig(
   userId: string,
   provider: string
 ): Promise<void> {
-  if (!isDatabaseKnownUnavailable()) {
+  if (!db.isKnownUnavailable()) {
     try {
       await prisma.providerConfig.updateMany({
         where: {
@@ -309,13 +257,16 @@ export async function deleteUserProviderConfig(
         },
       })
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('deleteUserProviderConfig', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('deleteUserProviderConfig', 'provider config', error)
       }
     }
   }
 
-  const store = getFallbackUserStore(userId)
+  const store = peekFallbackUserStore(userId)
+  if (!store) {
+    return
+  }
   const existing = store.get(provider)
   if (existing) {
     store.set(provider, {
@@ -336,7 +287,7 @@ export async function hasValidApiKey(
 ): Promise<boolean> {
   let config: { apiKey: string | null; isActive: boolean } | null = null
 
-  if (!isDatabaseKnownUnavailable()) {
+  if (!db.isKnownUnavailable()) {
     try {
       config = await prisma.providerConfig.findUnique({
         where: {
@@ -347,8 +298,8 @@ export async function hasValidApiKey(
         },
       })
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('hasValidApiKey', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('hasValidApiKey', 'provider config', error)
       }
     }
   }
@@ -371,7 +322,7 @@ export async function updateProviderSettings(
   provider: string,
   settings: Record<string, any>
 ): Promise<ProviderConfig | null> {
-  if (!isDatabaseKnownUnavailable()) {
+  if (!db.isKnownUnavailable()) {
     try {
       const result = await prisma.providerConfig.updateMany({
         where: {
@@ -407,13 +358,14 @@ export async function updateProviderSettings(
         }
       }
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('updateProviderSettings', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('updateProviderSettings', 'provider config', error)
       }
     }
   }
 
-  const store = getFallbackUserStore(userId)
+  const store = peekFallbackUserStore(userId)
+  if (!store) return null
   const existing = store.get(provider)
   if (!existing || !existing.isActive) return null
   const updated: FallbackRecord = {

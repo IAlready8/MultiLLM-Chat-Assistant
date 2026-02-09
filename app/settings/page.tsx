@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/use-toast'
 import ApiKeyForm from '@/components/api-key-form'
 import { ExportImportDialog } from '@/components/export-import-dialog'
 import { exportAllData, importAllData } from '@/services/export-import-service'
+import { supportedProviderIds } from '@/lib/provider-registry'
 
 const PROFILE_STORAGE_KEY = 'settings.profile'
 const FONT_SIZE_STORAGE_KEY = 'settings.fontSize'
@@ -42,13 +43,7 @@ const FONT_OPTIONS: Record<FontSizeOption, { label: string; scale: number }> = {
   large: { label: 'Large', scale: 1.08 },
 }
 
-const SUPPORTED_PROVIDER_IDS = [
-  'openai',
-  'openrouter',
-  'anthropic',
-  'googleai',
-  'grok',
-] as const
+const SUPPORTED_PROVIDER_IDS = supportedProviderIds
 
 const isFontSizeOption = (value: string): value is FontSizeOption =>
   value === 'small' || value === 'normal' || value === 'large'
