@@ -16,6 +16,7 @@ NC='\033[0m'
 BASE_URL="${BASE_URL:-http://localhost:3000}"
 START_SERVER=false
 SERVER_PID=""
+SERVER_PORT=""
 PASS=0
 FAIL=0
 SKIP=0
@@ -27,6 +28,16 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
+
+if [ -z "$SERVER_PORT" ]; then
+  if [[ "$BASE_URL" =~ ^https?://[^/:]+:([0-9]+) ]]; then
+    SERVER_PORT="${BASH_REMATCH[1]}"
+  elif [[ "$BASE_URL" =~ ^https:// ]]; then
+    SERVER_PORT="443"
+  else
+    SERVER_PORT="80"
+  fi
+fi
 
 cleanup() {
   if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -70,9 +81,9 @@ assert_json_field() {
 
 # Optionally start the server
 if [ "$START_SERVER" = true ]; then
-  echo -e "${YELLOW}Starting Next.js production server...${NC}"
+  echo -e "${YELLOW}Starting Next.js production server on port ${SERVER_PORT}...${NC}"
   cd "$(dirname "$0")/.."
-  npm run start &
+  PORT="$SERVER_PORT" npm run start &
   SERVER_PID=$!
 
   # Wait for server readiness (up to 30s)
