@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockAuth = vi.fn()
 const mockMigrateGuestData = vi.fn()
+const mockApiLogRequest = vi.fn()
 
 vi.mock('@/lib/auth', () => ({
   auth: () => mockAuth(),
@@ -10,6 +11,12 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('@/lib/guest-migration', () => ({
   migrateGuestData: (guestUserId: string, userId: string) =>
     mockMigrateGuestData(guestUserId, userId),
+}))
+
+vi.mock('@/lib/api-logger', () => ({
+  apiLog: {
+    request: (payload: unknown) => mockApiLogRequest(payload),
+  },
 }))
 
 import { POST } from '@/app/api/auth/upgrade-guest/route'
@@ -34,6 +41,14 @@ describe('/api/auth/upgrade-guest route', () => {
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
     expect(mockMigrateGuestData).not.toHaveBeenCalled()
+    expect(mockApiLogRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        path: '/api/auth/upgrade-guest',
+        status: 401,
+        error: 'Unauthorized',
+      })
+    )
   })
 
   it('returns 400 when target user is still a guest/demo account', async () => {
@@ -46,6 +61,12 @@ describe('/api/auth/upgrade-guest route', () => {
       error: 'Cannot migrate guest data to a guest account',
     })
     expect(mockMigrateGuestData).not.toHaveBeenCalled()
+    expect(mockApiLogRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 400,
+        userId: 'guest-local-user',
+      })
+    )
   })
 
   it('uses provided guestUserId and returns migration counts', async () => {
@@ -71,6 +92,16 @@ describe('/api/auth/upgrade-guest route', () => {
     })
 
     expect(mockMigrateGuestData).toHaveBeenCalledWith('guest-temp', 'user-123')
+    expect(mockApiLogRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 200,
+        userId: 'user-123',
+        meta: expect.objectContaining({
+          guestUserId: 'guest-temp',
+          totalMigrated: 10,
+        }),
+      })
+    )
   })
 
   it('falls back to guest-local-user when guestUserId is missing', async () => {
@@ -86,6 +117,12 @@ describe('/api/auth/upgrade-guest route', () => {
 
     expect(response.status).toBe(200)
     expect(mockMigrateGuestData).toHaveBeenCalledWith('guest-local-user', 'user-123')
+    expect(mockApiLogRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 200,
+        meta: expect.objectContaining({ guestUserId: 'guest-local-user' }),
+      })
+    )
   })
 
   it('returns 500 when migration throws', async () => {
@@ -98,6 +135,13 @@ describe('/api/auth/upgrade-guest route', () => {
 
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toEqual({ error: 'Migration failed' })
+    expect(mockApiLogRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 500,
+        userId: 'user-123',
+        meta: expect.objectContaining({ guestUserId: 'guest-local-user' }),
+      })
+    )
 
     consoleSpy.mockRestore()
   })
