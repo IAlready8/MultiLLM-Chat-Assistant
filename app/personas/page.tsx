@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Plus, Edit, Trash2, Bot } from 'lucide-react'
+import { Plus, Edit, Trash2, Bot, RotateCcw } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { usePersonas } from '@/hooks/use-personas'
 
@@ -58,7 +58,7 @@ const STARTER_PERSONAS: PersonaFormData[] = [
 ]
 
 export default function PersonasPage() {
-  const { personas, isLoading, error, createPersona, updatePersona, deletePersona } =
+  const { personas, isLoading, error, refreshPersonas, createPersona, updatePersona, deletePersona } =
     usePersonas()
   const { toast } = useToast()
 
@@ -331,8 +331,14 @@ export default function PersonasPage() {
 
       {error && (
         <Card className="border-destructive/50">
-          <CardContent className="py-4 text-sm text-destructive">
-            Failed to load personas: {error.message}
+          <CardContent className="py-4 flex items-center justify-between">
+            <p className="text-sm text-destructive">
+              Failed to load personas: {error.message}
+            </p>
+            <Button variant="outline" size="sm" onClick={refreshPersonas}>
+              <RotateCcw className="h-4 w-4 mr-1" />
+              Retry
+            </Button>
           </CardContent>
         </Card>
       )}

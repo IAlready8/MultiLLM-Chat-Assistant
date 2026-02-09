@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { PersonaService } from '@/services/persona-service.db'
+import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 import { z } from 'zod'
 
 // Zod schema for updating a persona
@@ -18,16 +19,16 @@ const updatePersonaSchema = z.object({
  * GET /api/personas/[id]
  * Retrieves a single persona by ID for the authenticated user.
  */
-export async function GET(
+export const GET = withApiMetrics(async (
   _req: Request,
-  { params }: { params: { id: string } }
-) {
+  ctx?: { params?: Record<string, string> }
+) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const id = ctx?.params?.id ?? ''
 
   try {
-    const { id } = params
     const persona = await PersonaService.getPersonaById(id, user.id)
 
     if (!persona) {
@@ -39,22 +40,22 @@ export async function GET(
     console.error('Error loading persona:', error)
     return NextResponse.json({ error: 'Failed to load persona' }, { status: 500 })
   }
-}
+})
 
 /**
  * PUT /api/personas/[id]
  * Updates an existing persona for the authenticated user.
  */
-export async function PUT(
+export const PUT = withApiMetrics(async (
   req: Request,
-  { params }: { params: { id: string } }
-) {
+  ctx?: { params?: Record<string, string> }
+) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const id = ctx?.params?.id ?? ''
 
   try {
-    const { id } = params
     const body = await req.json()
     const validation = updatePersonaSchema.safeParse(body)
 
@@ -87,32 +88,32 @@ export async function PUT(
       updateData,
       user.id
     )
-    
+
     if (!updatedPersona) {
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
-    
+
     return NextResponse.json(updatedPersona)
   } catch (error) {
     console.error('Error updating persona:', error)
     return NextResponse.json({ error: 'Failed to update persona' }, { status: 500 })
   }
-}
+})
 
 /**
  * DELETE /api/personas/[id]
  * Deletes a persona for the authenticated user.
  */
-export async function DELETE(
+export const DELETE = withApiMetrics(async (
   _req: Request,
-  { params }: { params: { id: string } }
-) {
+  ctx?: { params?: Record<string, string> }
+) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const id = ctx?.params?.id ?? ''
 
   try {
-    const { id } = params
     const success = await PersonaService.deletePersona(id, user.id)
 
     if (!success) {
@@ -124,4 +125,4 @@ export async function DELETE(
     console.error('Error deleting persona:', error)
     return NextResponse.json({ error: 'Failed to delete persona' }, { status: 500 })
   }
-}
+})

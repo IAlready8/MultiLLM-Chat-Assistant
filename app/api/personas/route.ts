@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { PersonaService } from '@/services/persona-service.db'
+import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 import { z } from 'zod'
 
 // Zod schema for persona validation
@@ -34,7 +35,7 @@ const personaSchema = z.object({
  * GET /api/personas
  * Retrieves all personas for the authenticated user.
  */
-export async function GET(_req: Request) {
+export const GET = withApiMetrics(async (_req: Request) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
@@ -46,13 +47,13 @@ export async function GET(_req: Request) {
     console.error('Error loading personas:', error)
     return NextResponse.json({ error: 'Failed to load personas' }, { status: 500 })
   }
-}
+})
 
 /**
  * POST /api/personas
  * Creates a new persona for the authenticated user.
  */
-export async function POST(req: Request) {
+export const POST = withApiMetrics(async (req: Request) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
@@ -84,7 +85,7 @@ export async function POST(req: Request) {
     console.error('Error creating persona:', error)
     return NextResponse.json({ error: 'Failed to create persona' }, { status: 500 })
   }
-}
+})
 
 // NOTE: PUT and DELETE would be in /api/personas/[id]/route.ts
 // This file is simplified to show GET/POST at the root.

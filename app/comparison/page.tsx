@@ -473,7 +473,14 @@ export default function ComparisonPage() {
         <p className="text-muted-foreground mt-2">
           Compare real performance metrics and side-by-side responses across providers.
         </p>
-        {error && <p className="text-sm text-destructive mt-2">{error}</p>}
+        {error && (
+          <div className="flex items-center gap-3 mt-2">
+            <p className="text-sm text-destructive">{error}</p>
+            <Button variant="outline" size="sm" onClick={() => void Promise.all([loadMetrics(), loadConversations()])}>
+              Retry
+            </Button>
+          </div>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

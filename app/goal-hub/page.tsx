@@ -532,8 +532,12 @@ export default function GoalHubPage() {
 
       {error && (
         <Card className="mb-6 border-red-300">
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 flex items-center justify-between">
             <p className="text-sm text-red-600">{error.message}</p>
+            <Button variant="outline" size="sm" onClick={refreshGoals}>
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Retry
+            </Button>
           </CardContent>
         </Card>
       )}

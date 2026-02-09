@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { GoalService } from '@/services/goal-service.db'
+import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 
 const goalStatusSchema = z.enum([
   'not-started',
@@ -33,16 +34,17 @@ const updateGoalSchema = z
  * GET /api/goals/[id]
  * Returns one goal for the authenticated user.
  */
-export async function GET(
+export const GET = withApiMetrics(async (
   _req: Request,
-  { params }: { params: { id: string } }
-) {
+  ctx?: { params?: Record<string, string> }
+) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const id = ctx?.params?.id ?? ''
 
   try {
-    const goal = await GoalService.getGoalById(params.id, user.id)
+    const goal = await GoalService.getGoalById(id, user.id)
     if (!goal) {
       return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
     }
@@ -51,19 +53,20 @@ export async function GET(
     console.error('Error loading goal:', error)
     return NextResponse.json({ error: 'Failed to load goal' }, { status: 500 })
   }
-}
+})
 
 /**
  * PUT /api/goals/[id]
  * Updates one goal for the authenticated user.
  */
-export async function PUT(
+export const PUT = withApiMetrics(async (
   req: Request,
-  { params }: { params: { id: string } }
-) {
+  ctx?: { params?: Record<string, string> }
+) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const id = ctx?.params?.id ?? ''
 
   const body = await req.json()
   const validation = updateGoalSchema.safeParse(body)
@@ -75,7 +78,7 @@ export async function PUT(
   }
 
   try {
-    const updated = await GoalService.updateGoal(params.id, validation.data, user.id)
+    const updated = await GoalService.updateGoal(id, validation.data, user.id)
     if (!updated) {
       return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
     }
@@ -84,22 +87,23 @@ export async function PUT(
     console.error('Error updating goal:', error)
     return NextResponse.json({ error: 'Failed to update goal' }, { status: 500 })
   }
-}
+})
 
 /**
  * DELETE /api/goals/[id]
  * Deletes one goal for the authenticated user.
  */
-export async function DELETE(
+export const DELETE = withApiMetrics(async (
   _req: Request,
-  { params }: { params: { id: string } }
-) {
+  ctx?: { params?: Record<string, string> }
+) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const id = ctx?.params?.id ?? ''
 
   try {
-    const deleted = await GoalService.deleteGoal(params.id, user.id)
+    const deleted = await GoalService.deleteGoal(id, user.id)
     if (!deleted) {
       return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
     }
@@ -108,4 +112,4 @@ export async function DELETE(
     console.error('Error deleting goal:', error)
     return NextResponse.json({ error: 'Failed to delete goal' }, { status: 500 })
   }
-}
+})

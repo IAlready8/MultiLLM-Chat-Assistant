@@ -1,5 +1,6 @@
 import prisma from '@/lib/prisma'
 import type { Analytics as AnalyticsRecord } from '@/types/prisma'
+import { createDbAvailabilityTracker } from '@/lib/db-fallback'
 
 export interface AnalyticsEvent {
   event: string
@@ -34,60 +35,14 @@ type StoredAnalyticsEvent = {
 
 type GlobalAnalyticsFallback = typeof globalThis & {
   __multiLlmAnalyticsFallbackStore?: Map<string, StoredAnalyticsEvent[]>
-  __multiLlmAnalyticsWarnings?: Set<string>
-  __multiLlmAnalyticsDbUnavailable?: boolean
 }
 
 const analyticsGlobal = globalThis as GlobalAnalyticsFallback
 const fallbackEvents =
   analyticsGlobal.__multiLlmAnalyticsFallbackStore ??
   (analyticsGlobal.__multiLlmAnalyticsFallbackStore = new Map())
-const fallbackWarnings =
-  analyticsGlobal.__multiLlmAnalyticsWarnings ??
-  (analyticsGlobal.__multiLlmAnalyticsWarnings = new Set())
 
-const isDatabaseKnownUnavailable = () =>
-  analyticsGlobal.__multiLlmAnalyticsDbUnavailable === true
-
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message
-  }
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'message' in error &&
-    typeof (error as { message?: unknown }).message === 'string'
-  ) {
-    return (error as { message: string }).message
-  }
-  return ''
-}
-
-const isDatabaseUnavailableError = (error: unknown): boolean => {
-  const message = getErrorMessage(error)
-  return (
-    message.includes('Database access for') ||
-    message.includes('Database access is not available')
-  )
-}
-
-const markDatabaseUnavailableIfNeeded = (error: unknown): boolean => {
-  if (isDatabaseUnavailableError(error)) {
-    analyticsGlobal.__multiLlmAnalyticsDbUnavailable = true
-    return true
-  }
-  return false
-}
-
-const logFallbackWarning = (scope: string, error: unknown) => {
-  if (fallbackWarnings.has(scope)) {
-    return
-  }
-  fallbackWarnings.add(scope)
-  const message = getErrorMessage(error) || 'unknown analytics storage error'
-  console.warn(`Falling back to in-memory analytics for ${scope}: ${message}`)
-}
+const db = createDbAvailabilityTracker()
 
 const createFallbackId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -246,7 +201,7 @@ const loadStoredEvents = async (
 ): Promise<StoredAnalyticsEvent[]> => {
   let dbEvents: StoredAnalyticsEvent[] = []
 
-  if (!isDatabaseKnownUnavailable()) {
+  if (!db.isKnownUnavailable()) {
     try {
       const analytics = await prisma.analytics.findMany({
         where: {
@@ -264,10 +219,8 @@ const loadStoredEvents = async (
         userId: event.userId,
       }))
     } catch (error) {
-      if (markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('loadStoredEvents', error)
-      } else {
-        console.error('Error querying analytics events:', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('loadStoredEvents', 'analytics', error)
       }
     }
   }
@@ -289,7 +242,7 @@ const toParsedEvents = (events: StoredAnalyticsEvent[]): ParsedAnalyticsEvent[] 
 export async function recordAnalyticsEvent(event: AnalyticsEvent): Promise<void> {
   const createdAt = event.createdAt ?? new Date()
 
-  if (isDatabaseKnownUnavailable()) {
+  if (db.isKnownUnavailable()) {
     saveFallbackEvent({ ...event, createdAt })
     return
   }
@@ -303,12 +256,10 @@ export async function recordAnalyticsEvent(event: AnalyticsEvent): Promise<void>
       },
     })
   } catch (error) {
-    if (markDatabaseUnavailableIfNeeded(error)) {
-      logFallbackWarning('recordAnalyticsEvent', error)
-      saveFallbackEvent({ ...event, createdAt })
-      return
+    if (!db.markUnavailableIfNeeded(error)) {
+      db.logWarningOnce('recordAnalyticsEvent', 'analytics', error)
     }
-    console.error('Error recording analytics event:', error)
+    saveFallbackEvent({ ...event, createdAt })
   }
 }
 

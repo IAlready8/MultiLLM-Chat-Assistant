@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { getParsedAnalyticsEvents, ParsedAnalyticsEvent } from '@/services/analytics-service'
+import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 
 type Timeframe = '24h' | '7d' | '30d'
 
@@ -93,8 +94,9 @@ const readResponseTime = (payload: Record<string, unknown>): number =>
   parseNumeric(payload.responseTimeMs) ||
   parseNumeric(payload.latency)
 
-const getTimeframe = (request: NextRequest): Timeframe => {
-  const value = request.nextUrl.searchParams.get('timeframe')
+const getTimeframe = (request: Request): Timeframe => {
+  const url = new URL(request.url)
+  const value = url.searchParams.get('timeframe')
   if (value === '24h' || value === '7d' || value === '30d') {
     return value
   }
@@ -302,7 +304,7 @@ const buildModelComparison = (
     })
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withApiMetrics(async (request: Request) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) {
     return authCheck
@@ -358,4 +360,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

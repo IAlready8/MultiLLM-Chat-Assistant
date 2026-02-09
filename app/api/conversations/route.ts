@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { ConversationService } from '@/services/conversation-service.db'
+import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 import { z } from 'zod'
 
 // Zod schema for creating a conversation
@@ -22,7 +23,7 @@ const createConvoSchema = z.object({
  * GET /api/conversations
  * Retrieves all conversations (metadata) for the authenticated user.
  */
-export async function GET(_req: Request) {
+export const GET = withApiMetrics(async (_req: Request) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
@@ -37,13 +38,13 @@ export async function GET(_req: Request) {
       { status: 500 }
     )
   }
-}
+})
 
 /**
  * POST /api/conversations
  * Creates a new conversation and its first messages.
  */
-export async function POST(req: Request) {
+export const POST = withApiMetrics(async (req: Request) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
@@ -79,4 +80,4 @@ export async function POST(req: Request) {
     console.error('Error creating conversation:', error)
     return NextResponse.json({ error: 'Failed to create conversation' }, { status: 500 })
   }
-}
+})

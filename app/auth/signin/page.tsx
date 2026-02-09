@@ -113,10 +113,14 @@ export default function SignInPage() {
 
     if (!email.trim()) {
       nextErrors.email = 'Email is required.'
+    } else if (!email.includes('@') || !email.includes('.')) {
+      nextErrors.email = 'Please enter a valid email address.'
     }
 
     if (!password.trim()) {
       nextErrors.password = 'Password is required.'
+    } else if (isSignUp && password.length < 8) {
+      nextErrors.password = 'Password must be at least 8 characters.'
     }
 
     return nextErrors

@@ -1,13 +1,12 @@
 import { prisma } from '@/lib/prisma'
 import { Persona } from '@/types/prisma'
+import { createDbAvailabilityTracker, getOrCreateUserStore } from '@/lib/db-fallback'
 
 type NewPersonaData = Omit<Persona, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
 type PersonaUpdateData = Partial<Omit<Persona, 'id' | 'userId' | 'createdAt'>>
 
 type GlobalPersonaFallback = typeof globalThis & {
   __multiLlmPersonaFallbackStore?: Map<string, Map<string, Persona>>
-  __multiLlmPersonaFallbackWarnings?: Set<string>
-  __multiLlmPersonaDbUnavailable?: boolean
 }
 
 const personaGlobal = globalThis as GlobalPersonaFallback
@@ -19,61 +18,10 @@ const fallbackPersonas: Map<string, Map<string, Persona>> =
     Map<string, Persona>
   >())
 
-const fallbackWarnings: Set<string> =
-  personaGlobal.__multiLlmPersonaFallbackWarnings ??
-  (personaGlobal.__multiLlmPersonaFallbackWarnings = new Set())
+const db = createDbAvailabilityTracker()
 
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message
-  }
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'message' in error &&
-    typeof (error as { message?: unknown }).message === 'string'
-  ) {
-    return (error as { message: string }).message
-  }
-  return ''
-}
-
-const isDatabaseUnavailableError = (error: unknown): boolean => {
-  const message = getErrorMessage(error)
-  return (
-    message.includes('Database access for') ||
-    message.includes('Database access is not available')
-  )
-}
-
-const isDatabaseKnownUnavailable = () =>
-  personaGlobal.__multiLlmPersonaDbUnavailable === true
-
-const markDatabaseUnavailableIfNeeded = (error: unknown) => {
-  if (isDatabaseUnavailableError(error)) {
-    personaGlobal.__multiLlmPersonaDbUnavailable = true
-    return true
-  }
-  return false
-}
-
-const logFallbackWarning = (scope: string, error: unknown) => {
-  if (fallbackWarnings.has(scope)) {
-    return
-  }
-  fallbackWarnings.add(scope)
-  const message = getErrorMessage(error) || 'unknown database error'
-  console.warn(`Falling back to in-memory persona store for ${scope}: ${message}`)
-}
-
-const getFallbackUserStore = (userId: string) => {
-  let store = fallbackPersonas.get(userId)
-  if (!store) {
-    store = new Map<string, Persona>()
-    fallbackPersonas.set(userId, store)
-  }
-  return store
-}
+const getFallbackUserStore = (userId: string) =>
+  getOrCreateUserStore(fallbackPersonas, userId)
 
 const clonePersona = (persona: Persona): Persona => ({
   ...persona,
@@ -95,7 +43,7 @@ const listFallbackPersonas = (userId: string): Persona[] =>
 
 export const PersonaService = {
   async getPersonasByUserId(userId: string): Promise<Persona[]> {
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return listFallbackPersonas(userId)
     }
 
@@ -109,15 +57,15 @@ export const PersonaService = {
         },
       })
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('getPersonasByUserId', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('getPersonasByUserId', 'persona', error)
       }
       return listFallbackPersonas(userId)
     }
   },
 
   async getPersonaById(id: string, userId: string): Promise<Persona | null> {
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       const persona = getFallbackUserStore(userId).get(id)
       return persona ? clonePersona(persona) : null
     }
@@ -130,8 +78,8 @@ export const PersonaService = {
         },
       })
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('getPersonaById', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('getPersonaById', 'persona', error)
       }
       const persona = getFallbackUserStore(userId).get(id)
       return persona ? clonePersona(persona) : null
@@ -154,7 +102,7 @@ export const PersonaService = {
       return clonePersona(persona)
     }
 
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return saveToFallback()
     }
 
@@ -166,8 +114,8 @@ export const PersonaService = {
         },
       })
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('createPersona', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('createPersona', 'persona', error)
       }
       return saveToFallback()
     }
@@ -198,7 +146,7 @@ export const PersonaService = {
       return clonePersona(updated)
     }
 
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return saveToFallback()
     }
 
@@ -221,15 +169,15 @@ export const PersonaService = {
         data,
       })
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('updatePersona', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('updatePersona', 'persona', error)
       }
       return saveToFallback()
     }
   },
 
   async deletePersona(id: string, userId: string): Promise<boolean> {
-    if (isDatabaseKnownUnavailable()) {
+    if (db.isKnownUnavailable()) {
       return getFallbackUserStore(userId).delete(id)
     }
 
@@ -253,8 +201,8 @@ export const PersonaService = {
 
       return true
     } catch (error) {
-      if (!markDatabaseUnavailableIfNeeded(error)) {
-        logFallbackWarning('deletePersona', error)
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('deletePersona', 'persona', error)
       }
       return getFallbackUserStore(userId).delete(id)
     }

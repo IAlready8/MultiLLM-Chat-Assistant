@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Save, Trash2, Clock } from 'lucide-react';
 import { useConversation } from '@/hooks/use-conversation';
+import { useToast } from '@/components/ui/use-toast';
 import { formatTimestamp } from '@/lib/utils';
 
 interface ConversationManagerProps {
@@ -26,6 +27,7 @@ export function ConversationManager({
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [conversationTitle, setConversationTitle] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const {
     conversationList,
@@ -51,16 +53,18 @@ export function ConversationManager({
       ]);
       setShowSaveDialog(false);
       setConversationTitle("");
-    } catch (error) {
-      console.error("Error saving conversation:", error);
+    } catch (err) {
+      console.error("Error saving conversation:", err);
+      toast({ title: 'Save failed', description: 'Could not save the conversation.', variant: 'destructive' });
     }
   };
 
   const handleLoad = async (id: string) => {
     try {
       await loadConversation(id);
-    } catch (error) {
-      console.error("Error loading conversation:", error);
+    } catch (err) {
+      console.error("Error loading conversation:", err);
+      toast({ title: 'Load failed', description: 'Could not load the conversation.', variant: 'destructive' });
     }
   };
 
@@ -68,8 +72,9 @@ export function ConversationManager({
     try {
       await deleteConversation(id);
       setShowDeleteConfirm(null);
-    } catch (error) {
-      console.error("Error deleting conversation:", error);
+    } catch (err) {
+      console.error("Error deleting conversation:", err);
+      toast({ title: 'Delete failed', description: 'Could not delete the conversation.', variant: 'destructive' });
     }
   };
 

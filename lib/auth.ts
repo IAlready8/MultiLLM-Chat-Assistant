@@ -5,6 +5,7 @@ import GitHubProvider from 'next-auth/providers/github'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
 import prisma from '@/lib/prisma'
+import { checkAndConsume } from '@/lib/rate-limit'
 import {
   createDemoAuthUser,
   getDemoAccountContext,
@@ -12,6 +13,8 @@ import {
   isDemoEmail,
   isStrictAuthRequired,
 } from '@/lib/demo-account'
+
+const PASSWORD_MIN_LENGTH = 8
 
 // Define the types for subscription tier and team role as strings
 type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
@@ -136,6 +139,22 @@ const buildProviders = () => {
           return createDemoAuthUser()
         }
 
+        // Rate limit: 10 login attempts per email per 15 minutes
+        const rateKey = `auth:login:${email}`
+        const rateResult = await checkAndConsume(rateKey, {
+          windowMs: 15 * 60 * 1000,
+          max: 10,
+        })
+        if (!rateResult.allowed) {
+          console.warn(`Rate limited login for ${email}`)
+          return null
+        }
+
+        // Enforce minimum password length on signup
+        if (name && password.length < PASSWORD_MIN_LENGTH) {
+          return null
+        }
+
         try {
           const user = await prisma.user.findUnique({
             where: { email },
@@ -229,6 +248,14 @@ export const authOptions: NextAuthOptions = {
     error: '/auth/error',
   },
   callbacks: {
+    async signIn({ user, account }) {
+      // Audit log: record every sign-in attempt
+      const method = account?.provider ?? 'credentials'
+      console.info(
+        `[auth] sign-in: user=${user?.email ?? 'unknown'} method=${method} id=${user?.id ?? 'none'}`
+      )
+      return true
+    },
     async jwt({ token, user }) {
       if (!strictAuth && isDemoEmail(user?.email ?? token.email)) {
         token.id = user?.id || token.id || token.sub || getDemoAccountContext().id

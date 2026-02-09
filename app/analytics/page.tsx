@@ -63,10 +63,12 @@ export default function AnalyticsPage() {
     avgResponseTime: 0
   })
   const [sourceLabel, setSourceLabel] = useState<'Live data' | 'No telemetry yet'>('Live data')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const { toast } = useToast()
 
   const loadAnalyticsData = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const response = await fetch(`/api/analytics?timeframe=${timeframe}`, {
         method: 'GET',
@@ -90,11 +92,12 @@ export default function AnalyticsPage() {
         }
       )
       setSourceLabel(data.meta?.source === 'empty' ? 'No telemetry yet' : 'Live data')
-    } catch (error) {
-      console.error('Failed to load analytics data:', error)
+    } catch (err) {
+      console.error('Failed to load analytics data:', err)
+      setLoadError(err instanceof Error ? err.message : 'Failed to load analytics data')
       toast({
         title: 'Error',
-        description: 'Failed to load analytics data',
+        description: 'Failed to load analytics data. Use the refresh button to retry.',
         variant: 'destructive'
       })
     } finally {
@@ -118,6 +121,46 @@ export default function AnalyticsPage() {
           <RotateCcw className="h-6 w-6 animate-spin mr-2" />
           Loading analytics...
         </div>
+      </div>
+    )
+  }
+
+  const hasData = providerData.length > 0 || usageTrends.length > 0 || totalStats.totalRequests > 0
+
+  if (loadError && !hasData) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">Unable to Load Analytics</h3>
+            <p className="text-sm text-muted-foreground mb-4">{loadError}</p>
+            <Button onClick={loadAnalyticsData}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!hasData) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Telemetry Yet</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Start using the Multi-Chat or Pipeline features to generate analytics data.
+            </p>
+            <Button variant="outline" onClick={loadAnalyticsData}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }

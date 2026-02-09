@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { GoalService } from '@/services/goal-service.db'
+import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 
 const goalStatusSchema = z.enum([
   'not-started',
@@ -25,7 +26,7 @@ const createGoalSchema = z.object({
  * GET /api/goals
  * Returns all goals for the authenticated user.
  */
-export async function GET(_req: Request) {
+export const GET = withApiMetrics(async (_req: Request) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
@@ -37,13 +38,13 @@ export async function GET(_req: Request) {
     console.error('Error loading goals:', error)
     return NextResponse.json({ error: 'Failed to load goals' }, { status: 500 })
   }
-}
+})
 
 /**
  * POST /api/goals
  * Creates a goal for the authenticated user.
  */
-export async function POST(req: Request) {
+export const POST = withApiMetrics(async (req: Request) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
@@ -72,4 +73,4 @@ export async function POST(req: Request) {
     console.error('Error creating goal:', error)
     return NextResponse.json({ error: 'Failed to create goal' }, { status: 500 })
   }
-}
+})
