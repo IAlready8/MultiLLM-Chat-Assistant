@@ -31,6 +31,12 @@ const loadService = async () => {
   return { GoalService: mod.GoalService, prismaMock }
 }
 
+const loadServiceWithPrismaMock = async (prismaMock: PrismaMock) => {
+  vi.doMock('@/lib/prisma', () => ({ prisma: prismaMock }))
+  const mod = await import('@/services/goal-service.db')
+  return { GoalService: mod.GoalService, prismaMock }
+}
+
 describe('GoalService DB fallback', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -73,5 +79,46 @@ describe('GoalService DB fallback', () => {
 
     const afterDelete = await GoalService.getGoalsByUserId('user-1')
     expect(afterDelete).toHaveLength(0)
+  })
+
+  it('uses fallback records when DB is reachable but user-scoped rows are missing', async () => {
+    const fkConstraintError = new Error(
+      'Foreign key constraint failed on the field: Goal_userId_fkey'
+    )
+
+    const prismaMock: PrismaMock = {
+      goal: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockRejectedValue(fkConstraintError),
+        update: vi.fn(),
+        delete: vi.fn(),
+      },
+    }
+
+    const { GoalService } = await loadServiceWithPrismaMock(prismaMock)
+
+    const created = await GoalService.createGoal(
+      {
+        title: 'Guest fallback goal',
+        description: 'Stored in memory when FK prevents DB write',
+        status: 'pending',
+      },
+      'guest-local-user'
+    )
+
+    const list = await GoalService.getGoalsByUserId('guest-local-user')
+    expect(list).toHaveLength(1)
+    expect(list[0].id).toBe(created.id)
+
+    const updated = await GoalService.updateGoal(
+      created.id,
+      { status: 'done' },
+      'guest-local-user'
+    )
+    expect(updated?.status).toBe('completed')
+
+    const deleted = await GoalService.deleteGoal(created.id, 'guest-local-user')
+    expect(deleted).toBe(true)
   })
 })

@@ -68,6 +68,22 @@ const listFallbackGoals = (userId: string): Goal[] =>
     .map(cloneGoal)
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
 
+const mergeGoalsById = (dbGoals: Goal[], fallbackGoals: Goal[]): Goal[] => {
+  const merged = new Map<string, Goal>()
+
+  for (const goal of fallbackGoals) {
+    merged.set(goal.id, goal)
+  }
+
+  for (const goal of dbGoals) {
+    merged.set(goal.id, withNormalizedStatus(goal))
+  }
+
+  return Array.from(merged.values()).sort(
+    (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
+  )
+}
+
 export const GoalService = {
   async getGoalsByUserId(userId: string): Promise<Goal[]> {
     if (db.isKnownUnavailable()) {
@@ -79,7 +95,12 @@ export const GoalService = {
         where: { userId },
         orderBy: { updatedAt: 'desc' },
       })
-      return goals.map((goal) => withNormalizedStatus(goal))
+      const fallback = listFallbackGoals(userId)
+      if (fallback.length === 0) {
+        return goals.map((goal) => withNormalizedStatus(goal))
+      }
+
+      return mergeGoalsById(goals, fallback)
     } catch (error) {
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('getGoalsByUserId', 'goal', error)
@@ -98,7 +119,12 @@ export const GoalService = {
       const goal = await prisma.goal.findFirst({
         where: { id, userId },
       })
-      return goal ? withNormalizedStatus(goal) : null
+      if (goal) {
+        return withNormalizedStatus(goal)
+      }
+
+      const fallbackGoal = getFallbackUserStore(userId).get(id)
+      return fallbackGoal ? cloneGoal(fallbackGoal) : null
     } catch (error) {
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('getGoalById', 'goal', error)
@@ -186,7 +212,7 @@ export const GoalService = {
       })
 
       if (!existing) {
-        return null
+        return saveToFallback()
       }
 
       const updated = await prisma.goal.update({
@@ -222,7 +248,7 @@ export const GoalService = {
       })
 
       if (!existing) {
-        return false
+        return getFallbackUserStore(userId).delete(id)
       }
 
       await prisma.goal.delete({
