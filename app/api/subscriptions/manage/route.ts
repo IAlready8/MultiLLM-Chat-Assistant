@@ -1,10 +1,24 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
-import { stripe, getOrCreateStripeCustomer } from '@/lib/stripe'
-import { prisma } from '@/lib/prisma'
+import {
+  stripe,
+  getOrCreateStripeCustomer,
+  StripeConfigurationError,
+  ensureStripeConfigured,
+} from '@/lib/stripe'
 
 // Get the absolute URL for Stripe callbacks
-const getBaseUrl = () => new URL(process.env.NEXTAUTH_URL || 'http://localhost:3000')
+const getBaseUrl = () => {
+  const configured = process.env.NEXTAUTH_URL?.trim()
+  if (configured) {
+    try {
+      return new URL(configured)
+    } catch {
+      console.warn('Invalid NEXTAUTH_URL; falling back to http://localhost:3000')
+    }
+  }
+  return new URL('http://localhost:3000')
+}
 
 /**
  * POST /api/subscriptions/manage
@@ -20,6 +34,8 @@ export async function POST(req: Request) {
   }
 
   try {
+    ensureStripeConfigured('api')
+
     // Get the Stripe Customer ID
     const stripeCustomerId = await getOrCreateStripeCustomer(user.id, user.email)
     const baseUrl = getBaseUrl()
@@ -32,10 +48,13 @@ export async function POST(req: Request) {
 
     // Return the session URL for client-side redirect
     return NextResponse.json({ url: portalSession.url })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating customer portal session:', error)
+    if (error instanceof StripeConfigurationError) {
+      return NextResponse.json({ error: error.message }, { status: 503 })
+    }
     return NextResponse.json(
-      { error: `Failed to create portal session: ${error.message}` },
+      { error: 'Failed to create portal session' },
       { status: 500 }
     )
   }

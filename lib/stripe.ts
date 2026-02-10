@@ -2,18 +2,73 @@ import Stripe from 'stripe'
 import { prisma } from '@/lib/prisma'
 
 // Price IDs from your Stripe dashboard
-export const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder'
-export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
+export const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID?.trim()
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY?.trim()
+export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim()
 
-// Flag to check if Stripe is properly configured
-export const isStripeConfigured = !!process.env.STRIPE_SECRET_KEY && !!process.env.STRIPE_WEBHOOK_SECRET
+const PLACEHOLDER_STRIPE_SECRET_KEY = 'sk_test_placeholder'
 
-// Initialize Stripe client (uses placeholder during build if not configured)
-export const stripe = new Stripe(STRIPE_SECRET_KEY, {
+// Backward-compatible flag used by existing call sites
+export const isStripeConfigured = Boolean(
+  STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET
+)
+
+export const isStripeApiConfigured = Boolean(
+  STRIPE_SECRET_KEY && STRIPE_SECRET_KEY !== PLACEHOLDER_STRIPE_SECRET_KEY
+)
+export const isStripeCheckoutConfigured = Boolean(
+  isStripeApiConfigured && STRIPE_PRO_PRICE_ID
+)
+export const isStripeWebhookConfigured = Boolean(
+  isStripeApiConfigured && STRIPE_WEBHOOK_SECRET
+)
+
+export class StripeConfigurationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'StripeConfigurationError'
+  }
+}
+
+export function ensureStripeConfigured(
+  mode: 'api' | 'checkout' | 'webhook'
+): void {
+  switch (mode) {
+    case 'api':
+      if (!isStripeApiConfigured) {
+        throw new StripeConfigurationError(
+          'Billing is not configured. Missing STRIPE_SECRET_KEY.'
+        )
+      }
+      break
+    case 'checkout':
+      if (!isStripeCheckoutConfigured) {
+        throw new StripeConfigurationError(
+          'Checkout is not configured. Missing STRIPE_SECRET_KEY or STRIPE_PRO_PRICE_ID.'
+        )
+      }
+      break
+    case 'webhook':
+      if (!isStripeWebhookConfigured) {
+        throw new StripeConfigurationError(
+          'Stripe webhook is not configured. Missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET.'
+        )
+      }
+      break
+    default:
+      break
+  }
+}
+
+// Initialize Stripe client (placeholder key is only used when not configured,
+// and guarded by ensureStripeConfigured before outbound Stripe API calls).
+export const stripe = new Stripe(
+  STRIPE_SECRET_KEY || PLACEHOLDER_STRIPE_SECRET_KEY,
+  {
   apiVersion: '2025-11-17.clover',
   typescript: true,
-})
+  }
+)
 
 /**
  * Retrieves a user's Stripe Customer ID from the DB,
@@ -23,6 +78,8 @@ export async function getOrCreateStripeCustomer(
   userId: string,
   email: string
 ): Promise<string> {
+  ensureStripeConfigured('api')
+
   // 1. Check if user has a subscription and customer ID
   const subscription = await prisma.subscription.findUnique({
     where: { userId },
