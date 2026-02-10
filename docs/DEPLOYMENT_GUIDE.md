@@ -58,11 +58,37 @@ Verify these endpoints/pages:
 - `/settings` loads and can save provider keys
 - `/api/llm/chat` handles configured provider requests
 
-## 8. Known Runtime Tradeoffs
+## 8. Production Lock-In Checklist
+Run these checks to confirm production is wired end-to-end:
+
+```bash
+npm run verify:prod -- --base-url https://<your-domain>
+```
+
+With full billing + webhook checks:
+
+```bash
+npm run verify:prod -- --base-url https://<your-domain> --require-stripe --check-webhook
+```
+
+If migrations are pending:
+
+```bash
+npm run verify:prod -- --apply-migrations --require-stripe
+```
+
+`verify:prod` validates:
+- required runtime env vars
+- Prisma migration status (and optional deploy)
+- `/api/health` status
+- Stripe configuration and price ID (`--require-stripe`)
+- webhook route behavior (`--check-webhook`)
+
+## 9. Known Runtime Tradeoffs
 - Current repository includes in-memory fallback stores for provider config and conversations when DB delegates are unavailable.
 - In-memory fallback data is process-local and non-persistent.
 
-## 9. Related Docs
+## 10. Related Docs
 - `README.md`
 - `ARCHITECTURE.md`
 - `PYTHON_INTEGRATION.md`

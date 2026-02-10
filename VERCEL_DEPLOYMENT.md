@@ -43,6 +43,26 @@ Use `.env.example` as the source of truth for supported variables.
    - `/api/auth/session` responds
    - `/api/config` responds
 
+## Production DB + Stripe Verification
+After a successful deploy, validate runtime wiring:
+
+```bash
+npm run verify:prod -- --base-url https://<your-domain> --require-stripe --check-webhook
+```
+
+If your deployment introduced new migrations:
+
+```bash
+npm run verify:prod -- --apply-migrations --require-stripe
+```
+
+This validates:
+- required env vars (`NEXTAUTH_*`, `API_KEY_ENCRYPTION_SEED`, `DATABASE_URL`)
+- Prisma migration status/deploy
+- health endpoint status
+- Stripe key + price configuration
+- webhook endpoint behavior
+
 ## Deploy via Vercel CLI
 ```bash
 vercel login
@@ -67,6 +87,12 @@ vercel --prod
 
 ### API config routes return empty/no providers
 - Expected when no provider keys have been saved for the current user/guest identity.
+
+### Webhook returns 503
+- `STRIPE_SECRET_KEY` is missing/invalid in Vercel env vars.
+- Confirm `STRIPE_WEBHOOK_SECRET` exists for the same environment.
+- Re-run:
+  - `npm run verify:prod -- --base-url https://<your-domain> --require-stripe --check-webhook`
 
 ## Related
 - `README.md`

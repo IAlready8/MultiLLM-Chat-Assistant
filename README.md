@@ -50,6 +50,9 @@ Setup:
 - `npm run test`: Vitest (watch)
 - `npm run test:run`: Vitest one-shot
 - `npm run test:coverage`: Vitest with coverage
+- `npm run smoke`: End-to-end smoke checks (pages + key APIs)
+- `npm run verify:prod`: Production readiness checks (env, DB, health, optional Stripe/webhook)
+- `npm run protect:main`: Enforce `main` branch protection with required CI checks
 
 ## CI
 GitHub Actions workflow: `.github/workflows/ci.yml`
@@ -57,7 +60,36 @@ GitHub Actions workflow: `.github/workflows/ci.yml`
 - Generates Prisma client
 - Runs `npm run type-check`
 - Runs `npm run lint`
+- Runs `npm run test:run`
 - Runs `npm run build`
+- Runs smoke tests against a PostgreSQL-backed app instance
+
+## Branch Protection (Mandatory CI)
+To make CI checks mandatory on `main`, run:
+
+```bash
+gh auth login -h github.com
+npm run protect:main
+```
+
+This enforces required status checks:
+- `Quality Checks`
+- `Smoke Tests`
+
+Without passing checks, merges to `main` are blocked.
+
+## Production Verification
+Before or immediately after a production deployment:
+
+```bash
+npm run verify:prod -- --base-url https://<your-domain> --check-webhook --require-stripe
+```
+
+To apply pending DB migrations as part of verification:
+
+```bash
+npm run verify:prod -- --apply-migrations --require-stripe
+```
 
 ## Architecture Snapshot
 - App/UI: Next.js App Router (`app/*`) + reusable components (`components/*`)

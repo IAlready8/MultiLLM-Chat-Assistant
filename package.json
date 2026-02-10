@@ -15,7 +15,9 @@
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "type-check": "tsc -p . --noEmit",
     "test:ci": "vitest run --coverage",
-    "smoke": "bash scripts/smoke-test.sh"
+    "smoke": "bash scripts/smoke-test.sh",
+    "verify:prod": "bash scripts/verify-production.sh",
+    "protect:main": "bash scripts/enforce-branch-protection.sh"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",

@@ -17,6 +17,13 @@ interface LimitConfig {
   max: number
 }
 
+export interface RateLimitDiagnostics {
+  mode: 'redis' | 'memory'
+  redisConfigured: boolean
+  redisConnected: boolean
+  inMemoryKeys: number
+}
+
 // Simple in-memory sliding window limiter (dev/default)
 const hits = new Map<Key, number[]>()
 
@@ -125,5 +132,17 @@ export function resetAll() {
   hits.clear()
   if (redisClient && isRedisConnected) {
     redisClient.flushAll().catch(console.error);
+  }
+}
+
+export function getRateLimitDiagnostics(): RateLimitDiagnostics {
+  const redisConfigured = Boolean(process.env.REDIS_URL?.trim())
+  const redisConnected = Boolean(redisClient && isRedisConnected)
+
+  return {
+    mode: redisConnected ? 'redis' : 'memory',
+    redisConfigured,
+    redisConnected,
+    inMemoryKeys: hits.size,
   }
 }
