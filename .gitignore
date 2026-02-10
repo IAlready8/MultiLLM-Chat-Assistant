@@ -23,6 +23,7 @@ backup-minimal/
 
 .vscode/
 .vercel
+.claude/settings.local.json
 
 # TypeScript incremental compilation cache
 *.tsbuildinfo
