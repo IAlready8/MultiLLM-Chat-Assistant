@@ -72,6 +72,13 @@ gh auth login -h github.com
 npm run protect:main
 ```
 
+If `gh` is not authenticated, you can use a token:
+
+```bash
+export GITHUB_TOKEN=<token-with-repo-admin-rights>
+npm run protect:main -- IAlready8/MultiLLM-Chat-Assistant
+```
+
 This enforces required status checks:
 - `Quality Checks`
 - `Smoke Tests`

@@ -182,22 +182,86 @@ NODE
 
   if [[ "${CHECK_WEBHOOK}" == "true" ]]; then
     echo "==> Checking Stripe webhook endpoint behavior"
-    WEBHOOK_CODE="$(curl -sS -o /tmp/multillm_webhook_check.json -w "%{http_code}" \
-      -X POST "${BASE_URL}/api/webhooks/stripe")"
+    WEBHOOK_RESPONSE_FILE="$(mktemp)"
 
-    if [[ "${REQUIRE_STRIPE}" == "true" && "${WEBHOOK_CODE}" == "503" ]]; then
-      echo "ERROR: Webhook endpoint reports Stripe is not configured (HTTP 503)."
-      cat /tmp/multillm_webhook_check.json
-      exit 1
+    if [[ "${REQUIRE_STRIPE}" == "true" ]]; then
+      SIGNED_PAYLOAD_FILE="$(mktemp)"
+      SIGNED_HEADER_FILE="$(mktemp)"
+
+      SIGNED_PAYLOAD_FILE="${SIGNED_PAYLOAD_FILE}" SIGNED_HEADER_FILE="${SIGNED_HEADER_FILE}" node <<'NODE'
+const fs = require('node:fs')
+const Stripe = require('stripe')
+
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+if (!webhookSecret) {
+  console.error('Missing STRIPE_WEBHOOK_SECRET for signed webhook verification.')
+  process.exit(1)
+}
+
+const payload = JSON.stringify({
+  id: 'evt_test_webhook_verification',
+  object: 'event',
+  api_version: '2025-11-17.clover',
+  created: Math.floor(Date.now() / 1000),
+  data: {
+    object: {
+      id: 'cs_test_webhook_verification',
+      object: 'checkout.session',
+      metadata: {
+        userId: 'webhook-health-check-user',
+      },
+    },
+  },
+  livemode: false,
+  pending_webhooks: 1,
+  request: {
+    id: null,
+    idempotency_key: null,
+  },
+  type: 'checkout.session.completed',
+})
+
+const signature = Stripe.webhooks.generateTestHeaderString({
+  payload,
+  secret: webhookSecret,
+})
+
+fs.writeFileSync(process.env.SIGNED_PAYLOAD_FILE, payload)
+fs.writeFileSync(process.env.SIGNED_HEADER_FILE, signature)
+NODE
+
+      STRIPE_SIGNATURE="$(cat "${SIGNED_HEADER_FILE}")"
+      WEBHOOK_CODE="$(curl -sS -o "${WEBHOOK_RESPONSE_FILE}" -w "%{http_code}" \
+        -X POST "${BASE_URL}/api/webhooks/stripe" \
+        -H "Content-Type: application/json" \
+        -H "Stripe-Signature: ${STRIPE_SIGNATURE}" \
+        --data-binary "@${SIGNED_PAYLOAD_FILE}")"
+
+      rm -f "${SIGNED_PAYLOAD_FILE}" "${SIGNED_HEADER_FILE}"
+
+      if [[ "${WEBHOOK_CODE}" != "200" ]]; then
+        echo "ERROR: Signed webhook verification failed (expected HTTP 200, got ${WEBHOOK_CODE})."
+        cat "${WEBHOOK_RESPONSE_FILE}"
+        rm -f "${WEBHOOK_RESPONSE_FILE}"
+        exit 1
+      fi
+
+      echo "Signed webhook verification passed (HTTP ${WEBHOOK_CODE})."
+    else
+      WEBHOOK_CODE="$(curl -sS -o "${WEBHOOK_RESPONSE_FILE}" -w "%{http_code}" \
+        -X POST "${BASE_URL}/api/webhooks/stripe")"
+
+      if [[ "${WEBHOOK_CODE}" != "400" && "${WEBHOOK_CODE}" != "503" ]]; then
+        echo "ERROR: Unexpected webhook status code: ${WEBHOOK_CODE}"
+        cat "${WEBHOOK_RESPONSE_FILE}"
+        rm -f "${WEBHOOK_RESPONSE_FILE}"
+        exit 1
+      fi
+
+      echo "Webhook endpoint check ok (HTTP ${WEBHOOK_CODE})."
     fi
 
-    if [[ "${WEBHOOK_CODE}" != "400" && "${WEBHOOK_CODE}" != "503" ]]; then
-      echo "ERROR: Unexpected webhook status code: ${WEBHOOK_CODE}"
-      cat /tmp/multillm_webhook_check.json
-      exit 1
-    fi
-
-    echo "Webhook endpoint check ok (HTTP ${WEBHOOK_CODE})."
+    rm -f "${WEBHOOK_RESPONSE_FILE}"
   fi
 fi
 

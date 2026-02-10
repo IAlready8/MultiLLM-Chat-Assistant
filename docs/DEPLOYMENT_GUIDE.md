@@ -83,6 +83,7 @@ npm run verify:prod -- --apply-migrations --require-stripe
 - `/api/health` status
 - Stripe configuration and price ID (`--require-stripe`)
 - webhook route behavior (`--check-webhook`)
+  - with `--require-stripe`, webhook validation uses a signed test payload and expects HTTP 200
 
 ## 9. Known Runtime Tradeoffs
 - Current repository includes in-memory fallback stores for provider config and conversations when DB delegates are unavailable.

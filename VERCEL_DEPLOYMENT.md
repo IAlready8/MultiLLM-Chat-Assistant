@@ -61,7 +61,7 @@ This validates:
 - Prisma migration status/deploy
 - health endpoint status
 - Stripe key + price configuration
-- webhook endpoint behavior
+- webhook endpoint behavior (signed verification when `--require-stripe` is used)
 
 ## Deploy via Vercel CLI
 ```bash
