@@ -124,4 +124,31 @@ describe('PersonaService DB fallback', () => {
     )
     expect(deleted).toBe(true)
   })
+
+  it('throws unexpected write errors instead of silently falling back', async () => {
+    const unexpectedError = new Error('Unique constraint failed on title')
+
+    const prismaMock: PrismaMock = {
+      persona: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockRejectedValue(unexpectedError),
+        update: vi.fn(),
+        delete: vi.fn(),
+      },
+    }
+
+    const { PersonaService } = await loadServiceWithPrismaMock(prismaMock)
+
+    await expect(
+      PersonaService.createPersona(
+        {
+          title: 'Should fail',
+          description: 'Unexpected DB error should bubble up',
+          prompt: 'Do not fallback for non-recoverable errors.',
+        },
+        'user-1'
+      )
+    ).rejects.toThrow('Unique constraint failed on title')
+  })
 })

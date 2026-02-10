@@ -1,6 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { Conversation, Message, PrismaClient } from '@/types/prisma'
-import { createDbAvailabilityTracker, getOrCreateUserStore } from '@/lib/db-fallback'
+import {
+  createDbAvailabilityTracker,
+  getOrCreateUserStore,
+  isUserForeignKeyConstraintError,
+} from '@/lib/db-fallback'
 
 type ConversationWithMessages = Conversation & { messages: Message[] }
 type NewMessageData = Omit<Message, 'id' | 'conversationId' | 'createdAt'>
@@ -159,8 +163,12 @@ export const ConversationService = {
         },
       })
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('createConversation', 'conversation', error)
+      } else if (!dbUnavailable) {
+        throw error
       }
       return saveToFallback()
     }
@@ -229,8 +237,12 @@ export const ConversationService = {
 
       return this.getFullConversation(id, userId)
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('addMessages', 'conversation', error)
+      } else if (!dbUnavailable) {
+        throw error
       }
       return saveToFallback()
     }
@@ -267,8 +279,12 @@ export const ConversationService = {
       })
       return true
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('deleteConversation', 'conversation', error)
+      } else if (!dbUnavailable) {
+        throw error
       }
       return getFallbackUserStore(userId).delete(id)
     }

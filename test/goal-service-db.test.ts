@@ -121,4 +121,31 @@ describe('GoalService DB fallback', () => {
     const deleted = await GoalService.deleteGoal(created.id, 'guest-local-user')
     expect(deleted).toBe(true)
   })
+
+  it('throws unexpected write errors instead of silently falling back', async () => {
+    const unexpectedError = new Error('Unique constraint failed on Goal.title')
+
+    const prismaMock: PrismaMock = {
+      goal: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockRejectedValue(unexpectedError),
+        update: vi.fn(),
+        delete: vi.fn(),
+      },
+    }
+
+    const { GoalService } = await loadServiceWithPrismaMock(prismaMock)
+
+    await expect(
+      GoalService.createGoal(
+        {
+          title: 'Should fail',
+          description: 'Unexpected DB errors should not be swallowed.',
+          status: 'pending',
+        },
+        'user-1'
+      )
+    ).rejects.toThrow('Unique constraint failed on Goal.title')
+  })
 })

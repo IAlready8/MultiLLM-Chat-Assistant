@@ -1,6 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { Persona } from '@/types/prisma'
-import { createDbAvailabilityTracker, getOrCreateUserStore } from '@/lib/db-fallback'
+import {
+  createDbAvailabilityTracker,
+  getOrCreateUserStore,
+  isUserForeignKeyConstraintError,
+} from '@/lib/db-fallback'
 
 type NewPersonaData = Omit<Persona, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
 type PersonaUpdateData = Partial<Omit<Persona, 'id' | 'userId' | 'createdAt'>>
@@ -147,8 +151,12 @@ export const PersonaService = {
         },
       })
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('createPersona', 'persona', error)
+      } else if (!dbUnavailable) {
+        throw error
       }
       return saveToFallback()
     }
@@ -202,8 +210,12 @@ export const PersonaService = {
         data,
       })
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('updatePersona', 'persona', error)
+      } else if (!dbUnavailable) {
+        throw error
       }
       return saveToFallback()
     }
@@ -234,8 +246,12 @@ export const PersonaService = {
 
       return true
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('deletePersona', 'persona', error)
+      } else if (!dbUnavailable) {
+        throw error
       }
       return getFallbackUserStore(userId).delete(id)
     }

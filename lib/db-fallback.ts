@@ -32,6 +32,44 @@ export const isDatabaseUnavailableError = (error: unknown): boolean => {
   )
 }
 
+const getErrorCode = (error: unknown): string | undefined => {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+  ) {
+    return (error as { code: string }).code
+  }
+  return undefined
+}
+
+/**
+ * Detects FK violations tied to the user relation (common when guest IDs
+ * intentionally do not exist as persisted User rows).
+ */
+export const isUserForeignKeyConstraintError = (error: unknown): boolean => {
+  const message = getErrorMessage(error)
+  const code = getErrorCode(error)
+
+  const metaString =
+    typeof error === 'object' && error !== null && 'meta' in error
+      ? JSON.stringify((error as { meta?: unknown }).meta)
+      : ''
+
+  const fieldHints = `${message} ${metaString}`.toLowerCase()
+  const targetsUserRelation =
+    fieldHints.includes('userid') ||
+    fieldHints.includes('user_id') ||
+    fieldHints.includes('_userid_fkey') ||
+    fieldHints.includes('userid_fkey')
+
+  const isForeignKeyViolation =
+    code === 'P2003' || message.includes('Foreign key constraint failed')
+
+  return isForeignKeyViolation && targetsUserRelation
+}
+
 export interface DbAvailabilityState {
   unavailable: boolean
   unavailableSince?: number

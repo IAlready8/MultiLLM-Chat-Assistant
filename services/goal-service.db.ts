@@ -1,6 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { Goal } from '@/types/prisma'
-import { createDbAvailabilityTracker, getOrCreateUserStore } from '@/lib/db-fallback'
+import {
+  createDbAvailabilityTracker,
+  getOrCreateUserStore,
+  isUserForeignKeyConstraintError,
+} from '@/lib/db-fallback'
 
 export type GoalStatus = 'not-started' | 'in-progress' | 'completed' | 'delayed'
 
@@ -165,8 +169,12 @@ export const GoalService = {
       })
       return withNormalizedStatus(created)
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('createGoal', 'goal', error)
+      } else if (!dbUnavailable) {
+        throw error
       }
       return saveToFallback()
     }
@@ -230,8 +238,12 @@ export const GoalService = {
 
       return withNormalizedStatus(updated)
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('updateGoal', 'goal', error)
+      } else if (!dbUnavailable) {
+        throw error
       }
       return saveToFallback()
     }
@@ -256,8 +268,12 @@ export const GoalService = {
       })
       return true
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('deleteGoal', 'goal', error)
+      } else if (!dbUnavailable) {
+        throw error
       }
       return getFallbackUserStore(userId).delete(id)
     }

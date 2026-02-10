@@ -39,6 +39,12 @@ const loadService = async () => {
   return { ConversationService: mod.ConversationService, prismaMock }
 }
 
+const loadServiceWithPrismaMock = async (prismaMock: PrismaMock) => {
+  vi.doMock('@/lib/prisma', () => ({ prisma: prismaMock }))
+  const mod = await import('@/services/conversation-service.db')
+  return { ConversationService: mod.ConversationService, prismaMock }
+}
+
 describe('ConversationService DB fallback', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -84,5 +90,36 @@ describe('ConversationService DB fallback', () => {
 
     const afterDelete = await ConversationService.getConversationsByUserId('user-1')
     expect(afterDelete).toHaveLength(0)
+  })
+
+  it('throws unexpected write errors instead of silently falling back', async () => {
+    const unexpectedError = new Error('Unexpected conversation write failure')
+
+    const prismaMock: PrismaMock = {
+      conversation: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockRejectedValue(unexpectedError),
+        update: vi.fn(),
+        delete: vi.fn(),
+      },
+      message: {
+        deleteMany: vi.fn(),
+      },
+      $transaction: vi.fn(),
+    }
+
+    const { ConversationService } = await loadServiceWithPrismaMock(prismaMock)
+
+    await expect(
+      ConversationService.createConversation('user-1', 'Should fail', [
+        {
+          role: 'user',
+          content: 'hello',
+          provider: null,
+          model: null,
+        },
+      ])
+    ).rejects.toThrow('Unexpected conversation write failure')
   })
 })

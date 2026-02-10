@@ -4,6 +4,7 @@ import {
   getOrCreateUserStore,
   getErrorMessage,
   isDatabaseUnavailableError,
+  isUserForeignKeyConstraintError,
 } from '@/lib/db-fallback'
 
 describe('db-fallback', () => {
@@ -44,6 +45,35 @@ describe('db-fallback', () => {
 
     it('returns false for non-database errors', () => {
       expect(isDatabaseUnavailableError(new Error('Connection refused'))).toBe(
+        false
+      )
+    })
+  })
+
+  describe('isUserForeignKeyConstraintError', () => {
+    it('detects Prisma P2003 userId FK errors', () => {
+      const error = {
+        code: 'P2003',
+        message: 'Foreign key constraint failed on the field: Goal_userId_fkey',
+      }
+      expect(isUserForeignKeyConstraintError(error)).toBe(true)
+    })
+
+    it('detects user relation FK errors from plain messages', () => {
+      expect(
+        isUserForeignKeyConstraintError(
+          new Error('Foreign key constraint failed on the field: Persona_userId_fkey')
+        )
+      ).toBe(true)
+    })
+
+    it('returns false for non-user FK or unrelated errors', () => {
+      expect(
+        isUserForeignKeyConstraintError(
+          new Error('Foreign key constraint failed on the field: Message_conversationId_fkey')
+        )
+      ).toBe(false)
+      expect(isUserForeignKeyConstraintError(new Error('Connection refused'))).toBe(
         false
       )
     })
