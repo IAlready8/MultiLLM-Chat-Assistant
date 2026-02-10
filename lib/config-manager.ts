@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import { aesGcmEncrypt, aesGcmDecrypt, deriveKey } from '@/lib/crypto'
+import { resolveApiKeyEncryptionSeed } from '@/lib/runtime-secrets'
 import {
   configSchema,
   providerConfigSchema,
@@ -15,10 +16,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 // Get encryption key for API keys
 async function getEncryptionKey() {
-  const seed = process.env.API_KEY_ENCRYPTION_SEED
-  if (!seed) {
-    throw new Error('API_KEY_ENCRYPTION_SEED environment variable is required')
-  }
+  const seed = resolveApiKeyEncryptionSeed()
   return await deriveKey(seed)
 }
 

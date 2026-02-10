@@ -1,6 +1,7 @@
 import prisma from './prisma'
 import { deriveKey, aesGcmEncrypt, aesGcmDecrypt } from './crypto'
 import { createDbAvailabilityTracker, getOrCreateUserStore } from './db-fallback'
+import { resolveApiKeyEncryptionSeed } from './runtime-secrets'
 
 type FallbackRecord = {
   id: string
@@ -46,7 +47,7 @@ const getFallbackRecord = (userId: string, provider: string) =>
 
 // Server-side encryption key from environment
 const getEncryptionKey = async (): Promise<Uint8Array> => {
-  const seed = process.env.API_KEY_ENCRYPTION_SEED || 'default-encryption-seed-change-in-production'
+  const seed = resolveApiKeyEncryptionSeed()
   return await deriveKey(seed)
 }
 

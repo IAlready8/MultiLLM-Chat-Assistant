@@ -105,6 +105,45 @@ echo "========================================"
 echo " Smoke Tests — ${BASE_URL}"
 echo "========================================"
 
+# ── 0. Health endpoint checks ──────────────────────────────────────
+
+echo ""
+echo "0) Health endpoint checks"
+
+health_status_code=$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/health" 2>/dev/null || echo "000")
+assert_status "GET /api/health" "200" "$health_status_code"
+
+health_body=$(curl -s "${BASE_URL}/api/health" 2>/dev/null || echo '{}')
+health_state=$(echo "$health_body" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+value = data.get('status')
+print(value if value in {'healthy', 'degraded'} else 'INVALID')
+" 2>/dev/null || echo "PARSE_ERROR")
+if [ "$health_state" = "healthy" ] || [ "$health_state" = "degraded" ]; then
+  echo -e "  ${GREEN}PASS${NC} /api/health status=$health_state"
+  PASS=$((PASS + 1))
+else
+  echo -e "  ${RED}FAIL${NC} /api/health unexpected status payload: $health_state"
+  FAIL=$((FAIL + 1))
+fi
+
+health_metrics_body=$(curl -s "${BASE_URL}/api/health?metrics=1" 2>/dev/null || echo '{}')
+has_metrics_routes=$(echo "$health_metrics_body" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+metrics = data.get('metrics')
+ok = isinstance(metrics, dict) and isinstance(metrics.get('routes'), dict)
+print('yes' if ok else 'no')
+" 2>/dev/null || echo "error")
+if [ "$has_metrics_routes" = "yes" ]; then
+  echo -e "  ${GREEN}PASS${NC} /api/health?metrics=1 includes metrics.routes"
+  PASS=$((PASS + 1))
+else
+  echo -e "  ${RED}FAIL${NC} /api/health?metrics=1 missing metrics.routes"
+  FAIL=$((FAIL + 1))
+fi
+
 # ── 1. Page Render Checks ──────────────────────────────────────────
 
 echo ""
