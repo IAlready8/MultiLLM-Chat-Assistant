@@ -54,7 +54,7 @@ cat >"${TMP_JSON}" <<'JSON'
     "dismiss_stale_reviews": true,
     "require_code_owner_reviews": false,
     "required_approving_review_count": 0,
-    "require_last_push_approval": false
+    "require_last_push_approval": true
   },
   "required_conversation_resolution": true,
   "restrictions": null
@@ -95,4 +95,5 @@ echo "Additional protections:"
 echo " - Admin enforcement: enabled"
 echo " - PR required: enabled (approvals required: 0)"
 echo " - Dismiss stale reviews: enabled"
+echo " - Last push approval: enabled"
 echo " - Conversation resolution: enabled"
