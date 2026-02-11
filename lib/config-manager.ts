@@ -12,6 +12,7 @@ import {
   defaultProviderModels,
   defaultRateLimits,
 } from './config-schemas'
+import { getProviderAdapter, type ProviderAdapterConfig } from './providers'
 import { v4 as uuidv4 } from 'uuid'
 
 // Get encryption key for API keys
@@ -247,28 +248,38 @@ export class ConfigurationManager {
     const startTime = Date.now()
     
     try {
-      // Import the appropriate provider service dynamically
-      switch (provider) {
-        case 'openai': {
-          const { OpenAIService } = await import('@/services/llm-providers/openai-service')
-          const service = OpenAIService.getInstance()
-          await service.testConnection(config.apiKey)
-          break
+      const adapter = getProviderAdapter(provider)
+      if (!adapter) {
+        throw new Error(`Unknown provider: ${provider}`)
+      }
+
+      const extraHeaders: Record<string, string> = {}
+      if (provider === 'openrouter') {
+        if (config.settings?.httpReferer) {
+          extraHeaders['HTTP-Referer'] = String(config.settings.httpReferer)
         }
-        case 'anthropic': {
-          // Implement Anthropic test when service exists
-          break
+        if (config.settings?.xTitle) {
+          extraHeaders['X-Title'] = String(config.settings.xTitle)
         }
-        case 'googleai': {
-          // Implement Google AI test when service exists
-          break
-        }
-        case 'openrouter': {
-          // Implement OpenRouter test when service exists
-          break
-        }
-        default:
-          throw new Error(`Unknown provider: ${provider}`)
+      }
+
+      const adapterConfig: ProviderAdapterConfig = {
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl,
+        extraHeaders,
+      }
+
+      if (adapter.testConnection) {
+        await adapter.testConnection(adapterConfig)
+      } else {
+        await adapter.chat(
+          {
+            messages: [{ role: 'user', content: 'ping' }],
+            max_tokens: 1,
+            temperature: 0,
+          },
+          adapterConfig,
+        )
       }
 
       const latency = Date.now() - startTime

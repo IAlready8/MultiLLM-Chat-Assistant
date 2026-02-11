@@ -98,10 +98,15 @@ export async function getOrCreateStripeCustomer(
     },
   })
 
-  // 3. Save the new customer ID to the user's subscription record
-  await prisma.subscription.update({
+  // 3. Save the new customer ID and ensure a subscription row exists
+  await prisma.subscription.upsert({
     where: { userId },
-    data: {
+    update: {
+      stripeCustomerId: customer.id,
+    },
+    create: {
+      userId,
+      tier: 'FREE',
       stripeCustomerId: customer.id,
     },
   })

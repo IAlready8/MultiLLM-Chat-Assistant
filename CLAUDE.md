@@ -58,16 +58,16 @@ To apply migrations:
 
 ## LLM Provider Architecture
 
-Provider abstraction in `services/llm-providers/`:
-- Each provider has a dedicated service (e.g., `openai-service.ts`)
-- Normalized streaming interface via `services/stream-client.ts`
-- API routes in `app/api/llm/` handle provider orchestration
-- Client-side encrypted storage for API keys via `lib/secure-storage.ts`
+Provider abstraction in `lib/providers/`:
+- Each provider has a dedicated adapter (e.g., `openai.ts`, `anthropic.ts`)
+- Shared registry via `lib/providers/registry.ts`
+- Shared error classification via `lib/providers/errors.ts`
+- API routes in `app/api/llm/` use the same adapter runtime for parity
 
 ## Authentication & Security
 
 - NextAuth.js handles OAuth (Google, GitHub) and credential auth
-- API keys stored encrypted client-side, never bundled in build
+- API keys stored encrypted server-side in `ProviderConfig` via `lib/api-key-service.ts`
 - Rate limiting configured via environment variables
 - Server-side validation in API route handlers
 

@@ -90,14 +90,22 @@ export async function POST(req: Request) {
           ? new Date(subscription.current_period_end * 1000)
           : null
 
-        await prisma.subscription.update({
+        await prisma.subscription.upsert({
           where: { userId },
-          data: {
+          update: {
             stripeSubscriptionId: subscription.id,
             stripeCustomerId: subscription.customer as string,
             stripePriceId: priceId,
             stripeCurrentPeriodEnd: periodEnd,
             tier,
+          },
+          create: {
+            userId,
+            tier,
+            stripeSubscriptionId: subscription.id,
+            stripeCustomerId: subscription.customer as string,
+            stripePriceId: priceId,
+            stripeCurrentPeriodEnd: periodEnd,
           },
         })
         break
@@ -105,13 +113,22 @@ export async function POST(req: Request) {
 
       // A subscription was canceled or ended
       case 'customer.subscription.deleted': {
-        await prisma.subscription.update({
+        const deletedSubscription = event.data.object as Stripe.Subscription
+        await prisma.subscription.upsert({
           where: { userId },
-          data: {
+          update: {
             stripeSubscriptionId: null,
             stripePriceId: null,
             stripeCurrentPeriodEnd: null,
             tier: 'FREE',
+          },
+          create: {
+            userId,
+            tier: 'FREE',
+            stripeCustomerId: deletedSubscription.customer as string,
+            stripeSubscriptionId: null,
+            stripePriceId: null,
+            stripeCurrentPeriodEnd: null,
           },
         })
         break
@@ -123,6 +140,8 @@ export async function POST(req: Request) {
         const lineItem = invoice.lines.data[0] as unknown as { price?: { id?: string } }
         const priceId = lineItem?.price?.id
         const tier = priceId === STRIPE_PRO_PRICE_ID ? 'PRO' : 'FREE'
+        const stripeCustomerId =
+          typeof invoice.customer === 'string' ? invoice.customer : null
 
         // Update the period end date on renewal
         if (invoice.subscription) {
@@ -130,13 +149,22 @@ export async function POST(req: Request) {
           const periodEnd = subscription.current_period_end
             ? new Date(subscription.current_period_end * 1000)
             : null
-          await prisma.subscription.update({
+          await prisma.subscription.upsert({
             where: { userId },
-            data: {
+            update: {
               stripeSubscriptionId: subscription.id,
+              stripeCustomerId,
               stripePriceId: priceId,
               stripeCurrentPeriodEnd: periodEnd,
               tier,
+            },
+            create: {
+              userId,
+              tier,
+              stripeSubscriptionId: subscription.id,
+              stripeCustomerId,
+              stripePriceId: priceId,
+              stripeCurrentPeriodEnd: periodEnd,
             },
           })
         }

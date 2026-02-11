@@ -17,7 +17,8 @@
     "test:ci": "vitest run --coverage",
     "smoke": "bash scripts/smoke-test.sh",
     "verify:prod": "bash scripts/verify-production.sh",
-    "protect:main": "bash scripts/enforce-branch-protection.sh"
+    "protect:main": "bash scripts/enforce-branch-protection.sh",
+    "upgrade:next:prep": "bash scripts/next-upgrade-readiness.sh"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",

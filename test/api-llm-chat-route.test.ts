@@ -154,6 +154,84 @@ describe('/api/llm/chat route', () => {
     })
   })
 
+  it('returns key format error for invalid provider key', async () => {
+    mockGetUserApiKey.mockResolvedValue('bad-key')
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          stream: false,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Invalid API key format for the selected provider',
+      code: 'PROVIDER_KEY_FORMAT_INVALID',
+    })
+  })
+
+  it('applies scoped rate limiting per user/provider', async () => {
+    mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'chat-rate-limit-user' } })
+    mockGetUserProviderConfigs.mockResolvedValue([
+      {
+        provider: 'openai',
+        settings: {
+          models: ['gpt-4'],
+          rateLimits: { requests: 1, window: 60000 },
+        },
+      },
+    ])
+    mockGetUserApiKey.mockResolvedValue('sk-test-12345678901234567890')
+
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: 'first' }, finish_reason: 'stop' }],
+        usage: { total_tokens: 10 },
+      }),
+    } as Response)
+
+    const first = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          stream: false,
+          model: 'gpt-4',
+          messages: [{ role: 'user', content: 'first' }],
+        }),
+      }),
+    )
+    expect(first.status).toBe(200)
+
+    const second = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          stream: false,
+          model: 'gpt-4',
+          messages: [{ role: 'user', content: 'second' }],
+        }),
+      }),
+    )
+    expect(second.status).toBe(429)
+    await expect(second.json()).resolves.toEqual({
+      error: 'Rate limit exceeded',
+      code: 'RATE_LIMITED',
+    })
+  })
+
   it('returns provider response for non-stream success', async () => {
     const fetchMock = vi.mocked(global.fetch)
     fetchMock.mockResolvedValue({

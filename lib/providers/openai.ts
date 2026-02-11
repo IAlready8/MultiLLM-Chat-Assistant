@@ -1,0 +1,102 @@
+/**
+ * OpenAI provider adapter.
+ *
+ * Also used as the base for OpenRouter and Grok (via re-parameterisation in
+ * their own adapter modules).
+ */
+
+import type {
+  ProviderAdapter,
+  ProviderAdapterConfig,
+  ProviderRequest,
+  ChatCompletion,
+} from './types'
+import { throwUpstreamError, requireBody, parseSSEStream } from './util'
+
+const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
+const DEFAULT_MODEL = 'gpt-3.5-turbo'
+const TIMEOUT_MS = 60_000
+
+export const openaiAdapter: ProviderAdapter = {
+  id: 'openai',
+
+  async testConnection(config: ProviderAdapterConfig): Promise<void> {
+    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const response = await fetch(`${baseUrl}/models`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        ...config.extraHeaders,
+      },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+
+    if (!response.ok) {
+      await throwUpstreamError('openai', response, false)
+    }
+  },
+
+  async chat(
+    request: ProviderRequest,
+    config: ProviderAdapterConfig,
+  ): Promise<ChatCompletion> {
+    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const model = request.model || DEFAULT_MODEL
+
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+        ...config.extraHeaders,
+      },
+      body: JSON.stringify({
+        model,
+        messages: request.messages,
+        temperature: request.temperature ?? 0.7,
+        max_tokens: request.max_tokens ?? 4096,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+
+    if (!response.ok) await throwUpstreamError('openai', response, false)
+
+    const data = await response.json()
+    return {
+      content: data.choices[0].message?.content || '',
+      finish_reason: data.choices[0].finish_reason,
+      usage: data.usage,
+    }
+  },
+
+  async *stream(
+    request: ProviderRequest,
+    config: ProviderAdapterConfig,
+  ): AsyncGenerator<string, void, undefined> {
+    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const model = request.model || DEFAULT_MODEL
+
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+        ...config.extraHeaders,
+      },
+      body: JSON.stringify({
+        model,
+        messages: request.messages,
+        temperature: request.temperature ?? 0.7,
+        max_tokens: request.max_tokens ?? 4096,
+        stream: true,
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+
+    if (!response.ok) await throwUpstreamError('openai', response, true)
+    const body = requireBody('openai', response)
+
+    yield* parseSSEStream(body, (parsed) => parsed.choices?.[0]?.delta?.content)
+  },
+}

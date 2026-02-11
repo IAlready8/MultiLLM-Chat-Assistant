@@ -2,7 +2,8 @@
 const nextConfig = {
   // Compiler optimizations
   compiler: {
-    removeConsole: process.env.NODE_ENV === "production",
+    // Keep server-side logs in production for operational debugging/alerts.
+    removeConsole: false,
   },
 
   // Image optimization

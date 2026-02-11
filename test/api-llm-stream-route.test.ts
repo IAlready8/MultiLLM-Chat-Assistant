@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const mockGetAuthenticatedUser = vi.fn()
 const mockGetUserProviderConfigs = vi.fn()
 const mockGetUserApiKey = vi.fn()
-const mockStreamChatMessage = vi.fn()
+const mockRecordAnalyticsEvent = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
@@ -16,14 +16,38 @@ vi.mock('@/lib/api-key-service', () => ({
     mockGetUserApiKey(userId, provider),
 }))
 
-vi.mock('@/services/api-service', () => ({
-  streamChatMessage: (
-    provider: string,
-    messages: unknown[],
-    onChunk: (chunk: string) => void,
-    options: Record<string, unknown>
-  ) => mockStreamChatMessage(provider, messages, onChunk, options),
+vi.mock('@/services/analytics-service', () => ({
+  recordAnalyticsEvent: (event: unknown) => mockRecordAnalyticsEvent(event),
 }))
+
+vi.mock('@/lib/error-system', () => {
+  class MockLLMProviderError extends Error {
+    constructor(provider: string, message: string) {
+      super(message)
+      this.name = `LLMProviderError:${provider}`
+    }
+  }
+
+  class MockNotImplementedError extends Error {
+    userMessage: string
+    constructor(featureName: string) {
+      super(`Feature '${featureName}' is not implemented`)
+      this.name = 'NotImplementedError'
+      this.userMessage = 'This feature is not yet available.'
+    }
+  }
+
+  return {
+    errorManager: { logError: vi.fn() },
+    createErrorContext: (
+      endpoint: string,
+      userId?: string,
+      metadata: Record<string, unknown> = {}
+    ) => ({ endpoint, userId, timestamp: new Date(), metadata }),
+    LLMProviderError: MockLLMProviderError,
+    NotImplementedError: MockNotImplementedError,
+  }
+})
 
 import { POST } from '@/app/api/llm/stream/route'
 
@@ -37,6 +61,8 @@ const makeRequest = (body: string) =>
 describe('/api/llm/stream route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
+
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
     mockGetUserProviderConfigs.mockResolvedValue([
       {
@@ -48,9 +74,7 @@ describe('/api/llm/stream route', () => {
       },
     ])
     mockGetUserApiKey.mockResolvedValue('sk-test-12345678901234567890')
-    mockStreamChatMessage.mockImplementation(async (_provider, _messages, onChunk) => {
-      onChunk('hello')
-    })
+    mockRecordAnalyticsEvent.mockResolvedValue(undefined)
   })
 
   it('forwards auth response when authentication fails', async () => {
@@ -156,7 +180,13 @@ describe('/api/llm/stream route', () => {
   })
 
   it('includes coded error events in NDJSON stream when provider streaming fails', async () => {
-    mockStreamChatMessage.mockRejectedValue(new Error('HTTP 429: Too many requests'))
+    // Mock fetch to return a 429 response from upstream provider
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: { message: 'Too many requests' } }),
+    } as Response)
 
     const response = await POST(
       makeRequest(JSON.stringify({ provider: 'openai', messages: [{ role: 'user', content: 'hello' }] }))
@@ -168,5 +198,40 @@ describe('/api/llm/stream route', () => {
     const body = await response.text()
     expect(body).toContain('"type":"error"')
     expect(body).toContain('"code":"RATE_LIMITED"')
+  })
+
+  it('streams NDJSON chunks on successful provider response', async () => {
+    // Build an SSE response body that the adapter can parse
+    const sseData = [
+      'data: {"choices":[{"delta":{"content":"Hello"},"finish_reason":null}]}\n',
+      'data: {"choices":[{"delta":{"content":" world"},"finish_reason":null}]}\n',
+      'data: [DONE]\n',
+    ].join('\n')
+    const encoder = new TextEncoder()
+
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(sseData))
+          controller.close()
+        },
+      }),
+    } as Response)
+
+    const response = await POST(
+      makeRequest(JSON.stringify({ provider: 'openai', messages: [{ role: 'user', content: 'hello' }] }))
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toBe('application/x-ndjson')
+
+    const body = await response.text()
+    expect(body).toContain('"type":"chunk"')
+    expect(body).toContain('"content":"Hello"')
+    expect(body).toContain('"content":" world"')
+    expect(body).toContain('"type":"done"')
   })
 })

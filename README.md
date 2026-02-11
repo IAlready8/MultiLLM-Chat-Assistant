@@ -53,6 +53,7 @@ Setup:
 - `npm run smoke`: End-to-end smoke checks (pages + key APIs)
 - `npm run verify:prod`: Production readiness checks (env, DB, health, optional Stripe/webhook)
 - `npm run protect:main`: Enforce `main` branch protection with required CI checks
+- `npm run upgrade:next:prep`: Next.js major-upgrade readiness scan + preflight gate checks
 
 ## CI
 GitHub Actions workflow: `.github/workflows/ci.yml`
@@ -161,6 +162,7 @@ After this setup, every `git push origin main` should trigger a production deplo
 - `DESIGN_SYSTEM.md`: design tokens and UI conventions
 - `ROADMAP.md`: roadmap and planned work
 - `STATUS_UPDATE.md`: historical status notes
+- `NEXT_UPGRADE_PLAYBOOK.md`: staged Next.js major-upgrade execution + rollback plan
 
 ## License
 MIT (`LICENSE`)

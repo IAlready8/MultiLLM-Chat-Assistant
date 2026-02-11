@@ -95,6 +95,7 @@ Primary auth files:
 - `npm run test:run`
 - `npm run build`
 - `npm run smoke`
+- `npm run upgrade:next:prep`
 
 ### CI (`.github/workflows/ci.yml`)
 - `Quality Checks` job:
@@ -123,3 +124,4 @@ Primary auth files:
 - `DOCUMENTATION.md`
 - `PYTHON_INTEGRATION.md`
 - `.env.example`
+- `NEXT_UPGRADE_PLAYBOOK.md`

@@ -7,6 +7,7 @@ This documentation covers all the APIs, services, components, and hooks implemen
 - Source-of-truth for build, architecture, and deployment is:
   - `README.md`
   - `ARCHITECTURE.md`
+  - `NEXT_UPGRADE_PLAYBOOK.md`
   - `VERCEL_DEPLOYMENT.md`
   - `docs/DEPLOYMENT_GUIDE.md`
 - This file is a broad reference and still contains some legacy examples from earlier storage patterns.
@@ -173,9 +174,17 @@ function handleStreamedResponse() {
 }
 ```
 
-## 2. Secure Storage
+## 2. Secure Storage (Legacy Client Helpers)
 
-### `secureStore(key, value)`
+The `lib/secure-storage` examples below are legacy references from an older
+client-side flow. Current provider key storage is server-side:
+
+- API route: `app/api/config/route.ts`
+- Service: `lib/api-key-service.ts`
+- Encryption: `lib/crypto.ts`
+- Persistence: `ProviderConfig` table in Prisma/Postgres (with DB-first fallback)
+
+### `secureStore(key, value)` (legacy)
 
 Securely stores a value with encryption.
 
@@ -198,7 +207,7 @@ async function saveApiKey(apiKey: string) {
 }
 ```
 
-### `secureRetrieve(key)`
+### `secureRetrieve(key)` (legacy)
 
 Securely retrieves a stored value.
 
@@ -221,7 +230,7 @@ async function getApiKey() {
 }
 ```
 
-### `secureRemove(key)`
+### `secureRemove(key)` (legacy)
 
 Removes a securely stored value.
 
