@@ -53,7 +53,7 @@ cat >"${TMP_JSON}" <<'JSON'
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": true,
     "require_code_owner_reviews": false,
-    "required_approving_review_count": 1,
+    "required_approving_review_count": 0,
     "require_last_push_approval": false
   },
   "required_conversation_resolution": true,
@@ -93,6 +93,6 @@ echo " - Quality Checks"
 echo " - Smoke Tests"
 echo "Additional protections:"
 echo " - Admin enforcement: enabled"
-echo " - PR review requirement: 1 approval"
+echo " - PR required: enabled (approvals required: 0)"
 echo " - Dismiss stale reviews: enabled"
 echo " - Conversation resolution: enabled"
