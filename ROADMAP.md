@@ -1,104 +1,44 @@
 # Project Roadmap: MultiLLM Chat Assistant
 
-## Vision
-Create the world's most powerful and intuitive multi-LLM management platform that professionals and enterprises are willing to pay premium prices for (hundreds to thousands of dollars annually).
+## Current Position (as of February 20, 2026)
+- Next.js migration branch to `16.1.1` is implemented and quality gates are green.
+- Route/runtime compatibility updates for Next 16 are in place.
+- Security baseline improved substantially from original state, but one production high advisory remains tied to current Next release line.
 
-## End Goal Definition
-A fully-featured, production-ready platform with:
-1. Seamless integration with 10+ major LLM providers
-2. Advanced analytics and comparison tools
-3. Enterprise-grade security and compliance
-4. Intuitive UI/UX that delights users
-5. Robust API for custom integrations
-6. Comprehensive documentation and support
-7. Monetization system with licensing and subscriptions
+## Phase 1: Foundation and Reliability
+### Status: Complete
+- Unified app/API structure
+- Stable CI quality gates (`type-check`, `lint`, `tests`, `build`)
+- Build reliability with explicit production env requirements
 
-## Phase 1: Foundation & Stability (Current)
-### Status: ✅ Complete
-### Goals:
-- [x] Unify project structure
-- [x] Fix build process
-- [x] Implement PostgreSQL database
-- [x] Fix authentication system
-- [x] Stabilize core LLM integrations
-- [x] Reduce test failures
+## Phase 2: Security and Dependency Hardening
+### Status: In Progress
+- [x] Move tooling packages out of runtime dependency scope
+- [x] Apply non-breaking audit remediations
+- [x] Land Next.js major upgrade branch (`next@16.1.1`) with compatibility fixes
+- [ ] Consume patched Next.js release that clears the remaining production high advisory
+- [ ] Migrate deprecated `middleware.ts` convention to `proxy.ts`
+- [ ] Separate CI reporting/gating for runtime vs tooling vulnerabilities
 
-### Success Metrics:
-- Zero critical bugs in core functionality
-- All basic features working in development
-- Build process completes without errors
+## Phase 3: Runtime Consolidation
+### Status: In Progress
+- [ ] Remove/retire legacy parallel API client paths
+- [ ] Standardize provider calls through unified provider runtime
+- [ ] Reduce fallback-path duplication across services
 
-## Phase 2: Core Feature Implementation
-### Status: ⏳ In Progress
-### Goals:
-- [ ] Complete API integration for all major LLM providers
-- [ ] Implement real-time streaming for all models
-- [ ] Build comprehensive analytics dashboard
-- [ ] Finish persona management system
-- [ ] Complete goal tracking and pipeline features
-- [ ] Fix all remaining test failures
+## Phase 4: Feature Depth and Observability
+### Status: Planned
+- [ ] Expand analytics and admin diagnostics coverage
+- [ ] Add true external-provider integration smoke coverage
+- [ ] Tighten orchestration telemetry and error budgeting
 
-### Success Metrics:
-- All core features working reliably
-- <5% test failure rate
-- Positive feedback from initial user testing
+## Phase 5: Product and Platform Scale
+### Status: Planned
+- [ ] Team/collaboration depth
+- [ ] Billing/subscription operational hardening
+- [ ] Deployment/documentation workflow polish
 
-## Phase 3: Advanced Features & Scaling
-### Status: 🚀 Not Started
-### Goals:
-- [ ] Implement team/collaboration features
-- [ ] Build advanced workflow automation
-- [ ] Add custom model training capabilities
-- [ ] Create API marketplace for third-party integrations
-- [ ] Develop mobile applications (iOS/Android)
-- [ ] Implement offline functionality
-
-### Success Metrics:
-- Platform handles 1000+ concurrent users
-- 99.9% uptime
-- Positive feedback from beta users
-
-## Phase 4: Enterprise & Monetization
-### Status: 🚀 Not Started
-### Goals:
-- [ ] Implement enterprise-grade security features
-- [ ] Build compliance tools (GDPR, HIPAA, etc.)
-- [ ] Create licensing and subscription system
-- [ ] Develop comprehensive documentation
-- [ ] Establish customer support system
-- [ ] Launch marketing website and sales funnel
-
-### Success Metrics:
-- First paying customers
-- Positive enterprise pilot program feedback
-- $10K+ in initial revenue
-
-## Phase 5: Market Expansion & Growth
-### Status: 🚀 Not Started
-### Goals:
-- [ ] Expand to international markets
-- [ ] Add support for 20+ LLM providers
-- [ ] Build partner ecosystem
-- [ ] Implement advanced AI features (agent workflows, etc.)
-- [ ] Continuous platform improvements based on user feedback
-
-### Success Metrics:
-- $100K+ monthly recurring revenue
-- 1000+ active paying users
-- Industry recognition and awards
-
-## Risk Mitigation
-1. **Feature Creep Prevention**: Every new feature must pass a value assessment - does it directly contribute to user retention or revenue?
-2. **Technical Debt Management**: Allocate 20% of development time to refactoring and improving existing code
-3. **Quality Assurance**: Maintain >95% test coverage for all new features
-4. **User Feedback Integration**: Regular user testing sessions to ensure we're building what users actually want
-5. **Performance Monitoring**: Continuous monitoring of platform performance to prevent degradation
-
-## Success Definition
-We know we've reached our end goal when:
-1. Users consistently rate the platform 4.5+/5 stars
-2. Enterprise customers sign annual contracts worth $10K+
-3. The platform processes 1M+ API calls per day
-4. We have 100+ active paying customers
-5. Industry publications feature us as a leading AI tool
-6. We achieve $1M+ in annual recurring revenue
+## Next 30-Day Execution Priorities
+1. Track and adopt patched Next.js release; re-baseline audits immediately.
+2. Complete middleware-to-proxy migration and remove deprecation warning.
+3. Enforce production-focused vulnerability threshold in CI while tracking tooling advisories separately.

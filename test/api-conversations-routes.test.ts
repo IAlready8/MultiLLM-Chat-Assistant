@@ -30,7 +30,10 @@ vi.mock('@/services/conversation-service.db', () => ({
 
 vi.mock('@/lib/api-metrics-wrapper', () => ({
   withApiMetrics: (
-    handler: (req: Request, ctx?: { params?: Record<string, string> }) => Promise<Response>
+    handler: (
+      req: Request,
+      ctx: { params: Promise<Record<string, string | string[] | undefined>> }
+    ) => Promise<Response>
   ) => handler,
 }))
 
@@ -43,6 +46,9 @@ import {
   POST as addMessages,
   DELETE as deleteConversation,
 } from '@/app/api/conversations/[id]/route'
+
+const rootRouteContext = { params: Promise.resolve({}) }
+const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
 
 describe('/api/conversations routes', () => {
   beforeEach(() => {
@@ -62,7 +68,8 @@ describe('/api/conversations routes', () => {
     ])
 
     const response = await getConversations(
-      new Request('http://localhost/api/conversations')
+      new Request('http://localhost/api/conversations'),
+      rootRouteContext
     )
 
     expect(response.status).toBe(200)
@@ -78,7 +85,8 @@ describe('/api/conversations routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: '', messages: [] }),
-      })
+      }),
+      rootRouteContext
     )
 
     expect(response.status).toBe(400)
@@ -113,7 +121,8 @@ describe('/api/conversations routes', () => {
             },
           ],
         }),
-      })
+      }),
+      rootRouteContext
     )
 
     expect(response.status).toBe(201)
@@ -136,7 +145,7 @@ describe('/api/conversations routes', () => {
 
     const response = await getConversationById(
       new Request('http://localhost/api/conversations/conv-1'),
-      { params: { id: 'conv-1' } }
+      idRouteContext('conv-1')
     )
 
     expect(response.status).toBe(404)
@@ -152,7 +161,7 @@ describe('/api/conversations routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify([]),
       }),
-      { params: { id: 'conv-1' } }
+      idRouteContext('conv-1')
     )
 
     expect(response.status).toBe(400)
@@ -185,7 +194,7 @@ describe('/api/conversations routes', () => {
           },
         ]),
       }),
-      { params: { id: 'conv-1' } }
+      idRouteContext('conv-1')
     )
 
     expect(response.status).toBe(200)
@@ -210,7 +219,7 @@ describe('/api/conversations routes', () => {
       new Request('http://localhost/api/conversations/conv-1', {
         method: 'DELETE',
       }),
-      { params: { id: 'conv-1' } }
+      idRouteContext('conv-1')
     )
 
     expect(response.status).toBe(404)
@@ -225,7 +234,8 @@ describe('/api/conversations routes', () => {
     )
 
     const response = await getConversations(
-      new Request('http://localhost/api/conversations')
+      new Request('http://localhost/api/conversations'),
+      rootRouteContext
     )
 
     expect(response.status).toBe(401)

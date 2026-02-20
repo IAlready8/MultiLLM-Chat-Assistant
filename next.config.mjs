@@ -11,9 +11,6 @@ const nextConfig = {
     formats: ['image/webp', 'image/avif'],
   },
 
-  // Enable swcMinify for better performance
-  swcMinify: true,
-
   // Reduce runtime overhead
   reactStrictMode: true,
 

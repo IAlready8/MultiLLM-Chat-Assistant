@@ -7,7 +7,6 @@ function log(level: Level, event: string, data?: Record<string, any>) {
     event,
     ...data,
   }
-  // eslint-disable-next-line no-console
   console[level](JSON.stringify(entry))
 }
 

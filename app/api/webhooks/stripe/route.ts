@@ -16,7 +16,8 @@ import { prisma } from '@/lib/prisma'
  */
 export async function POST(req: Request) {
   const body = await req.text()
-  const signature = headers().get('Stripe-Signature')
+  const headerStore = await headers()
+  const signature = headerStore.get('Stripe-Signature')
 
   let event: Stripe.Event
 

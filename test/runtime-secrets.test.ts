@@ -5,7 +5,6 @@ const originalNodeEnv = process.env.NODE_ENV
 const originalSeed = process.env.API_KEY_ENCRYPTION_SEED
 
 declare global {
-  // eslint-disable-next-line no-var
   var __multiLlmLoggedMissingApiKeySeed: boolean | undefined
 }
 
