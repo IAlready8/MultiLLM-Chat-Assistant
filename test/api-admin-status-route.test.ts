@@ -44,6 +44,8 @@ vi.mock('@/lib/stripe', () => ({
 
 import { GET } from '@/app/api/admin/status/route'
 
+const routeContext = { params: Promise.resolve({}) }
+
 const originalNodeEnv = process.env.NODE_ENV
 const originalNextAuthSecret = process.env.NEXTAUTH_SECRET
 const originalNextAuthUrl = process.env.NEXTAUTH_URL
@@ -97,14 +99,20 @@ describe('/api/admin/status route', () => {
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )
 
-    const response = await GET(new Request('http://localhost/api/admin/status'))
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
   })
 
   it('returns live status checks with overall ok when probes pass', async () => {
-    const response = await GET(new Request('http://localhost/api/admin/status'))
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
 
     expect(response.status).toBe(200)
     const payload = await response.json()
@@ -121,7 +129,10 @@ describe('/api/admin/status route', () => {
       new Error('Database access is not available in this environment.')
     )
 
-    const response = await GET(new Request('http://localhost/api/admin/status'))
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
     const payload = await response.json()
     const databaseCheck = payload.checks.find(
       (check: { id: string }) => check.id === 'database'
@@ -137,7 +148,10 @@ describe('/api/admin/status route', () => {
     mockIsStrictAuthRequired.mockReturnValue(true)
     setEnvVar('NEXTAUTH_SECRET', undefined)
 
-    const response = await GET(new Request('http://localhost/api/admin/status'))
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
     const payload = await response.json()
     const authCheck = payload.checks.find(
       (check: { id: string }) => check.id === 'auth'

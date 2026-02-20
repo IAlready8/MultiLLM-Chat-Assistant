@@ -22,7 +22,6 @@ export async function* iterNdjson(stream: ReadableStream<Uint8Array>) {
           yield JSON.parse(trimmed)
         } catch (e) {
           // swallow malformed lines
-          // eslint-disable-next-line no-console
           console.warn('ndjson parse error', e)
         }
       }

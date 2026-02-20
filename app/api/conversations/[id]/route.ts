@@ -15,20 +15,25 @@ const addMessagesSchema = z.array(
     })
   ).min(1)
 
+type ConversationRouteContext = {
+  params: Promise<{ id: string }>
+}
+
 /**
  * GET /api/conversations/[id]
  * Retrieves a single, full conversation with all messages.
  */
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  context: ConversationRouteContext
 ) {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
   try {
-    const { id } = params
+    const { params } = context
+    const { id } = await params
     const conversation = await ConversationService.getFullConversation(id, user.id)
 
     if (!conversation) {
@@ -51,14 +56,15 @@ export async function GET(
  */
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  context: ConversationRouteContext
 ) {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
   try {
-    const { id } = params
+    const { params } = context
+    const { id } = await params
     const body = await req.json()
     const validation = addMessagesSchema.safeParse(body)
 
@@ -99,14 +105,15 @@ export async function POST(
  */
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } }
+  context: ConversationRouteContext
 ) {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
   try {
-    const { id } = params
+    const { params } = context
+    const { id } = await params
     const success = await ConversationService.deleteConversation(id, user.id)
 
     if (!success) {

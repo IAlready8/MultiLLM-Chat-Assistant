@@ -51,7 +51,7 @@ export async function getAuthenticatedUser(
   }
 
   if (allowGuest && !strictAuth) {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const hasSessionToken =
       Boolean(cookieStore.get('next-auth.session-token')) ||
       Boolean(cookieStore.get('__Secure-next-auth.session-token'))
