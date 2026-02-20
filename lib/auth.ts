@@ -56,6 +56,18 @@ const inMemoryAuthUsers = new Map<string, InMemoryAuthUser>()
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim()
 const strictAuth = isStrictAuthRequired()
+const buildPreviewFallbackSecret = (): string => {
+  const deploymentId =
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.VERCEL_URL ||
+    process.env.COMMIT_REF ||
+    process.env.NETLIFY ||
+    process.env.URL ||
+    'preview'
+
+  return `non-strict-nextauth-secret-${deploymentId}`
+}
+
 const resolveAuthSecret = (): string => {
   const configuredSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
 
@@ -72,7 +84,10 @@ const resolveAuthSecret = (): string => {
     return 'local-dev-nextauth-secret-change-before-production'
   }
 
-  throw new Error('NEXTAUTH_SECRET is required in production')
+  console.warn(
+    '[auth] NEXTAUTH_SECRET is missing in production while strict auth is disabled; using a deterministic preview fallback secret'
+  )
+  return buildPreviewFallbackSecret()
 }
 
 const authSecret = resolveAuthSecret()
