@@ -91,10 +91,9 @@ fi
 log "Step 3: Dependency Installation"
 
 # Clear cache and node_modules if requested
-if [ "$1" == "--clean" ]; then
+if [ "${1:-}" == "--clean" ]; then
     log "Cleaning node_modules and cache..."
     rm -rf node_modules
-    rm -rf package-lock.json
     npm cache clean --force
 fi
 
@@ -264,7 +263,7 @@ echo "- npm run dev          # Start development server"
 echo "- npm run build        # Build for production"
 echo "- npm run test         # Run tests"
 echo "- npm run lint         # Run linting"
-echo "- npm run validate     # Run all checks"
+echo "- npm run test:run     # Run tests once (CI style)"
 echo ""
 echo "Environment Variables to Configure:"
 echo "- OPENAI_API_KEY (for OpenAI models)"
@@ -272,7 +271,7 @@ echo "- ANTHROPIC_API_KEY (for Claude models)"
 echo "- GOOGLE_AI_API_KEY (for Gemini models)"
 echo "- DATABASE_URL (for database connection)"
 echo ""
-echo "For troubleshooting, see: docs/BUILD_TROUBLESHOOTING.md"
+echo "For troubleshooting, see: docs/DEPLOYMENT_GUIDE.md"
 echo "========================================="
 
 success "Setup completed successfully!"

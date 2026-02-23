@@ -14,7 +14,8 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const { status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
-  const signInUrl = `/auth/signin?callbackUrl=${encodeURIComponent(pathname)}`;
+  const currentPath = pathname ?? '/';
+  const signInUrl = `/auth/signin?callbackUrl=${encodeURIComponent(currentPath)}`;
   const strictAuthEnabled = process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN === 'true';
   const demoBypassEnabled = !strictAuthEnabled && (
     process.env.NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH === 'true' ||
@@ -33,10 +34,10 @@ export function AuthGuard({ children }: AuthGuardProps) {
     if (demoBypassEnabled) {
       return;
     }
-    if (status === "unauthenticated" && !pathname.startsWith("/auth")) {
+    if (status === "unauthenticated" && !currentPath.startsWith("/auth")) {
       router.replace(signInUrl);
     }
-  }, [status, router, pathname, demoBypassEnabled, signInUrl]);
+  }, [status, router, currentPath, demoBypassEnabled, signInUrl]);
 
   useEffect(() => {
     if (status !== "loading") {
@@ -78,7 +79,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     timeoutCycle === loadingCycle;
 
   // Auth pages always render immediately
-  if (pathname.startsWith("/auth")) {
+  if (currentPath.startsWith("/auth")) {
     return <>{children}</>;
   }
 
