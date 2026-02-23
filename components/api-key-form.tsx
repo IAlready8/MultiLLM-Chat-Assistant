@@ -352,7 +352,7 @@ export default function ApiKeyForm() {
                 size="sm"
                 className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                 onClick={() => toggleShowKey(provider.id)}
-                tabIndex={-1}
+                aria-label={showKeys[provider.id] ? "Hide API key" : "Show API key"}
               >
                 {showKeys[provider.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 <span className="sr-only">{showKeys[provider.id] ? "Hide" : "Show"} API key</span>
