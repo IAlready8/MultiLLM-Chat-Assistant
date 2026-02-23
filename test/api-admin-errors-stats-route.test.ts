@@ -22,6 +22,8 @@ vi.mock('@/services/analytics-service', () => ({
 
 import { POST } from '@/app/api/admin/errors/stats/route'
 
+const routeContext = { params: Promise.resolve({}) }
+
 describe('/api/admin/errors/stats route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -49,7 +51,8 @@ describe('/api/admin/errors/stats route', () => {
     const response = await POST(
       new Request('http://localhost/api/admin/errors/stats', {
         method: 'POST',
-      })
+      }),
+      routeContext
     )
 
     expect(response.status).toBe(401)
@@ -65,7 +68,8 @@ describe('/api/admin/errors/stats route', () => {
           from: '2026-02-10T00:00:00.000Z',
           to: '2026-02-01T00:00:00.000Z',
         }),
-      })
+      }),
+      routeContext
     )
 
     expect(response.status).toBe(400)
@@ -106,7 +110,8 @@ describe('/api/admin/errors/stats route', () => {
           from: '2026-02-01T00:00:00.000Z',
           to: '2026-02-10T00:00:00.000Z',
         }),
-      })
+      }),
+      routeContext
     )
 
     expect(response.status).toBe(200)

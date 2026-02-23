@@ -27,7 +27,10 @@ vi.mock('@/services/goal-service.db', () => ({
 
 vi.mock('@/lib/api-metrics-wrapper', () => ({
   withApiMetrics: (
-    handler: (req: Request, ctx?: { params?: Record<string, string> }) => Promise<Response>
+    handler: (
+      req: Request,
+      ctx: { params: Promise<Record<string, string | string[] | undefined>> }
+    ) => Promise<Response>
   ) => handler,
 }))
 
@@ -37,6 +40,9 @@ import {
   PUT as updateGoal,
   DELETE as deleteGoal,
 } from '@/app/api/goals/[id]/route'
+
+const rootRouteContext = { params: Promise.resolve({}) }
+const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
 
 describe('/api/goals routes', () => {
   beforeEach(() => {
@@ -55,7 +61,10 @@ describe('/api/goals routes', () => {
       },
     ])
 
-    const response = await getGoals(new Request('http://localhost/api/goals'))
+    const response = await getGoals(
+      new Request('http://localhost/api/goals'),
+      rootRouteContext
+    )
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toHaveLength(1)
@@ -68,7 +77,8 @@ describe('/api/goals routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: '' }),
-      })
+      }),
+      rootRouteContext
     )
 
     expect(response.status).toBe(400)
@@ -90,7 +100,8 @@ describe('/api/goals routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'Ship release' }),
-      })
+      }),
+      rootRouteContext
     )
 
     expect(response.status).toBe(201)
@@ -109,7 +120,7 @@ describe('/api/goals routes', () => {
 
     const response = await getGoalById(
       new Request('http://localhost/api/goals/goal-1'),
-      { params: { id: 'goal-1' } }
+      idRouteContext('goal-1')
     )
 
     expect(response.status).toBe(404)
@@ -123,7 +134,7 @@ describe('/api/goals routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       }),
-      { params: { id: 'goal-1' } }
+      idRouteContext('goal-1')
     )
 
     expect(response.status).toBe(400)
@@ -146,7 +157,7 @@ describe('/api/goals routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'done', description: 'updated' }),
       }),
-      { params: { id: 'goal-1' } }
+      idRouteContext('goal-1')
     )
 
     expect(response.status).toBe(200)
@@ -162,7 +173,7 @@ describe('/api/goals routes', () => {
 
     const response = await deleteGoal(
       new Request('http://localhost/api/goals/goal-1', { method: 'DELETE' }),
-      { params: { id: 'goal-1' } }
+      idRouteContext('goal-1')
     )
 
     expect(response.status).toBe(200)
@@ -174,7 +185,10 @@ describe('/api/goals routes', () => {
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )
 
-    const response = await getGoals(new Request('http://localhost/api/goals'))
+    const response = await getGoals(
+      new Request('http://localhost/api/goals'),
+      rootRouteContext
+    )
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })

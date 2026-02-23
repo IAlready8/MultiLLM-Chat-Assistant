@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { GoalService } from '@/services/goal-service.db'
-import { withApiMetrics } from '@/lib/api-metrics-wrapper'
+import {
+  withApiMetrics,
+  type MetricsRouteContext,
+} from '@/lib/api-metrics-wrapper'
 
 const goalStatusSchema = z.enum([
   'not-started',
@@ -30,18 +33,25 @@ const updateGoalSchema = z
     { message: 'At least one field must be provided' }
   )
 
+const getGoalIdFromContext = async (
+  ctx: MetricsRouteContext
+): Promise<string> => {
+  const rawId = (await ctx.params).id
+  return Array.isArray(rawId) ? rawId[0] ?? '' : rawId ?? ''
+}
+
 /**
  * GET /api/goals/[id]
  * Returns one goal for the authenticated user.
  */
 export const GET = withApiMetrics(async (
   _req: Request,
-  ctx?: { params?: Record<string, string> }
+  ctx: MetricsRouteContext
 ) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
-  const id = ctx?.params?.id ?? ''
+  const id = await getGoalIdFromContext(ctx)
 
   try {
     const goal = await GoalService.getGoalById(id, user.id)
@@ -61,12 +71,12 @@ export const GET = withApiMetrics(async (
  */
 export const PUT = withApiMetrics(async (
   req: Request,
-  ctx?: { params?: Record<string, string> }
+  ctx: MetricsRouteContext
 ) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
-  const id = ctx?.params?.id ?? ''
+  const id = await getGoalIdFromContext(ctx)
 
   const body = await req.json()
   const validation = updateGoalSchema.safeParse(body)
@@ -95,12 +105,12 @@ export const PUT = withApiMetrics(async (
  */
 export const DELETE = withApiMetrics(async (
   _req: Request,
-  ctx?: { params?: Record<string, string> }
+  ctx: MetricsRouteContext
 ) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
-  const id = ctx?.params?.id ?? ''
+  const id = await getGoalIdFromContext(ctx)
 
   try {
     const deleted = await GoalService.deleteGoal(id, user.id)

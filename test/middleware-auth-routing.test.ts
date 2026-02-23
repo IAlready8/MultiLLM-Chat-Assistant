@@ -7,7 +7,7 @@ vi.mock('next-auth/jwt', () => ({
   getToken: (...args: unknown[]) => mockGetToken(...args),
 }))
 
-import { middleware } from '@/middleware'
+import { proxy } from '@/proxy'
 
 const originalAuthRequireLogin = process.env.AUTH_REQUIRE_LOGIN
 const originalPublicAuthRequireLogin = process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN
@@ -23,7 +23,7 @@ const setEnvVar = (key: string, value: string | undefined) => {
   }
 }
 
-describe('middleware strict-auth routing', () => {
+describe('proxy strict-auth routing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetToken.mockResolvedValue(null)
@@ -41,7 +41,7 @@ describe('middleware strict-auth routing', () => {
     setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'false')
 
     const request = new NextRequest('http://localhost:3000/api/conversations')
-    const response = await middleware(request)
+    const response = await proxy(request)
 
     expect(response.status).toBe(200)
     expect(mockGetToken).not.toHaveBeenCalled()
@@ -52,7 +52,7 @@ describe('middleware strict-auth routing', () => {
     setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
 
     const request = new NextRequest('http://localhost:3000/api/health')
-    const response = await middleware(request)
+    const response = await proxy(request)
 
     expect(response.status).toBe(200)
     expect(mockGetToken).not.toHaveBeenCalled()
@@ -63,7 +63,7 @@ describe('middleware strict-auth routing', () => {
     setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
 
     const request = new NextRequest('http://localhost:3000/api/webhooks/stripe')
-    const response = await middleware(request)
+    const response = await proxy(request)
 
     expect(response.status).toBe(200)
     expect(mockGetToken).not.toHaveBeenCalled()
@@ -76,7 +76,7 @@ describe('middleware strict-auth routing', () => {
     setEnvVar('AUTH_SECRET', undefined)
 
     const request = new NextRequest('http://localhost:3000/api/conversations')
-    const response = await middleware(request)
+    const response = await proxy(request)
 
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toEqual({
@@ -92,7 +92,7 @@ describe('middleware strict-auth routing', () => {
     setEnvVar('AUTH_SECRET', undefined)
 
     const request = new NextRequest('http://localhost:3000/settings')
-    const response = await middleware(request)
+    const response = await proxy(request)
 
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toContain('/auth/error')
@@ -106,7 +106,7 @@ describe('middleware strict-auth routing', () => {
     setEnvVar('NEXTAUTH_SECRET', 'test-secret')
 
     const request = new NextRequest('http://localhost:3000/api/conversations')
-    const response = await middleware(request)
+    const response = await proxy(request)
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
@@ -119,7 +119,7 @@ describe('middleware strict-auth routing', () => {
     setEnvVar('NEXTAUTH_SECRET', 'test-secret')
 
     const request = new NextRequest('http://localhost:3000/settings')
-    const response = await middleware(request)
+    const response = await proxy(request)
 
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toContain('/auth/signin')

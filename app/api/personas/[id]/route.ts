@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { PersonaService } from '@/services/persona-service.db'
-import { withApiMetrics } from '@/lib/api-metrics-wrapper'
+import {
+  withApiMetrics,
+  type MetricsRouteContext,
+} from '@/lib/api-metrics-wrapper'
 import { z } from 'zod'
 
 // Zod schema for updating a persona
@@ -15,18 +18,25 @@ const updatePersonaSchema = z.object({
   model: z.string().optional(),
 })
 
+const getPersonaIdFromContext = async (
+  ctx: MetricsRouteContext
+): Promise<string> => {
+  const rawId = (await ctx.params).id
+  return Array.isArray(rawId) ? rawId[0] ?? '' : rawId ?? ''
+}
+
 /**
  * GET /api/personas/[id]
  * Retrieves a single persona by ID for the authenticated user.
  */
 export const GET = withApiMetrics(async (
   _req: Request,
-  ctx?: { params?: Record<string, string> }
+  ctx: MetricsRouteContext
 ) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
-  const id = ctx?.params?.id ?? ''
+  const id = await getPersonaIdFromContext(ctx)
 
   try {
     const persona = await PersonaService.getPersonaById(id, user.id)
@@ -48,12 +58,12 @@ export const GET = withApiMetrics(async (
  */
 export const PUT = withApiMetrics(async (
   req: Request,
-  ctx?: { params?: Record<string, string> }
+  ctx: MetricsRouteContext
 ) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
-  const id = ctx?.params?.id ?? ''
+  const id = await getPersonaIdFromContext(ctx)
 
   try {
     const body = await req.json()
@@ -106,12 +116,12 @@ export const PUT = withApiMetrics(async (
  */
 export const DELETE = withApiMetrics(async (
   _req: Request,
-  ctx?: { params?: Record<string, string> }
+  ctx: MetricsRouteContext
 ) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
-  const id = ctx?.params?.id ?? ''
+  const id = await getPersonaIdFromContext(ctx)
 
   try {
     const success = await PersonaService.deletePersona(id, user.id)
