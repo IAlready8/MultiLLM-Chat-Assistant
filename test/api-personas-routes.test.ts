@@ -31,7 +31,10 @@ vi.mock('@/services/persona-service.db', () => ({
 
 vi.mock('@/lib/api-metrics-wrapper', () => ({
   withApiMetrics: (
-    handler: (req: Request, ctx?: { params?: Record<string, string> }) => Promise<Response>
+    handler: (
+      req: Request,
+      ctx: { params: Promise<Record<string, string | string[] | undefined>> }
+    ) => Promise<Response>
   ) => handler,
 }))
 
@@ -44,6 +47,9 @@ import {
   PUT as updatePersona,
   DELETE as deletePersona,
 } from '@/app/api/personas/[id]/route'
+
+const rootRouteContext = { params: Promise.resolve({}) }
+const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
 
 describe('/api/personas routes', () => {
   beforeEach(() => {
@@ -64,7 +70,10 @@ describe('/api/personas routes', () => {
       },
     ])
 
-    const response = await getPersonas(new Request('http://localhost/api/personas'))
+    const response = await getPersonas(
+      new Request('http://localhost/api/personas'),
+      rootRouteContext
+    )
 
     expect(response.status).toBe(200)
     const body = await response.json()
@@ -79,7 +88,8 @@ describe('/api/personas routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
-      })
+      }),
+      rootRouteContext
     )
 
     expect(response.status).toBe(400)
@@ -108,7 +118,8 @@ describe('/api/personas routes', () => {
           systemPrompt: 'Think in trade-offs',
           description: 'Designs systems',
         }),
-      })
+      }),
+      rootRouteContext
     )
 
     expect(response.status).toBe(201)
@@ -127,7 +138,7 @@ describe('/api/personas routes', () => {
 
     const response = await getPersonaById(
       new Request('http://localhost/api/personas/persona-1'),
-      { params: { id: 'persona-1' } }
+      idRouteContext('persona-1')
     )
 
     expect(response.status).toBe(404)
@@ -141,7 +152,7 @@ describe('/api/personas routes', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider: 'openai' }),
       }),
-      { params: { id: 'persona-1' } }
+      idRouteContext('persona-1')
     )
 
     expect(response.status).toBe(400)
@@ -171,7 +182,7 @@ describe('/api/personas routes', () => {
           description: 'Updated',
         }),
       }),
-      { params: { id: 'persona-1' } }
+      idRouteContext('persona-1')
     )
 
     expect(response.status).toBe(200)
@@ -193,7 +204,7 @@ describe('/api/personas routes', () => {
       new Request('http://localhost/api/personas/persona-1', {
         method: 'DELETE',
       }),
-      { params: { id: 'persona-1' } }
+      idRouteContext('persona-1')
     )
 
     expect(response.status).toBe(200)
@@ -209,7 +220,10 @@ describe('/api/personas routes', () => {
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )
 
-    const response = await getPersonas(new Request('http://localhost/api/personas'))
+    const response = await getPersonas(
+      new Request('http://localhost/api/personas'),
+      rootRouteContext
+    )
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })

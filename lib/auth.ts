@@ -4,6 +4,7 @@ import GoogleProvider from 'next-auth/providers/google'
 import GitHubProvider from 'next-auth/providers/github'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
+import { randomBytes } from 'crypto'
 import prisma from '@/lib/prisma'
 import { checkAndConsume } from '@/lib/rate-limit'
 import {
@@ -56,6 +57,15 @@ const inMemoryAuthUsers = new Map<string, InMemoryAuthUser>()
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim()
 const strictAuth = isStrictAuthRequired()
+let previewFallbackSecret: string | null = null
+
+const buildPreviewFallbackSecret = (): string => {
+  if (!previewFallbackSecret) {
+    previewFallbackSecret = randomBytes(32).toString('hex')
+  }
+  return previewFallbackSecret
+}
+
 const resolveAuthSecret = (): string => {
   const configuredSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
 
@@ -72,7 +82,10 @@ const resolveAuthSecret = (): string => {
     return 'local-dev-nextauth-secret-change-before-production'
   }
 
-  throw new Error('NEXTAUTH_SECRET is required in production')
+  console.warn(
+    '[auth] NEXTAUTH_SECRET is missing in production while strict auth is disabled; using an ephemeral fallback secret'
+  )
+  return buildPreviewFallbackSecret()
 }
 
 const authSecret = resolveAuthSecret()

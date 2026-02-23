@@ -15,11 +15,16 @@ vi.mock('@/services/analytics-service', () => ({
 
 vi.mock('@/lib/api-metrics-wrapper', () => ({
   withApiMetrics: (
-    handler: (req: Request, ctx?: { params?: Record<string, string> }) => Promise<Response>
+    handler: (
+      req: Request,
+      ctx: { params: Promise<Record<string, string | string[] | undefined>> }
+    ) => Promise<Response>
   ) => handler,
 }))
 
 import { GET } from '@/app/api/analytics/route'
+
+const routeContext = { params: Promise.resolve({}) }
 
 describe('/api/analytics route', () => {
   beforeEach(() => {
@@ -32,7 +37,10 @@ describe('/api/analytics route', () => {
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )
 
-    const response = await GET(new Request('http://localhost/api/analytics'))
+    const response = await GET(
+      new Request('http://localhost/api/analytics'),
+      routeContext
+    )
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
@@ -63,7 +71,10 @@ describe('/api/analytics route', () => {
       },
     ])
 
-    const response = await GET(new Request('http://localhost/api/analytics'))
+    const response = await GET(
+      new Request('http://localhost/api/analytics'),
+      routeContext
+    )
 
     expect(response.status).toBe(200)
     const body = await response.json()
@@ -94,7 +105,8 @@ describe('/api/analytics route', () => {
     mockGetParsedAnalyticsEvents.mockResolvedValue([])
 
     const response = await GET(
-      new Request('http://localhost/api/analytics?timeframe=24h')
+      new Request('http://localhost/api/analytics?timeframe=24h'),
+      routeContext
     )
 
     expect(response.status).toBe(200)
@@ -110,7 +122,10 @@ describe('/api/analytics route', () => {
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const response = await GET(new Request('http://localhost/api/analytics'))
+    const response = await GET(
+      new Request('http://localhost/api/analytics'),
+      routeContext
+    )
 
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toEqual({

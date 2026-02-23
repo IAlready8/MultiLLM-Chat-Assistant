@@ -28,7 +28,7 @@ const isStaticAsset = (pathname: string): boolean =>
   pathname.endsWith('.ico') ||
   pathname.endsWith('.svg')
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Always allow static assets and public auth routes
