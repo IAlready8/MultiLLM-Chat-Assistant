@@ -98,7 +98,8 @@ Copy `.env.example` to `.env.local` and configure:
 
 ## CI/CD Pipeline
 
-Not configured in this repo. Add a workflow for lint, type-check, tests, and build if needed.
+Configured in `.github/workflows/ci.yml`.
+Current pipeline runs install, Prisma generate, type-check, lint, test (`test:run`), build, and smoke checks.
 
 ## Known Architecture Notes
 

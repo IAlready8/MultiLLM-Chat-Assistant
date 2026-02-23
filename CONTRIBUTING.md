@@ -35,4 +35,4 @@ When you're ready to submit a pull request, please make sure to:
 
 ### Code Style
 
-This project uses [Prettier](https://prettier.io/) to format code. Please make sure to run `npm run format` before committing your changes.
+This project uses [Prettier](https://prettier.io/) to format code. Please run `npx prettier --write .` before committing your changes.
