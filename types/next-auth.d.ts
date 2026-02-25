@@ -1,6 +1,9 @@
-import NextAuth, { DefaultSession } from "next-auth"
+import NextAuth, { DefaultSession } from 'next-auth'
 
-declare module "next-auth" {
+type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
+type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER'
+
+declare module 'next-auth' {
   /**
    * Returned by `useSession`, `getSession` and received as a prop on the `SessionProvider` React Context
    */
@@ -8,6 +11,16 @@ declare module "next-auth" {
     user: {
       /** The user's id. */
       id: string
-    } & DefaultSession["user"]
+      role: TeamRole
+      tier: SubscriptionTier
+    } & DefaultSession['user']
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id?: string
+    role?: TeamRole
+    tier?: SubscriptionTier
   }
 }

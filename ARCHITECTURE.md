@@ -6,7 +6,7 @@
 - Keep deployment/release flow production-safe with CI, smoke tests, and runtime verification.
 
 ## Core Stack
-- App/UI: Next.js 14 (App Router), React, TypeScript
+- App/UI: Next.js 16 (App Router), React, TypeScript
 - Styling/UI primitives: Tailwind CSS + Radix UI patterns
 - Auth/session: NextAuth + custom auth helpers (`lib/auth.ts`, `lib/api-auth.ts`)
 - API layer: Route Handlers under `app/api/*`
@@ -61,7 +61,7 @@ Primary auth files:
 - `lib/auth.ts`
 - `lib/api-auth.ts`
 - `lib/demo-account.ts`
-- `middleware.ts`
+- `proxy.ts`
 
 ## Persistence and Fallback Model
 - `lib/prisma.ts`:

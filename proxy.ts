@@ -45,13 +45,29 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  const authSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
+
+  if (!authSecret) {
+    const message =
+      'Authentication misconfigured: set NEXTAUTH_SECRET or AUTH_SECRET when strict auth is enabled.'
+    console.error(message)
+
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'Server authentication is not configured.' },
+        { status: 500 },
+      )
+    }
+
+    const errorUrl = new URL('/auth/error', request.url)
+    errorUrl.searchParams.set('error', 'Configuration')
+    return NextResponse.redirect(errorUrl)
+  }
+
   // In strict auth mode, verify JWT token exists
   const token = await getToken({
     req: request,
-    secret:
-      process.env.NEXTAUTH_SECRET ||
-      process.env.AUTH_SECRET ||
-      'local-dev-nextauth-secret-change-before-production',
+    secret: authSecret,
   })
 
   if (!token) {

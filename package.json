@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack",
-    "build": "prisma generate && next build --webpack",
+    "dev": "npm run dev:webpack",
+    "dev:webpack": "next dev --webpack",
+    "dev:turbopack": "next dev --turbopack",
+    "build": "npm run build:webpack",
+    "build:webpack": "prisma generate && next build --webpack",
+    "build:turbopack": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
@@ -58,6 +62,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.6.4",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",

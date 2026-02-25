@@ -60,20 +60,29 @@ else
 fi
 
 section "Critical Routing Guards"
-if rg -n "'/api/health'|\"/api/health\"" middleware.ts >/dev/null 2>&1; then
-  ok "Strict-auth middleware includes /api/health public exemption"
+ROUTING_GUARD_FILE=""
+if [[ -f "proxy.ts" ]]; then
+  ROUTING_GUARD_FILE="proxy.ts"
+elif [[ -f "middleware.ts" ]]; then
+  ROUTING_GUARD_FILE="middleware.ts"
 else
-  block "Missing /api/health public exemption in middleware"
+  block "No routing guard file found (expected proxy.ts or middleware.ts)"
 fi
 
-if rg -n "'/api/webhooks'|\"/api/webhooks\"" middleware.ts >/dev/null 2>&1; then
-  ok "Strict-auth middleware includes /api/webhooks public exemption"
+if [[ -n "$ROUTING_GUARD_FILE" ]] && rg -n "'/api/health'|\"/api/health\"" "$ROUTING_GUARD_FILE" >/dev/null 2>&1; then
+  ok "Strict-auth routing guard includes /api/health public exemption (${ROUTING_GUARD_FILE})"
 else
-  block "Missing /api/webhooks public exemption in middleware"
+  block "Missing /api/health public exemption in ${ROUTING_GUARD_FILE:-routing guard file}"
+fi
+
+if [[ -n "$ROUTING_GUARD_FILE" ]] && rg -n "'/api/webhooks'|\"/api/webhooks\"" "$ROUTING_GUARD_FILE" >/dev/null 2>&1; then
+  ok "Strict-auth routing guard includes /api/webhooks public exemption (${ROUTING_GUARD_FILE})"
+else
+  block "Missing /api/webhooks public exemption in ${ROUTING_GUARD_FILE:-routing guard file}"
 fi
 
 section "Provider / Streaming Contract Drift"
-if rg -n "NotImplementedError\('AnthropicService|NotImplementedError\('GoogleAIService" services/llm-providers >/dev/null 2>&1; then
+if rg -n "NotImplementedError\('AnthropicService|NotImplementedError\('GoogleAIService" services lib src/core >/dev/null 2>&1; then
   warn "Provider service layer still contains placeholders (Anthropic/Google). /api/llm/chat and /api/llm/stream are not fully unified."
 else
   ok "Provider services do not contain placeholder NotImplementedError stubs"

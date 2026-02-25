@@ -18,10 +18,10 @@ Essential commands for working in this codebase:
 
 ## Architecture Overview
 
-This is a Next.js 14 App Router application with the following key architecture:
+This is a Next.js 16 App Router application with the following key architecture:
 
 ### Core Stack
-- **Frontend**: Next.js 14 (App Router), React 18, TypeScript
+- **Frontend**: Next.js 16 (App Router), React 18, TypeScript
 - **Styling**: Tailwind CSS + Radix UI primitives + Class Variance Authority (CVA)
 - **Database**: Prisma ORM with PostgreSQL
 - **Authentication**: NextAuth.js v4 with Prisma adapter
@@ -98,7 +98,8 @@ Copy `.env.example` to `.env.local` and configure:
 
 ## CI/CD Pipeline
 
-Not configured in this repo. Add a workflow for lint, type-check, tests, and build if needed.
+Configured in `.github/workflows/ci.yml`.
+Current pipeline runs install, Prisma generate, type-check, lint, test (`test:run`), build, and smoke checks.
 
 ## Known Architecture Notes
 

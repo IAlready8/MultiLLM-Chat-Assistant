@@ -55,12 +55,12 @@ export default function SignInPage() {
   const shouldAttemptGuestMigration = !strictAuthEnabled
 
   const callbackUrl = useMemo(() => {
-    const callback = searchParams.get('callbackUrl')
+    const callback = searchParams?.get('callbackUrl')
     return callback && callback.startsWith('/') ? callback : '/'
   }, [searchParams])
 
   const postAuthUpgrade = useMemo(
-    () => searchParams.get('postAuth') === '1',
+    () => searchParams?.get('postAuth') === '1',
     [searchParams]
   )
 

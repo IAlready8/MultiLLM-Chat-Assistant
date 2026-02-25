@@ -12,8 +12,9 @@ set -e # Exit on any error
 echo "🚀 Starting RealMultiLLM deployment process..."
 
 # Check Node version
-if ! node -v | grep -q "v1[68]"; then
-  echo "❌ Node.js version 16 or 18 is required"
+NODE_MAJOR="$(node -p "process.versions.node.split('.')[0]")"
+if [ "$NODE_MAJOR" -lt 20 ]; then
+  echo "❌ Node.js version 20 or newer is required"
   exit 1
 fi
 
@@ -35,7 +36,11 @@ fi
 
 # Clean previous build files
 echo "🧹 Cleaning previous build artifacts..."
-npm run clean
+if npm run -s clean >/dev/null 2>&1; then
+  npm run clean
+else
+  rm -rf .next
+fi
 
 # Install dependencies with memory optimization
 echo "📦 Installing dependencies..."
@@ -52,7 +57,7 @@ npm run type-check
 
 # Run lightweight tests (skip heavy tests on resource-constrained machines)
 echo "🧪 Running critical tests only..."
-LIGHTWEIGHT_TESTS=true npm test -- --run
+LIGHTWEIGHT_TESTS=true npm run test:run
 
 # Build the application
 echo "🏗️ Building the application..."
