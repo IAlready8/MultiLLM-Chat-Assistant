@@ -5,7 +5,7 @@
 [![Last Commit](https://img.shields.io/github/last-commit/IAlready8/MultiLLM-Chat-Assistant/main)](https://github.com/IAlready8/MultiLLM-Chat-Assistant/commits/main)
 [![Open Issues](https://img.shields.io/github/issues/IAlready8/MultiLLM-Chat-Assistant)](https://github.com/IAlready8/MultiLLM-Chat-Assistant/issues)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js&logoColor=white)](https://nextjs.org)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org)
 
 Multi-LLM web app for chat, personas, analytics, comparison workflows, pipelines, and AI Roundtable.
 
@@ -31,6 +31,10 @@ Setup:
    - `AUTH_REQUIRE_LOGIN` / `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN` (optional; defaults to guest-friendly mode)
 4. Start dev server: `npm run dev`
 
+Package manager:
+- Source-of-truth lockfile is `package-lock.json` (npm workflow).
+- `pnpm-lock.yaml` is retained as an archival snapshot and is not used by CI.
+
 ## Auth Modes
 - Guest/demo mode (default for local dev):
   - `AUTH_REQUIRE_LOGIN=false`
@@ -42,8 +46,12 @@ Setup:
   - Requires real session auth and explicit `NEXTAUTH_SECRET`.
 
 ## Scripts
-- `npm run dev`: Start Next.js dev server
-- `npm run build`: Create production build
+- `npm run dev`: Start Next.js dev server (webpack mode, default)
+- `npm run dev:webpack`: Start dev server in webpack mode explicitly
+- `npm run dev:turbopack`: Start dev server in Turbopack mode for migration validation
+- `npm run build`: Create production build (webpack mode, default)
+- `npm run build:webpack`: Build explicitly in webpack mode
+- `npm run build:turbopack`: Build in Turbopack mode for migration validation
 - `npm run start`: Start production server
 - `npm run lint`: ESLint (`--max-warnings=0`)
 - `npm run type-check`: TypeScript checks

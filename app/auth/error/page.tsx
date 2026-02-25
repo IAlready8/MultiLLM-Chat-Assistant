@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
-const resolveErrorMessage = (error: string | null) => {
+const resolveErrorMessage = (error: string | null | undefined) => {
   switch (error) {
     case 'Configuration':
       return 'Authentication is not configured correctly. Check your auth environment settings.'
@@ -22,7 +22,7 @@ const resolveErrorMessage = (error: string | null) => {
 
 export default function AuthErrorPage() {
   const searchParams = useSearchParams()
-  const error = searchParams.get('error')
+  const error = searchParams?.get('error')
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">

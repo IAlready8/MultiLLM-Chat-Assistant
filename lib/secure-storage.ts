@@ -7,7 +7,7 @@ let storageEncryptionKeyPromise: Promise<string> | null = null;
 
 const generateRuntimeKey = async (): Promise<string> => {
   // Allow explicit override for deterministic test environments.
-  const configuredKey = process.env.SECURE_STORAGE_KEY?.trim();
+  const configuredKey = process.env.NEXT_PUBLIC_SECURE_STORAGE_KEY?.trim();
   if (configuredKey) {
     return configuredKey;
   }

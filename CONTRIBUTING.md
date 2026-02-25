@@ -4,7 +4,7 @@ First off, thank you for considering contributing to this project! Any and all a
 
 ## Where do I start?
 
-If you're looking for a place to start, you can check out the [open issues](https://github.com/IAlready8/realmultillmnovember/issues).
+If you're looking for a place to start, you can check out the [open issues](https://github.com/IAlready8/MultiLLM-Chat-Assistant/issues).
 
 ## How do I contribute?
 
@@ -23,6 +23,15 @@ When you're ready to submit a pull request, please make sure to:
 1.  **Update the `CHANGELOG.md`:** If your changes are notable, please add an entry to the `CHANGELOG.md` file.
 2.  **Provide a clear description:** Explain the "what" and "why" of your changes.
 3.  **Link to any relevant issues:** If your pull request addresses an open issue, please link to it.
+
+### Local Quality Gates (Required Before PR)
+
+Run these locally before opening a pull request:
+
+1. `npm run lint`
+2. `npm run type-check`
+3. `npm run test:run`
+4. `npm run build`
 
 ## Styleguides
 

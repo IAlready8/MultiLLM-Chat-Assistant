@@ -102,7 +102,7 @@ if (typeof window === 'undefined') {
 
 ### ✅ Development Server:
 ```bash
-✓ Server running on: http://localhost:3008
+✓ Server running on: http://localhost:3000
 ✓ Hot reload working
 ✓ API routes functional
 ✓ Authentication working
@@ -165,6 +165,6 @@ if (typeof window === 'undefined') {
 
 **The Multi-LLM Chat Assistant is now fully operational and production-ready!** 🚀
 
-**Development Server**: http://localhost:3008  
+**Development Server**: http://localhost:3000  
 **Build Status**: ✅ SUCCESSFUL  
 **All Systems**: ✅ OPERATIONAL
