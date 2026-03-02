@@ -58,8 +58,6 @@ const inMemoryAuthUsers = new Map<string, InMemoryAuthUser>()
 const normalizeEmail = (email: string) => email.toLowerCase().trim()
 validateStartupEnvironment()
 const strictAuth = isStrictAuthRequired()
-const allowInMemoryAuthFallback =
-  process.env.NODE_ENV !== 'production' && !strictAuth
 
 const resolveAuthSecret = (): string => {
   const configuredSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET

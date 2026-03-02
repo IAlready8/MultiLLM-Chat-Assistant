@@ -158,7 +158,7 @@ Configure once in Vercel Project Settings:
    - `NEXTAUTH_SECRET`
    - `NEXTAUTH_URL`
    - `API_KEY_ENCRYPTION_SEED`
-   - `DATABASE_URL`
+   - `DATABASE_URL` (if your runtime/build path needs it)
    - CLI shortcut:
      - `vercel env add NEXTAUTH_SECRET production && vercel env add NEXTAUTH_SECRET preview`
      - `vercel env add NEXTAUTH_URL production && vercel env add NEXTAUTH_URL preview`
