@@ -1,6 +1,31 @@
-import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { v4 as uuidv4 } from 'uuid'
+
+type AnalyticsRow = { payload?: string | null }
+type AnalyticsDelegate = {
+  create: (args: unknown) => Promise<unknown>
+  findMany: (args: unknown) => Promise<AnalyticsRow[]>
+}
+type PrismaLike = { analytics: AnalyticsDelegate }
+
+let prismaClientPromise: Promise<PrismaLike | null> | null = null
+
+async function getPrismaClient(): Promise<PrismaLike | null> {
+  if (typeof window !== 'undefined') {
+    return null
+  }
+
+  if (!prismaClientPromise) {
+    prismaClientPromise = import('@/lib/prisma')
+      .then((mod) => (mod.default ?? (mod as unknown as { prisma: PrismaLike }).prisma) as PrismaLike)
+      .catch((error) => {
+        console.warn('Prisma client unavailable in error-system:', error)
+        return null
+      })
+  }
+
+  return prismaClientPromise
+}
 
 // Error categories for better classification
 export enum ErrorCategory {
@@ -258,20 +283,23 @@ export class ErrorManager {
       // Persist critical errors for analytics/inspection
       if (appError.severity === ErrorSeverity.CRITICAL) {
         try {
-          await prisma.analytics.create({
-            data: {
-              id: uuidv4(),
-              event: 'error',
-              payload: JSON.stringify({
-                code: appError.code,
-                category: appError.category,
-                severity: appError.severity,
-                message: appError.message,
-              }),
-              // Analytics.userId is required in schema; default to 'system' if absent
-              userId: appError.context.userId ?? 'system',
-            },
-          })
+          const prisma = await getPrismaClient()
+          if (prisma) {
+            await prisma.analytics.create({
+              data: {
+                id: uuidv4(),
+                event: 'error',
+                payload: JSON.stringify({
+                  code: appError.code,
+                  category: appError.category,
+                  severity: appError.severity,
+                  message: appError.message,
+                }),
+                // Analytics.userId is required in schema; default to 'system' if absent
+                userId: appError.context.userId ?? 'system',
+              },
+            })
+          }
         } catch (persistErr) {
           // swallow persistence errors in logger
         }

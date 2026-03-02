@@ -129,7 +129,14 @@ export class ConfigurationManager {
 
       const encryptionKey = await getEncryptionKey()
       const decryptedApiKey = config.apiKey ? await aesGcmDecrypt(encryptionKey, config.apiKey) : ''
-      const settings = config.settings ? JSON.parse(config.settings) : {}
+      let settings: Record<string, unknown> = {}
+      if (config.settings) {
+        try {
+          settings = JSON.parse(config.settings)
+        } catch (error) {
+          console.error('Failed to parse provider settings JSON:', error)
+        }
+      }
 
       const providerConfig: ProviderConfig = {
         apiKey: decryptedApiKey,
@@ -301,7 +308,14 @@ export class ConfigurationManager {
 
       for (const config of configs) {
         const decryptedApiKey = config.apiKey ? await aesGcmDecrypt(encryptionKey, config.apiKey) : ''
-        const settings = config.settings ? JSON.parse(config.settings) : {}
+        let settings: Record<string, unknown> = {}
+        if (config.settings) {
+          try {
+            settings = JSON.parse(config.settings)
+          } catch (error) {
+            console.error(`Failed to parse provider settings JSON for ${config.provider}:`, error)
+          }
+        }
 
         result[config.provider] = {
           apiKey: decryptedApiKey,
