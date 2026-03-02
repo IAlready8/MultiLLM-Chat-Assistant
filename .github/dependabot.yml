@@ -16,7 +16,7 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
-    # Auto-merge patch and minor updates
+    # Use 'increase' strategy for updating dependency version ranges
     versioning-strategy: increase
 
   # GitHub Actions
