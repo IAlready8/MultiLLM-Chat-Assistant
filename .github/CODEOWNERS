@@ -1,0 +1,34 @@
+# Code Owners
+# Each line is a file pattern followed by one or more owners.
+# Owners will be auto-assigned as reviewers when PRs modify matching files.
+
+# Default owner for everything
+* @IAlready8
+
+# Frontend components and pages
+/app/ @IAlready8
+/components/ @IAlready8
+/hooks/ @IAlready8
+
+# Backend API and services
+/app/api/ @IAlready8
+/lib/ @IAlready8
+/services/ @IAlready8
+
+# Database and schema
+/prisma/ @IAlready8
+
+# CI/CD and DevOps
+/.github/ @IAlready8
+/scripts/ @IAlready8
+
+# Security-sensitive files
+/**/auth*.ts @IAlready8
+/**/api-key*.ts @IAlready8
+/**/secure-storage.ts @IAlready8
+/middleware.ts @IAlready8
+
+# Configuration
+package.json @IAlready8
+tsconfig.json @IAlready8
+.env.example @IAlready8

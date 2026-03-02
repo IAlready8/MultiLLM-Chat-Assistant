@@ -1,0 +1,48 @@
+# Auto-label PRs based on changed files
+
+'area: frontend':
+  - 'app/**/page.tsx'
+  - 'app/**/layout.tsx'
+  - 'app/**/loading.tsx'
+  - 'app/**/error.tsx'
+  - 'components/**/*'
+  - 'hooks/**/*'
+
+'area: backend':
+  - 'app/api/**/*'
+  - 'lib/**/*'
+  - 'services/**/*'
+  - 'middleware.ts'
+
+'area: database':
+  - 'prisma/**/*'
+
+'area: tests':
+  - 'test/**/*'
+  - 'tests/**/*'
+  - 'vitest.config.ts'
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+
+'area: ci/cd':
+  - '.github/workflows/**/*'
+  - 'scripts/**/*.sh'
+
+'area: docs':
+  - '*.md'
+  - 'docs/**/*'
+  - '.github/*.md'
+
+'dependencies':
+  - 'package.json'
+  - 'package-lock.json'
+
+'security':
+  - '**/auth*.ts'
+  - '**/secure-storage.ts'
+  - '**/api-key-service.ts'
+  - 'lib/crypto*.ts'
+
+'performance':
+  - '**/cache*.ts'
+  - '**/rate-limit*.ts'
