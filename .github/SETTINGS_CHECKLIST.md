@@ -80,11 +80,14 @@ Navigate to: **Settings → Actions → General**
 ### ✅ Actions Permissions
 - [x] **Allow all actions and reusable workflows**: Selected
   - Or: Allow select actions (if more restrictive needed)
-- [x] **Allow GitHub Actions to create and approve pull requests**: Enabled (for Dependabot)
+- [ ] **Allow GitHub Actions to create and approve pull requests**: Disabled by default  
+  - Enable only if a specific, trusted workflow must create PRs, and prefer using scoped tokens or GitHub Apps where possible.
 
 ### ✅ Workflow Permissions
-- [x] **Read and write permissions**: Selected
-- [x] **Allow GitHub Actions to approve pull requests**: Enabled
+- [x] **Read repository contents permissions**: Selected (secure default)  
+  - For workflows that need write access, grant it per workflow using the `permissions` key in the workflow YAML (rather than enabling global write).
+- [ ] **Allow GitHub Actions to approve pull requests**: Disabled  
+  - Avoid granting global approval rights; if automated approvals are ever required, restrict them to tightly controlled workflows and review the security implications.
 
 ### ✅ Artifact and Log Settings
 - [x] Artifact retention: **90 days** (default, adjust if needed)
