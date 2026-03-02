@@ -25,7 +25,8 @@
   - '**/*.test.tsx'
 
 'area: ci/cd':
-  - '.github/workflows/**/*'
+  - '.github/**/*'
+  - '!.github/*.md'
   - 'scripts/**/*.sh'
 
 'area: docs':
