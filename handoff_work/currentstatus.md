@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-02 07:46:53 EST
-timestamp_utc: 2026-03-02T12:46:53Z
+timestamp_local: 2026-03-02 08:20:11 EST
+timestamp_utc: 2026-03-02T13:20:11Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -35,6 +35,11 @@ source: direct repo inspection + command evidence in this session
 - `09.1` PASS: `/api/llm/chat` contract validated across success/auth/validation/provider/DB failure modes plus guest/strict auth behavior.
 - `09.2` PASS: `/api/llm/stream` NDJSON contract verified and aligned with client-side stream protocol consumers.
 - `09.3` PASS: conversation persistence lifecycle verified across create/load/list/update/delete and refresh behavior with route/service tests plus browser e2e evidence.
+- `09.4` PASS: `/multi-chat` page-level flow validated for loading/empty/success/error/refresh/provider-change with deterministic browser e2e coverage.
+- `10.1` PASS: sidecar status explicitly reaffirmed as optional (from locked runtime topology).
+- `10.2` PASS: optional sidecar path is isolated and tested; `/api/llm/orchestrate` succeeds with Python sidecar and falls back locally on sidecar failure/timeouts/network issues.
+- `11.1` PASS: Goals feature contract verified across `/api/goals*` and `/goal-hub` with route + UI evidence (create/edit/delete/list/update status).
+- `11.2` PASS: Personas feature contract verified across `/api/personas*` and `/personas` with route + UI evidence (create/edit/delete/list/use flow).
 
 ## failed
 - none for `01.*` through `03.1`.
@@ -146,7 +151,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `09.4`: verify main `/multi-chat` UI flow (loading/empty/success/error/refresh/provider-change) now that `09.3` lifecycle persistence is closed.
+Start `11.3`: verify Analytics feature (`/analytics`, `/api/analytics`) for truthfulness and empty-state behavior with API + UI evidence.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -621,3 +626,95 @@ TOTAL (22)
   - `npm run type-check`
 - Result:
   - `09.3` is PASS with explicit evidence for create/load/list/update/delete plus refresh persistence behavior.
+
+## 09.4 evidence (`/multi-chat` UI flow verified)
+- New page-level e2e coverage:
+  - `test/e2e/multi-chat-flow.spec.ts` (new)
+    - verifies loading state (`Loading conversations...`)
+    - verifies empty state (`No saved conversations yet.` + empty chat guidance)
+    - verifies successful prompt roundtrip and response rendering
+    - verifies provider-model change behavior in active-model controls
+    - verifies refresh persistence after reload
+    - verifies stream error path rendering in chat transcript
+- Supporting UI updates:
+  - `app/multi-chat/page.tsx`
+    - added stable action labels (`aria-label`) for send/load/rename/delete controls to make e2e interaction deterministic
+- Verification commands:
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/multi-chat-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+- Result:
+  - `09.4` PASS for required `/multi-chat` page-level flow categories.
+
+## 10.1 evidence (sidecar status decision locked)
+- Decision:
+  - Python sidecar remains **optional** for supported production handoff scope.
+- Decision anchors:
+  - `handoff_work/llminstructions.md` (`03.1 official production runtime`)
+  - `PYTHON_INTEGRATION.md` (bridge + fallback behavior)
+  - `handoff_work/theplan.md` locked topology section
+- Result:
+  - `10.1` PASS with explicit status declaration and aligned docs.
+
+## 10.2 evidence (optional sidecar isolation verified)
+- New route test suite:
+  - `test/api-llm-orchestrate-route.test.ts` (new)
+    - auth forwarding
+    - invalid JSON and invalid payload handling
+    - Python sidecar success passthrough
+    - local fallback on Python 5xx
+    - local fallback on network fetch failure
+    - local fallback on timeout abort
+    - no fallback on Python 429
+    - guest-capable auth option assertion (`allowGuest: true`)
+- Verification commands:
+  - `npm run test:run -- test/api-llm-orchestrate-route.test.ts`
+  - `npm run type-check`
+- Additional maintenance:
+  - cleaned corrupted generated cache at `.next/dev/types` and regenerated route types to restore stable type-check behavior.
+- Result:
+  - `10.2` PASS: missing/unhealthy sidecar no longer blocks core behavior for orchestration route contract.
+
+## 11.1 evidence (Goals feature verified)
+- API contract evidence:
+  - `test/api-goals-routes.test.ts`
+    - verifies list/create/get/update/delete behavior
+    - verifies invalid payload handling
+    - verifies auth forwarding behavior
+- UI flow evidence:
+  - `test/e2e/goal-hub-flow.spec.ts` (new)
+    - loading state
+    - empty state
+    - create goal
+    - update title and status
+    - refresh action
+    - delete goal
+- Verification commands:
+  - `npm run test:run -- test/api-goals-routes.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/goal-hub-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+- Result:
+  - `11.1` PASS with route and page-level evidence for the locked goals feature contract.
+
+## 11.2 evidence (Personas feature verified)
+- API contract evidence:
+  - `test/api-personas-routes.test.ts`
+    - verifies list/create/get/update/delete behavior
+    - verifies invalid payload handling
+    - verifies auth forwarding behavior
+- UI flow evidence:
+  - `test/e2e/personas-flow.spec.ts` (new)
+    - loading state
+    - empty state
+    - create persona
+    - edit persona
+    - list/count verification
+    - delete persona
+- UI accessibility support:
+  - `app/personas/page.tsx`
+    - added explicit labels for edit/delete icon buttons to improve deterministic automation and accessibility
+- Verification commands:
+  - `npm run test:run -- test/api-personas-routes.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/personas-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+- Result:
+  - `11.2` PASS with route and page-level evidence for the locked personas feature contract.

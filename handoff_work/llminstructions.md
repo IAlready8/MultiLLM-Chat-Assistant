@@ -411,6 +411,65 @@ Unsupported production shapes:
   - `test/conversation-service-db.test.ts`
   - `test/e2e/conversation-persistence.spec.ts`
 
+## 09.4 main chat UI flow verification (verified)
+- Page under test:
+  - `app/multi-chat/page.tsx`
+- Coverage goals verified:
+  - loading state
+  - empty state
+  - successful send/stream render
+  - provider stream-error render
+  - refresh continuity
+  - provider-model change behavior
+- Test evidence:
+  - `test/e2e/multi-chat-flow.spec.ts`
+
+## 10.1 sidecar status decision (verified)
+- Status:
+  - Python sidecar is optional in the locked production topology.
+- Scope effect:
+  - core app readiness does not require sidecar availability.
+  - orchestration bridge remains optional and must degrade safely.
+
+## 10.2 optional sidecar isolation verification (verified)
+- Route under test:
+  - `app/api/llm/orchestrate/route.ts`
+- Verified behavior:
+  - sidecar success passthrough
+  - fallback to local orchestration on sidecar 5xx, timeout abort, and network fetch failures
+  - no fallback for sidecar 429 responses
+  - auth forwarding and request validation behavior
+- Test evidence:
+  - `test/api-llm-orchestrate-route.test.ts`
+
+## 11.1 goals feature verification (verified)
+- Surfaces under test:
+  - `app/api/goals/route.ts`
+  - `app/api/goals/[id]/route.ts`
+  - `app/goal-hub/page.tsx`
+- Verified behavior:
+  - list/create/get/update/delete route contract
+  - validation and auth-forwarding behavior
+  - goal-hub loading and empty states
+  - create/update/delete + refresh UI flow
+- Test evidence:
+  - `test/api-goals-routes.test.ts`
+  - `test/e2e/goal-hub-flow.spec.ts`
+
+## 11.2 personas feature verification (verified)
+- Surfaces under test:
+  - `app/api/personas/route.ts`
+  - `app/api/personas/[id]/route.ts`
+  - `app/personas/page.tsx`
+- Verified behavior:
+  - list/create/get/update/delete route contract
+  - validation and auth-forwarding behavior
+  - personas loading and empty states
+  - create/edit/delete/list UI flow
+- Test evidence:
+  - `test/api-personas-routes.test.ts`
+  - `test/e2e/personas-flow.spec.ts`
+
 ## Code-verified provider support
 From `lib/providers/*` and provider registration:
 - OpenAI

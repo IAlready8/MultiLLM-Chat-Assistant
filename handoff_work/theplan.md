@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-02 07:46 EST)
+## Progress snapshot (2026-03-02 08:20 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -37,6 +37,11 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `09.1` Verify `/api/llm/chat` contract across required success/failure/auth paths
   - `09.2` Verify `/api/llm/stream` protocol and align NDJSON client consumption
   - `09.3` Verify conversation persistence lifecycle (create/load/list/update/delete + refresh continuity)
+  - `09.4` Verify `/multi-chat` page-level flow (loading/empty/success/error/refresh/provider-change)
+  - `10.1` Reaffirm sidecar status as optional in locked production topology
+  - `10.2` Verify optional sidecar isolation with orchestrate fallback route tests
+  - `11.1` Verify Goals feature contract for `/api/goals*` + `/goal-hub`
+  - `11.2` Verify Personas feature contract for `/api/personas*` + `/personas`
 - failed:
   - none
 - unverified:
@@ -340,6 +345,66 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/conversation-persistence.spec.ts --project=chromium`
   - `npm run type-check`
 
+## 09.4 implementation evidence
+- New page-level flow coverage:
+  - `test/e2e/multi-chat-flow.spec.ts` (new)
+    - loading state
+    - empty state
+    - successful send/stream render
+    - stream error render
+    - refresh continuity
+    - provider/model change behavior
+- UI support updates:
+  - `app/multi-chat/page.tsx`
+    - action labels added to improve deterministic browser test targeting
+- Verification commands:
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/multi-chat-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+
+## 10.1 implementation evidence
+- Sidecar status: optional (no change from locked topology).
+- Decision anchors:
+  - `handoff_work/llminstructions.md` (`03.1`)
+  - `PYTHON_INTEGRATION.md`
+  - `handoff_work/CLOSURE_MASTER_CHECKLIST.md`
+
+## 10.2 implementation evidence
+- Added orchestrate route tests:
+  - `test/api-llm-orchestrate-route.test.ts` (new)
+    - sidecar success passthrough
+    - fallback on 5xx/network/timeout
+    - non-fallback 429 behavior
+    - auth + validation checks
+- Verification commands:
+  - `npm run test:run -- test/api-llm-orchestrate-route.test.ts`
+  - `npm run type-check`
+- Stability note:
+  - cleared stale generated `.next/dev/types` cache when malformed artifacts broke type-check, then revalidated.
+
+## 11.1 implementation evidence
+- Existing API tests verified:
+  - `test/api-goals-routes.test.ts`
+- Added UI flow coverage:
+  - `test/e2e/goal-hub-flow.spec.ts` (new)
+    - loading/empty/create/update/refresh/delete coverage
+- Verification commands:
+  - `npm run test:run -- test/api-goals-routes.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/goal-hub-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+
+## 11.2 implementation evidence
+- Existing API tests verified:
+  - `test/api-personas-routes.test.ts`
+- Added UI flow coverage:
+  - `test/e2e/personas-flow.spec.ts` (new)
+    - loading/empty/create/edit/list/delete coverage
+- UI support update:
+  - `app/personas/page.tsx` adds accessible labels for edit/delete icon actions
+- Verification commands:
+  - `npm run test:run -- test/api-personas-routes.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/personas-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -353,8 +418,8 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 18. [x] Verify conversations end-to-end
 
 ## Phase E - feature acceptance
-19. [ ] Goals
-20. [ ] Personas
+19. [x] Goals
+20. [x] Personas
 21. [ ] Analytics
 22. [ ] Comparison
 23. [ ] Pipeline

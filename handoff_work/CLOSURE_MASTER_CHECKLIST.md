@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-02 07:46:53 EST` (`2026-03-02T12:46:53Z`)
+- Last updated: `2026-03-02 08:20:11 EST` (`2026-03-02T13:20:11Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -44,7 +44,12 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `09.1` Verify chat route contract (PASS)
 - [x] `09.2` Verify stream route contract (PASS)
 - [x] `09.3` Verify conversation persistence (PASS)
-- [ ] `09.4` Verify main chat UI flow (next)
+- [x] `09.4` Verify main chat UI flow (PASS)
+- [x] `10.1` Decide sidecar status (PASS)
+- [x] `10.2` If optional: isolate cleanly (PASS)
+- [x] `11.1` Goals feature (PASS)
+- [x] `11.2` Personas feature (PASS)
+- [ ] `11.3` Analytics feature (next)
 
 ---
 
@@ -122,22 +127,22 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 | 09.1 ✅ | Verify chat route contract | 08.4 | Test success, auth failure, validation failure, provider failure, DB failure, guest mode, strict mode | PASS (closed 2026-03-02) | `app/api/llm/chat/route.ts`, related tests | LLM | expanded chat route contract tests |
 | 09.2 ✅ | Verify stream route contract | 09.1 | Test NDJSON stream event types, abort path, provider failure path, browser rendering path | PASS (closed 2026-03-02) | `app/api/llm/stream/route.ts`, `services/ndjson.ts`, `services/stream-client.ts`, tests | LLM | NDJSON route + stream-client tests + multi-chat protocol alignment |
 | 09.3 ✅ | Verify conversation persistence | 07.3, 09.1 | Test create, load, rename, delete, list, refresh persistence across sessions | PASS (closed 2026-03-02) | `app/api/conversations/*.ts`, `services/conversation-service*.ts`, UI components | LLM | conversation route/service lifecycle tests + refresh e2e (`test/e2e/conversation-persistence.spec.ts`) |
-| 09.4 | Verify main chat UI flow | 09.1, 09.2, 09.3 | Run page-level tests for `/multi-chat`; include loading, empty, success, error, refresh, provider change | PASS when user can complete full chat roundtrip | `app/multi-chat/page.tsx`, `components/conversation-manager.tsx` | LLM | e2e evidence |
+| 09.4 ✅ | Verify main chat UI flow | 09.1, 09.2, 09.3 | Run page-level tests for `/multi-chat`; include loading, empty, success, error, refresh, provider change | PASS (closed 2026-03-02) | `app/multi-chat/page.tsx`, `components/conversation-manager.tsx` | LLM | new e2e flow test (`test/e2e/multi-chat-flow.spec.ts`) + passing chromium run |
 
 ## 10. Resolve Python sidecar truth
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 10.1 | Decide sidecar status | 03.1, 05.2 | Keep optional, make required, or remove from supported handoff scope | PASS when one status is declared | `.currentstatus`, `.plan`, `PYTHON_INTEGRATION.md`, `CLAUDE.md` | Repo operator | decision record |
-| 10.2 | If optional: isolate cleanly | 10.1 | Ensure `/api/llm/orchestrate` local fallback is documented and tested; ensure missing sidecar does not fail core app | PASS when core app is green without sidecar | `app/api/llm/orchestrate/route.ts`, docs, tests | LLM | test output |
+| 10.1 ✅ | Decide sidecar status | 03.1, 05.2 | Keep optional, make required, or remove from supported handoff scope | PASS (closed 2026-03-02) | `.currentstatus`, `.plan`, `PYTHON_INTEGRATION.md`, `CLAUDE.md` | Repo operator | optional sidecar decision reaffirmed from locked runtime (`03.1`) |
+| 10.2 ✅ | If optional: isolate cleanly | 10.1 | Ensure `/api/llm/orchestrate` local fallback is documented and tested; ensure missing sidecar does not fail core app | PASS (closed 2026-03-02) | `app/api/llm/orchestrate/route.ts`, docs, tests | LLM | new orchestrate route tests (`test/api-llm-orchestrate-route.test.ts`) covering success + local fallback paths |
 | 10.3 | If required: finish parity | 10.1 | Implement missing `/api/v1/llm/stream`; align auth, schemas, provider support, health checks, docs, tests | PASS when sidecar supports required runtime contract | `src/core/*`, `tests/*python*`, route bridge, docs | LLM + Repo operator | passing Python tests and integration evidence |
 
 ## 11. Verify CRUD feature surfaces beyond chat
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 11.1 | Goals feature | 07.3 | Verify create/edit/delete/list/update status in routes and UI | PASS when `/goal-hub` and `/api/goals*` match acceptance contract | goal files + tests | LLM | API + UI tests |
-| 11.2 | Personas feature | 07.3 | Verify create/edit/delete/list/use in routes and UI | PASS when `/personas` and `/api/personas*` match acceptance contract | persona files + tests | LLM | API + UI tests |
+| 11.1 ✅ | Goals feature | 07.3 | Verify create/edit/delete/list/update status in routes and UI | PASS (closed 2026-03-02) | goal files + tests | LLM | API route tests + goal-hub e2e flow (`test/api-goals-routes.test.ts`, `test/e2e/goal-hub-flow.spec.ts`) |
+| 11.2 ✅ | Personas feature | 07.3 | Verify create/edit/delete/list/use in routes and UI | PASS (closed 2026-03-02) | persona files + tests | LLM | API route tests + personas e2e flow (`test/api-personas-routes.test.ts`, `test/e2e/personas-flow.spec.ts`) |
 | 11.3 | Analytics feature | 07.3 | Verify `/analytics` and `/api/analytics` do not show fake or broken data and handle empty state | PASS when analytics truthfulness is proven | analytics files + tests | LLM | route + UI tests |
 | 11.4 | Comparison feature | 09.1, 09.2 | Verify `/comparison` can execute and render real comparison flow or explicitly demote it | PASS when feature is either accepted or demoted | comparison page + any backing code/tests | LLM | evidence attached |
 | 11.5 | Pipeline feature | 09.1 | Verify `/pipeline` is real and tested or explicitly demote/remove from scope | PASS when no decorative unsupported pipeline remains in supported scope | pipeline page + docs | LLM + Repo operator | decision + tests |

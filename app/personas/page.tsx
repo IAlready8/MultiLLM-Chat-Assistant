@@ -394,13 +394,19 @@ export default function PersonasPage() {
                     Updated {new Date(persona.updatedAt).toLocaleDateString()}
                   </div>
                   <div className="flex space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(persona.id)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(persona.id)}
+                      aria-label={`Edit persona ${persona.title}`}
+                    >
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="destructive"
                       size="sm"
                       onClick={() => handleDelete(persona.id)}
+                      aria-label={`Delete persona ${persona.title}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
