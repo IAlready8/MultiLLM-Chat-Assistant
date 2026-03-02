@@ -84,11 +84,11 @@ async function callOpenAI(
   const data = await response.json();
   
   return {
-    text: data.choices[0].message.content,
+    text: data.choices?.[0]?.message?.content || '',
     usage: {
-      promptTokens: data.usage.prompt_tokens,
-      completionTokens: data.usage.completion_tokens,
-      totalTokens: data.usage.total_tokens,
+      promptTokens: data.usage?.prompt_tokens || 0,
+      completionTokens: data.usage?.completion_tokens || 0,
+      totalTokens: data.usage?.total_tokens || 0,
     },
   };
 }
@@ -129,7 +129,7 @@ async function callClaude(
   const data = await response.json();
   
   return {
-    text: data.content[0].text,
+    text: data.content?.[0]?.text || '',
     usage: {
       promptTokens: data.usage?.input_tokens || 0,
       completionTokens: data.usage?.output_tokens || 0,
@@ -194,7 +194,7 @@ async function callGoogleAI(
   const data = await response.json();
   
   // Extract response text and usage information
-  const responseText = data.candidates[0].content.parts[0].text;
+  const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   
   // Google AI doesn't provide token usage directly, estimate based on characters
   const promptChars = messages.reduce((sum, msg) => sum + msg.content.length, 0);
@@ -347,7 +347,7 @@ async function streamOpenAI(
           if (!match) continue;
           
           const data = JSON.parse(match[1]);
-          const content = data.choices[0]?.delta?.content || '';
+          const content = data.choices?.[0]?.delta?.content || '';
           
           if (content) {
             callbacks.onChunk(content);

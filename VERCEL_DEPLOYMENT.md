@@ -34,6 +34,23 @@ Common optional:
 
 Use `.env.example` as the source of truth for supported variables.
 
+CLI alternative (sets permanent project env vars):
+
+```bash
+vercel env add NEXTAUTH_SECRET production
+vercel env add NEXTAUTH_SECRET preview
+vercel env add NEXTAUTH_URL production
+vercel env add NEXTAUTH_URL preview
+vercel env add API_KEY_ENCRYPTION_SEED production
+vercel env add API_KEY_ENCRYPTION_SEED preview
+```
+
+Generate `NEXTAUTH_SECRET` with:
+
+```bash
+openssl rand -base64 32
+```
+
 ## Deploy via GitHub Integration
 1. Import the repository in Vercel.
 2. Set environment variables.

@@ -158,6 +158,10 @@ Configure once in Vercel Project Settings:
    - `NEXTAUTH_URL`
    - `API_KEY_ENCRYPTION_SEED`
    - `DATABASE_URL` (if your runtime/build path needs it)
+   - CLI shortcut:
+     - `vercel env add NEXTAUTH_SECRET production && vercel env add NEXTAUTH_SECRET preview`
+     - `vercel env add NEXTAUTH_URL production && vercel env add NEXTAUTH_URL preview`
+     - `vercel env add API_KEY_ENCRYPTION_SEED production && vercel env add API_KEY_ENCRYPTION_SEED preview`
 4. Fix secret wiring so deploys do not depend on CLI overrides:
    - Option A: Create the Vercel secrets referenced in `vercel.json` (`@database_url`, `@nextauth_secret`, `@nextauth_url`, `@api_key_encryption_seed`).
    - Option B: Remove secret references from `vercel.json` and manage env vars directly in Vercel settings.

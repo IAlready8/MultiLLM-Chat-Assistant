@@ -9,6 +9,20 @@ import { auth } from "@/lib/auth";
 import { getDemoAccountContext, isStrictAuthRequired } from '@/lib/demo-account'
 import { Toaster } from "@/components/ui/toaster";
 
+type DynamicUsageError = Error & { digest?: string }
+
+const isDynamicServerUsageError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const maybeError = error as DynamicUsageError
+  return (
+    maybeError.digest === 'DYNAMIC_SERVER_USAGE' ||
+    error.message.includes('Dynamic server usage')
+  )
+}
+
 export const metadata: Metadata = {
   title: "MultiLLM Chat Assistant",
   description: "A professional tool for interacting with multiple LLM APIs",
@@ -39,7 +53,9 @@ export default async function RootLayout({
     try {
       session = await auth()
     } catch (error) {
-      console.error("Failed to load session:", error);
+      if (!isDynamicServerUsageError(error)) {
+        console.error('Failed to load session:', error)
+      }
     }
   }
 

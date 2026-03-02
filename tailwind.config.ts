@@ -70,19 +70,35 @@ const config = {
         "pulse-slow": {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.5" },
-        }
+        },
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "slide-in-right": {
+          from: { opacity: "0", transform: "translateX(12px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+        "scale-in": {
+          from: { opacity: "0", transform: "scale(0.95)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "pulse-slow": "pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "fade-in": "fade-in 0.4s ease-out forwards",
+        "slide-in-right": "slide-in-right 0.3s ease-out forwards",
+        "scale-in": "scale-in 0.3s ease-out forwards",
       },
       backdropBlur: {
         xs: '2px',
       },
       boxShadow: {
-        'glow': '0 0 10px rgba(139, 92, 246, 0.3)',
-        'glow-strong': '0 0 20px rgba(139, 92, 246, 0.5)',
+        'glow': '0 0 12px hsl(var(--ring) / 0.15)',
+        'glow-strong': '0 0 24px hsl(var(--ring) / 0.25)',
+        'card-hover': '0 8px 30px -8px hsl(var(--background) / 0.8)',
       }
     },
   },
