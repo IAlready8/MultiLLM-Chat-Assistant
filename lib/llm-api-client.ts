@@ -347,7 +347,7 @@ async function streamOpenAI(
           if (!match) continue;
           
           const data = JSON.parse(match[1]);
-          const content = data.choices[0]?.delta?.content || '';
+          const content = data.choices?.[0]?.delta?.content || '';
           
           if (content) {
             callbacks.onChunk(content);

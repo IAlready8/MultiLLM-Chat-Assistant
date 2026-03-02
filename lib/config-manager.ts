@@ -15,10 +15,61 @@ import {
 import { getProviderAdapter, type ProviderAdapterConfig } from './providers'
 import { v4 as uuidv4 } from 'uuid'
 
+type ProviderSettings = Record<string, unknown> & {
+  baseUrl?: string
+  models?: string[]
+  rateLimits?: ProviderConfig['rateLimits']
+}
+
 // Get encryption key for API keys
 async function getEncryptionKey() {
   const seed = resolveApiKeyEncryptionSeed()
   return await deriveKey(seed)
+}
+
+function parseProviderSettings(rawSettings: string | null, provider: string): ProviderSettings {
+  if (!rawSettings) {
+    return {}
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(rawSettings)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {}
+    }
+
+    const record = parsed as Record<string, unknown>
+    const settings: ProviderSettings = { ...record }
+
+    if (typeof record.baseUrl === 'string') {
+      settings.baseUrl = record.baseUrl
+    }
+
+    if (Array.isArray(record.models)) {
+      settings.models = record.models.filter(
+        (item): item is string => typeof item === 'string'
+      )
+    }
+
+    const rawRateLimits = record.rateLimits
+    if (rawRateLimits && typeof rawRateLimits === 'object' && !Array.isArray(rawRateLimits)) {
+      const maybeRateLimits = rawRateLimits as Record<string, unknown>
+      if (
+        typeof maybeRateLimits.requests === 'number' &&
+        typeof maybeRateLimits.window === 'number'
+      ) {
+        settings.rateLimits = {
+          requests: maybeRateLimits.requests,
+          window: maybeRateLimits.window,
+        }
+      }
+    }
+
+    return settings
+  } catch (error) {
+    console.error(`Failed to parse provider settings JSON for ${provider}:`, error)
+    return {}
+  }
 }
 
 export class ConfigurationError extends Error {
@@ -129,14 +180,7 @@ export class ConfigurationManager {
 
       const encryptionKey = await getEncryptionKey()
       const decryptedApiKey = config.apiKey ? await aesGcmDecrypt(encryptionKey, config.apiKey) : ''
-      let settings: Record<string, unknown> = {}
-      if (config.settings) {
-        try {
-          settings = JSON.parse(config.settings)
-        } catch (error) {
-          console.error('Failed to parse provider settings JSON:', error)
-        }
-      }
+      const settings = parseProviderSettings(config.settings, provider)
 
       const providerConfig: ProviderConfig = {
         apiKey: decryptedApiKey,
@@ -308,14 +352,7 @@ export class ConfigurationManager {
 
       for (const config of configs) {
         const decryptedApiKey = config.apiKey ? await aesGcmDecrypt(encryptionKey, config.apiKey) : ''
-        let settings: Record<string, unknown> = {}
-        if (config.settings) {
-          try {
-            settings = JSON.parse(config.settings)
-          } catch (error) {
-            console.error(`Failed to parse provider settings JSON for ${config.provider}:`, error)
-          }
-        }
+        const settings = parseProviderSettings(config.settings, config.provider)
 
         result[config.provider] = {
           apiKey: decryptedApiKey,

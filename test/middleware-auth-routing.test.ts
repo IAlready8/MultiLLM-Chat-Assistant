@@ -7,7 +7,7 @@ vi.mock('next-auth/jwt', () => ({
   getToken: (...args: unknown[]) => mockGetToken(...args),
 }))
 
-import { middleware } from '@/middleware'
+import { proxy as middleware } from '@/proxy'
 
 const originalAuthRequireLogin = process.env.AUTH_REQUIRE_LOGIN
 const originalPublicAuthRequireLogin = process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN

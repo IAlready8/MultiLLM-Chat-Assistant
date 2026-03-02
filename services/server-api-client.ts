@@ -242,7 +242,7 @@ async function callOpenRouter(
             const content = data.choices?.[0]?.delta?.content
             if (content) options.onChunk(content)
           } catch (e) {
-            console.error('Error parsing streaming response:', e)
+            console.error('Error parsing streaming response chunk:', e, 'Raw line:', line)
           }
         }
       }
@@ -313,10 +313,10 @@ async function callOpenAI(
         if (line.startsWith('data: ') && line !== 'data: [DONE]') {
           try {
             const data = JSON.parse(line.slice(6))
-            const content = data.choices[0]?.delta?.content
+            const content = data.choices?.[0]?.delta?.content
             if (content) options.onChunk(content)
           } catch (e) {
-            console.error('Error parsing streaming response:', e)
+            console.error('Error parsing streaming response chunk:', e, 'Raw line:', line)
           }
         }
       }
@@ -332,11 +332,11 @@ async function callOpenAI(
   }
 
   return {
-    text: data.choices[0].message.content,
+    text: data.choices?.[0]?.message?.content || '',
     usage: {
-      promptTokens: data.usage.prompt_tokens,
-      completionTokens: data.usage.completion_tokens,
-      totalTokens: data.usage.total_tokens,
+      promptTokens: data.usage?.prompt_tokens || 0,
+      completionTokens: data.usage?.completion_tokens || 0,
+      totalTokens: data.usage?.total_tokens || 0,
     },
   }
 }
@@ -382,7 +382,7 @@ async function callClaude(
             const content = data.delta?.text
             if (content) options.onChunk(content)
           } catch (e) {
-            console.error('Error parsing streaming response:', e)
+            console.error('Error parsing streaming response chunk:', e, 'Raw line:', line)
           }
         }
       }
@@ -398,7 +398,7 @@ async function callClaude(
   }
 
   return {
-    text: data.content[0].text,
+    text: data.content?.[0]?.text || '',
     usage: {
       promptTokens: data.usage?.input_tokens || 0,
       completionTokens: data.usage?.output_tokens || 0,
@@ -435,9 +435,9 @@ async function callGoogleAI(
   }
 
   return {
-    text: data.candidates[0].content.parts[0].text,
+    text: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
     metadata: {
-      safetyRatings: data.candidates[0].safetyRatings,
+      safetyRatings: data.candidates?.[0]?.safetyRatings,
     },
   }
 }
@@ -530,7 +530,7 @@ async function callGitHubCopilot(
     const data = await response.json()
 
     return {
-      text: data.choices[0].message.content,
+      text: data.choices?.[0]?.message?.content || '',
       usage: {
         promptTokens: data.usage?.prompt_tokens || 15,
         completionTokens: data.usage?.completion_tokens || 45,
@@ -581,7 +581,7 @@ async function callGrok(
     const data = await response.json()
 
     return {
-      text: data.choices[0].message.content,
+      text: data.choices?.[0]?.message?.content || '',
       usage: {
         promptTokens: data.usage?.prompt_tokens || 18,
         completionTokens: data.usage?.completion_tokens || 55,

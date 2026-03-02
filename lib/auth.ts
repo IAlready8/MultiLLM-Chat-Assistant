@@ -4,7 +4,6 @@ import GoogleProvider from 'next-auth/providers/google'
 import GitHubProvider from 'next-auth/providers/github'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
-import { randomBytes } from 'crypto'
 import prisma from '@/lib/prisma'
 import { checkAndConsume } from '@/lib/rate-limit'
 import {
@@ -57,35 +56,23 @@ const inMemoryAuthUsers = new Map<string, InMemoryAuthUser>()
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim()
 const strictAuth = isStrictAuthRequired()
-let previewFallbackSecret: string | null = null
-
-const buildPreviewFallbackSecret = (): string => {
-  if (!previewFallbackSecret) {
-    previewFallbackSecret = randomBytes(32).toString('hex')
-  }
-  return previewFallbackSecret
-}
 
 const resolveAuthSecret = (): string => {
   const configuredSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
+  const isProduction = process.env.NODE_ENV === 'production'
 
   if (configuredSecret?.trim()) {
     return configuredSecret.trim()
   }
 
-  if (strictAuth) {
-    throw new Error('NEXTAUTH_SECRET is required when AUTH_REQUIRE_LOGIN=true')
+  if (strictAuth || isProduction) {
+    throw new Error(
+      'NEXTAUTH_SECRET (or AUTH_SECRET) is required in production deployment. Configure it in your deployment environment variables.'
+    )
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    // Keep a stable local secret so JWT session cookies remain decryptable between reloads.
-    return 'local-dev-nextauth-secret-change-before-production'
-  }
-
-  console.warn(
-    '[auth] NEXTAUTH_SECRET is missing in production while strict auth is disabled; using an ephemeral fallback secret'
-  )
-  return buildPreviewFallbackSecret()
+  // Keep a stable local secret so JWT session cookies remain decryptable between reloads.
+  return 'local-dev-nextauth-secret-change-before-production'
 }
 
 const authSecret = resolveAuthSecret()

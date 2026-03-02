@@ -408,7 +408,21 @@ export class ErrorManager {
   }
 
   async getErrorStats(options: { from: Date; to: Date }): Promise<ErrorStats> {
+    const zeroByCategory = Object.values(ErrorCategory).reduce((acc, key) => {
+      acc[key as ErrorCategory] = 0
+      return acc
+    }, {} as Record<ErrorCategory, number>)
+    const zeroBySeverity = Object.values(ErrorSeverity).reduce((acc, key) => {
+      acc[key as ErrorSeverity] = 0
+      return acc
+    }, {} as Record<ErrorSeverity, number>)
+
     try {
+      const prisma = await getPrismaClient()
+      if (!prisma) {
+        return { total: 0, byCategory: zeroByCategory, bySeverity: zeroBySeverity, topErrors: [] }
+      }
+
       const rows = await prisma.analytics.findMany({
         where: {
           event: 'error',
@@ -416,8 +430,8 @@ export class ErrorManager {
         },
       })
 
-      const byCategory = {} as Record<ErrorCategory, number>
-      const bySeverity = {} as Record<ErrorSeverity, number>
+      const byCategory = { ...zeroByCategory }
+      const bySeverity = { ...zeroBySeverity }
       const counts = new Map<string, number>()
       let total = 0
 
@@ -448,14 +462,6 @@ export class ErrorManager {
         topErrors,
       }
     } catch {
-      const zeroByCategory = Object.values(ErrorCategory).reduce((acc, key) => {
-        acc[key as ErrorCategory] = 0
-        return acc
-      }, {} as Record<ErrorCategory, number>)
-      const zeroBySeverity = Object.values(ErrorSeverity).reduce((acc, key) => {
-        acc[key as ErrorSeverity] = 0
-        return acc
-      }, {} as Record<ErrorSeverity, number>)
       return { total: 0, byCategory: zeroByCategory, bySeverity: zeroBySeverity, topErrors: [] }
     }
   }
