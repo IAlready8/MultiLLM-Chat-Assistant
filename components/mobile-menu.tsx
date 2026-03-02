@@ -18,7 +18,7 @@ export function MobileMenu({ items }: MobileMenuProps) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="lg:hidden">
+        <Button variant="ghost" size="icon" className="lg:hidden rainbow-outline-hover">
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle menu</span>
         </Button>
@@ -32,9 +32,10 @@ export function MobileMenu({ items }: MobileMenuProps) {
             <Link
               key={item.path}
               href={item.path}
-              className={`rounded-md px-4 py-2 transition-colors ${
+              data-active={pathname === item.path ? 'true' : 'false'}
+              className={`nav-rainbow-link rounded-md px-4 py-2 transition-colors ${
                 pathname === item.path
-                  ? "bg-card text-foreground"
+                  ? "bg-card text-foreground rainbow-outline-hover"
                   : "text-muted-foreground hover:bg-card/60 hover:text-foreground"
               }`}
               onClick={() => setOpen(false)}

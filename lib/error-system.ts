@@ -1,6 +1,31 @@
-import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { v4 as uuidv4 } from 'uuid'
+
+type AnalyticsRow = { payload?: string | null }
+type AnalyticsDelegate = {
+  create: (args: unknown) => Promise<unknown>
+  findMany: (args: unknown) => Promise<AnalyticsRow[]>
+}
+type PrismaLike = { analytics: AnalyticsDelegate }
+
+let prismaClientPromise: Promise<PrismaLike | null> | null = null
+
+async function getPrismaClient(): Promise<PrismaLike | null> {
+  if (typeof window !== 'undefined') {
+    return null
+  }
+
+  if (!prismaClientPromise) {
+    prismaClientPromise = import('@/lib/prisma')
+      .then((mod) => (mod.default ?? (mod as unknown as { prisma: PrismaLike }).prisma) as PrismaLike)
+      .catch((error) => {
+        console.warn('Prisma client unavailable in error-system:', error)
+        return null
+      })
+  }
+
+  return prismaClientPromise
+}
 
 // Error categories for better classification
 export enum ErrorCategory {
@@ -258,20 +283,23 @@ export class ErrorManager {
       // Persist critical errors for analytics/inspection
       if (appError.severity === ErrorSeverity.CRITICAL) {
         try {
-          await prisma.analytics.create({
-            data: {
-              id: uuidv4(),
-              event: 'error',
-              payload: JSON.stringify({
-                code: appError.code,
-                category: appError.category,
-                severity: appError.severity,
-                message: appError.message,
-              }),
-              // Analytics.userId is required in schema; default to 'system' if absent
-              userId: appError.context.userId ?? 'system',
-            },
-          })
+          const prisma = await getPrismaClient()
+          if (prisma) {
+            await prisma.analytics.create({
+              data: {
+                id: uuidv4(),
+                event: 'error',
+                payload: JSON.stringify({
+                  code: appError.code,
+                  category: appError.category,
+                  severity: appError.severity,
+                  message: appError.message,
+                }),
+                // Analytics.userId is required in schema; default to 'system' if absent
+                userId: appError.context.userId ?? 'system',
+              },
+            })
+          }
         } catch (persistErr) {
           // swallow persistence errors in logger
         }
@@ -380,7 +408,21 @@ export class ErrorManager {
   }
 
   async getErrorStats(options: { from: Date; to: Date }): Promise<ErrorStats> {
+    const zeroByCategory = Object.values(ErrorCategory).reduce((acc, key) => {
+      acc[key as ErrorCategory] = 0
+      return acc
+    }, {} as Record<ErrorCategory, number>)
+    const zeroBySeverity = Object.values(ErrorSeverity).reduce((acc, key) => {
+      acc[key as ErrorSeverity] = 0
+      return acc
+    }, {} as Record<ErrorSeverity, number>)
+
     try {
+      const prisma = await getPrismaClient()
+      if (!prisma) {
+        return { total: 0, byCategory: zeroByCategory, bySeverity: zeroBySeverity, topErrors: [] }
+      }
+
       const rows = await prisma.analytics.findMany({
         where: {
           event: 'error',
@@ -388,8 +430,8 @@ export class ErrorManager {
         },
       })
 
-      const byCategory = {} as Record<ErrorCategory, number>
-      const bySeverity = {} as Record<ErrorSeverity, number>
+      const byCategory = { ...zeroByCategory }
+      const bySeverity = { ...zeroBySeverity }
       const counts = new Map<string, number>()
       let total = 0
 
@@ -420,14 +462,6 @@ export class ErrorManager {
         topErrors,
       }
     } catch {
-      const zeroByCategory = Object.values(ErrorCategory).reduce((acc, key) => {
-        acc[key as ErrorCategory] = 0
-        return acc
-      }, {} as Record<ErrorCategory, number>)
-      const zeroBySeverity = Object.values(ErrorSeverity).reduce((acc, key) => {
-        acc[key as ErrorSeverity] = 0
-        return acc
-      }, {} as Record<ErrorSeverity, number>)
       return { total: 0, byCategory: zeroByCategory, bySeverity: zeroBySeverity, topErrors: [] }
     }
   }

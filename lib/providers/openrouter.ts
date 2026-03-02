@@ -64,8 +64,8 @@ export const openrouterAdapter: ProviderAdapter = {
 
     const data = await response.json()
     return {
-      content: data.choices[0].message?.content || '',
-      finish_reason: data.choices[0].finish_reason,
+      content: data.choices?.[0]?.message?.content || '',
+      finish_reason: data.choices?.[0]?.finish_reason,
       usage: data.usage,
     }
   },

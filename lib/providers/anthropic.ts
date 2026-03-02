@@ -73,7 +73,7 @@ export const anthropicAdapter: ProviderAdapter = {
 
     const data = await response.json()
     return {
-      content: data.content[0]?.text || '',
+      content: data.content?.[0]?.text || '',
       finish_reason: data.stop_reason,
       usage: {
         prompt_tokens: data.usage?.input_tokens,
