@@ -11,6 +11,17 @@
 const DB_RETRY_INTERVAL_MS = 60_000
 const DEFAULT_MAX_USERS = 100
 
+export const isInMemoryFallbackAllowed = (): boolean =>
+  process.env.NODE_ENV !== 'production'
+
+export const assertInMemoryFallbackAllowed = (scope: string): void => {
+  if (!isInMemoryFallbackAllowed()) {
+    throw new Error(
+      `In-memory ${scope} fallback is disabled in production.`
+    )
+  }
+}
+
 export const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error) return error.message
   if (
@@ -81,9 +92,15 @@ export interface DbAvailabilityState {
 export function createDbAvailabilityTracker() {
   const state: DbAvailabilityState = { unavailable: false }
   const warnings = new Set<string>()
+  const fallbackAllowed = isInMemoryFallbackAllowed()
 
   return {
+    isFallbackAllowed(): boolean {
+      return fallbackAllowed
+    },
+
     isKnownUnavailable(): boolean {
+      if (!fallbackAllowed) return false
       if (!state.unavailable) return false
       const since = state.unavailableSince ?? 0
       if (Date.now() - since > DB_RETRY_INTERVAL_MS) {
@@ -96,6 +113,7 @@ export function createDbAvailabilityTracker() {
     },
 
     markUnavailableIfNeeded(error: unknown): boolean {
+      if (!fallbackAllowed) return false
       if (isDatabaseUnavailableError(error)) {
         state.unavailable = true
         state.unavailableSince = Date.now()
@@ -108,6 +126,12 @@ export function createDbAvailabilityTracker() {
       if (warnings.has(scope)) return
       warnings.add(scope)
       const message = getErrorMessage(error) || 'unknown database error'
+      if (!fallbackAllowed) {
+        console.error(
+          `Database error for ${scope}; in-memory ${label} fallback is disabled in production: ${message}`
+        )
+        return
+      }
       console.warn(
         `Falling back to in-memory ${label} store for ${scope}: ${message}`
       )
@@ -124,6 +148,8 @@ export function getOrCreateUserStore<V>(
   userId: string,
   maxUsers: number = DEFAULT_MAX_USERS
 ): Map<string, V> {
+  assertInMemoryFallbackAllowed('database')
+
   let userStore = store.get(userId)
   if (!userStore) {
     if (store.size >= maxUsers) {

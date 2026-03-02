@@ -6,6 +6,7 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
 import prisma from '@/lib/prisma'
 import { checkAndConsume } from '@/lib/rate-limit'
+import { validateStartupEnvironment } from '@/lib/startup-validation'
 import {
   createDemoAuthUser,
   getDemoAccountContext,
@@ -55,7 +56,10 @@ type InMemoryAuthUser = {
 const inMemoryAuthUsers = new Map<string, InMemoryAuthUser>()
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim()
+validateStartupEnvironment()
 const strictAuth = isStrictAuthRequired()
+const allowInMemoryAuthFallback =
+  process.env.NODE_ENV !== 'production' && !strictAuth
 
 const resolveAuthSecret = (): string => {
   const configuredSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
@@ -196,7 +200,17 @@ const buildProviders = () => {
             email: user.email,
           }
         } catch (error) {
-          console.warn('Primary auth store unavailable, falling back to in-memory auth:', error)
+          if (!allowInMemoryAuthFallback) {
+            console.error(
+              'Primary auth store unavailable; in-memory auth fallback is disabled in strict/production mode:',
+              error
+            )
+            return null
+          }
+          console.warn(
+            'Primary auth store unavailable, falling back to in-memory auth:',
+            error
+          )
         }
 
         const localUser = inMemoryAuthUsers.get(email)

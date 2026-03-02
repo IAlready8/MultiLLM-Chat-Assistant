@@ -22,12 +22,15 @@ export type DemoAccountContext = {
   password: string
 }
 
+const isProduction = process.env.NODE_ENV === 'production'
+
 export const isStrictAuthRequired = (): boolean =>
+  isProduction ||
   process.env.AUTH_REQUIRE_LOGIN === 'true' ||
   process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN === 'true'
 
 export const getDemoAccountContext = (): DemoAccountContext => {
-  const isDevelopment = process.env.NODE_ENV !== 'production'
+  const isDevelopment = !isProduction
   const rawEnabled =
     process.env.DEMO_ACCOUNT_ENABLED ?? process.env.NEXT_PUBLIC_DEMO_ACCOUNT_ENABLED
   const rawBypass =
@@ -38,8 +41,8 @@ export const getDemoAccountContext = (): DemoAccountContext => {
   )
 
   return {
-    enabled: parseBoolean(rawEnabled, true),
-    bypassAuth: parseBoolean(rawBypass, isDevelopment),
+    enabled: isProduction ? false : parseBoolean(rawEnabled, true),
+    bypassAuth: isProduction ? false : parseBoolean(rawBypass, isDevelopment),
     id: process.env.DEMO_ACCOUNT_ID || 'demo-user',
     name: process.env.DEMO_ACCOUNT_NAME || 'Demo User',
     email,

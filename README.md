@@ -98,13 +98,13 @@ Without passing checks, merges to `main` are blocked.
 Before or immediately after a production deployment:
 
 ```bash
-npm run verify:prod -- --base-url https://<your-domain> --check-webhook --require-stripe
+npm run verify:prod -- --base-url https://<your-domain> --check-webhook
 ```
 
-To apply pending DB migrations as part of verification:
+To apply pending DB migrations and enforce optional integrations:
 
 ```bash
-npm run verify:prod -- --apply-migrations --require-stripe
+npm run verify:prod -- --apply-migrations --require-stripe --require-sidecar
 ```
 
 ## Architecture Snapshot
@@ -112,8 +112,8 @@ npm run verify:prod -- --apply-migrations --require-stripe
 - API layer: route handlers in `app/api/*`
 - Auth: NextAuth with credential + OAuth providers (`lib/auth.ts`)
 - Data access:
-  - Current runtime in this repo uses Prisma stubs in `lib/prisma.ts`
-  - Services provide in-memory fallbacks for key and conversation flows
+  - Production requires `DATABASE_URL` and uses Prisma runtime client (`lib/prisma.ts`)
+  - In-memory fallback paths are development-only; production fallback is fail-closed
 - Optional sidecar: FastAPI orchestration service in `src/core/*`
 
 See full details in `ARCHITECTURE.md` and `PYTHON_INTEGRATION.md`.
@@ -122,10 +122,11 @@ See full details in `ARCHITECTURE.md` and `PYTHON_INTEGRATION.md`.
 Primary reference: `.env.example`
 
 Key groups:
-- Auth/session: `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `AUTH_REQUIRE_LOGIN`, `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
+- Auth/session: `NEXTAUTH_URL`, `NEXTAUTH_SECRET` (or `AUTH_SECRET`), `AUTH_REQUIRE_LOGIN`, `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
 - Demo/guest behavior: `DEMO_ACCOUNT_*`, `NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH`, `GUEST_USER_*`
 - Provider key encryption: `API_KEY_ENCRYPTION_SEED`
-- Optional database: `DATABASE_URL`
+- Database: `DATABASE_URL` (required in production)
+- Optional billing: `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
 - Optional sidecar routing: `PYTHON_CORE_URL`
 
 ## Deployment
@@ -157,7 +158,7 @@ Configure once in Vercel Project Settings:
    - `NEXTAUTH_SECRET`
    - `NEXTAUTH_URL`
    - `API_KEY_ENCRYPTION_SEED`
-   - `DATABASE_URL` (if your runtime/build path needs it)
+   - `DATABASE_URL`
    - CLI shortcut:
      - `vercel env add NEXTAUTH_SECRET production && vercel env add NEXTAUTH_SECRET preview`
      - `vercel env add NEXTAUTH_URL production && vercel env add NEXTAUTH_URL preview`
