@@ -209,6 +209,208 @@ Unsupported production shapes:
 - Validation proof:
   - `test/startup-validation.test.ts`
 
+## 06.1 auth behavior matrix (verified)
+
+| Mode | Request type | Expected behavior | Code anchors | Test evidence |
+|---|---|---|---|---|
+| Production (strict always) | Protected API, no token | `401 Unauthorized` (or `500` if auth secret missing) | `proxy.ts`, `lib/demo-account.ts` | `test/middleware-auth-routing.test.ts` |
+| Production (strict always) | Protected page, no token | redirect to `/auth/signin` (or `/auth/error` if secret missing) | `proxy.ts` | `test/middleware-auth-routing.test.ts` |
+| Production (strict always) | Demo bypass env set | Demo bypass ignored; demo disabled | `lib/demo-account.ts` | `test/demo-account.test.ts` |
+| Non-production strict | Protected API/page, no token | same strict behavior as production | `proxy.ts`, `lib/api-auth.ts` | `test/middleware-auth-routing.test.ts`, `test/api-auth.test.ts` |
+| Non-production guest/demo | `allowGuest=true`, no session cookie | guest user record returned | `lib/api-auth.ts`, `lib/demo-account.ts` | `test/api-auth.test.ts` |
+| Non-production guest/demo | Demo bypass enabled | demo user record returned for bypassed path | `lib/api-auth.ts`, `lib/demo-account.ts` | behavior covered by module logic + demo context tests |
+
+## 06.2 auth fallback policy (closed)
+- Policy source of truth:
+  - `lib/demo-account.ts` -> `isInMemoryAuthFallbackAllowed()`
+- Effective rule:
+  - in-memory auth fallback allowed only when:
+    - not production, and
+    - strict auth is not required
+  - otherwise fallback is disabled and primary auth-store failures fail closed
+- Enforcement anchor:
+  - `lib/auth.ts` uses `isInMemoryAuthFallbackAllowed()` before in-memory auth path.
+
+## 06.3 protected-route verification status
+- Route-level checks:
+  - `test/middleware-auth-routing.test.ts`
+  - `test/api-auth.test.ts`
+- E2E strict-auth checks (chromium subset):
+  - `test/e2e/auth-flow.spec.ts` (redirect unauthenticated users, preserve callback URL)
+  - executed with strict-auth env + CI mode to force fresh web server
+- Runtime probe evidence:
+  - `/settings` returns `307` to `/auth/signin?callbackUrl=...`
+  - `/api/conversations` returns `401` for unauthenticated request in strict mode
+
+## 07.1 Prisma schema reality (verified)
+- Models present in `prisma/schema.prisma`:
+  - `Account`, `Session`, `User`, `VerificationToken`
+  - `Conversation`, `Message`, `ProviderConfig`, `Analytics`, `Goal`, `Persona`
+  - `Team`, `TeamMember`, `Subscription`
+- Runtime usage scan confirms schema-backed model access across app/service layers:
+  - auth/session + users/subscriptions (`lib/auth.ts`, `lib/stripe.ts`)
+  - conversations/messages (`services/conversation-service*.ts`)
+  - goals/personas/analytics (`services/*`, `lib/error-system.ts`)
+  - provider config/key lifecycle (`lib/api-key-service.ts`, `lib/config-manager.ts`)
+- Migration status on verification database:
+  - `npx prisma migrate status` -> `Database schema is up to date!`
+
+## 07.2 DB-first vs fallback matrix (verified)
+- Global policy anchors:
+  - `lib/prisma.ts` enforces production DB requirement (`DATABASE_URL` must exist).
+  - `lib/db-fallback.ts` allows fallback only outside production and blocks fallback store creation in production.
+- Domain rules:
+  - Provider config + API keys (`lib/api-key-service.ts`):
+    - production: DB source of truth
+    - local/dev: fallback store allowed when DB is unavailable
+  - Conversations (`services/conversation-service.db.ts`):
+    - production: DB source of truth
+    - local/dev: fallback conversations for DB-unavailable and guest FK fallback flows
+  - Goals (`services/goal-service.db.ts`):
+    - production: DB source of truth; fallback reads/writes now gated, no fallback-store creation on successful DB reads
+    - local/dev: fallback goals allowed for DB-unavailable and guest FK paths
+  - Personas (`services/persona-service.db.ts`):
+    - production: DB source of truth; fallback reads/writes now gated, no fallback-store creation on successful DB reads
+    - local/dev: fallback personas allowed for DB-unavailable and guest FK paths
+  - Analytics (`services/analytics-service.ts`):
+    - production: DB source of truth (`memoryEvents` merge disabled when fallback is disallowed)
+    - local/dev: fallback events allowed for DB-unavailable paths
+  - Teams (`services/team-service.db.ts`) and configuration manager (`lib/config-manager.ts`):
+    - production/local: DB-only behavior, no in-memory fallback branch
+- Regression proof added:
+  - `test/goal-service-db.test.ts`: production read path remains DB-first.
+  - `test/persona-service-db.test.ts`: production read path remains DB-first.
+
+## 07.3 production persistence ambiguity closure (verified)
+- Production fail-closed behavior now enforced in fallback-capable services:
+  - `lib/api-key-service.ts`: DB read/write failures now throw in production; no silent empty/null fallback responses.
+  - `services/analytics-service.ts`: analytics DB failures now throw in production; no silent empty analytics payloads.
+  - `services/conversation-service.db.ts`: FK/DB errors throw in production before fallback paths.
+- Verification tests:
+  - `test/api-key-service.test.ts` (production read/write fail-closed on DB unavailability)
+  - `test/analytics-service.test.ts` (production analytics fail-closed)
+  - `test/conversation-service-db.test.ts` (production FK-path fail-closed)
+  - plus previously added production DB-first read tests for goals/personas
+- Restart-proof evidence:
+  - Two separate production-mode Node processes using Prisma adapter against local verification Postgres:
+    - process A created user+goal+persona+conversation+message
+    - process B read the same records and confirmed counts persisted (`1`, `1`, `1`, `1`)
+  - Temporary proof records were deleted after verification.
+
+## 07.4 migration path verification (verified)
+- Verification DB: `multillm_verify_20260302` on `127.0.0.1:5432`.
+- Commands executed in production-like mode:
+  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate deploy`
+  - post-deploy recheck with `migrate status`
+- Observed outputs:
+  - `Database schema is up to date!`
+  - `No pending migrations to apply.`
+
+## 08.1 provider registry truth (verified)
+- Registry/type anchors:
+  - `lib/providers/registry.ts`
+  - `lib/providers/types.ts`
+- Code-backed provider set:
+  - OpenAI (`openai`)
+  - Anthropic (`anthropic`)
+  - Google AI (`googleai`)
+  - OpenRouter (`openrouter`)
+  - Grok (`grok`)
+- Docs alignment:
+  - `README.md` and `CLAUDE.md` both list the same five providers.
+
+## 08.2 provider config route verification (verified)
+- Verified routes:
+  - `app/api/config/route.ts`
+  - `app/api/provider-configs/route.ts`
+  - `app/api/test-api-key/route.ts`
+- Deterministic behavior updates:
+  - `/api/config` now returns explicit JSON `500` on config lookup failure and delete failure.
+  - `/api/test-api-key` now returns explicit JSON `500` on unexpected internal errors.
+- Auth mode coverage:
+  - strict mode: auth-forwarded `401` behavior validated in tests.
+  - guest mode: tests assert route calls `getAuthenticatedUser({ allowGuest: true })`.
+- Test evidence:
+  - `test/api-config-route.test.ts`
+  - `test/api-provider-configs-route.test.ts`
+  - `test/api-test-api-key-route.test.ts`
+
+## 08.3 key encryption contract verification (verified)
+- Seed policy:
+  - `lib/runtime-secrets.ts` enforces `API_KEY_ENCRYPTION_SEED` in production.
+  - validated by `test/runtime-secrets.test.ts`.
+- DB-backed encryption path:
+  - `lib/api-key-service.ts`:
+    - encrypt on store (`aesGcmEncrypt`)
+    - decrypt on retrieval (`aesGcmDecrypt`)
+    - provider-config listing excludes key material
+  - validated by `test/api-key-service.test.ts` contract roundtrip case.
+- Redaction and logging:
+  - route payloads remain redacted (`apiKey: ''` in provider-config response paths).
+  - key-operation route logs now avoid dumping raw error objects.
+
+## 08.4 provider failure behavior verification (verified)
+- Error mapping source:
+  - `lib/providers/errors.ts`
+- Verified deterministic mappings across chat + stream:
+  - invalid key format -> `PROVIDER_KEY_FORMAT_INVALID` (`400`)
+  - missing provider config/key -> `PROVIDER_NOT_CONFIGURED` (`400`)
+  - upstream auth rejection (401/403) -> `PROVIDER_AUTH_ERROR` (`401`)
+  - upstream rate limit (429) -> `RATE_LIMITED` (`429`)
+  - provider timeout/abort -> `PROVIDER_TIMEOUT` (`504`)
+  - malformed provider payload/body -> `PROVIDER_MALFORMED_RESPONSE` (`502`)
+- Route-level tests:
+  - `test/api-llm-chat-route.test.ts`
+  - `test/api-llm-stream-route.test.ts`
+
+## 09.1 chat route contract verification (verified)
+- Route under test:
+  - `app/api/llm/chat/route.ts`
+- Verified contract areas:
+  - auth forwarding (`401`)
+  - guest-mode execution path
+  - request validation failures
+  - provider config/key preconditions
+  - upstream failure mappings (auth, rate limit, timeout, malformed)
+  - DB/service internal failure propagation
+  - non-stream success response
+- Test evidence:
+  - `test/api-llm-chat-route.test.ts`
+
+## 09.2 stream route contract verification (verified)
+- Route under test:
+  - `app/api/llm/stream/route.ts`
+- Protocol contract:
+  - NDJSON events: `chunk`, `done`, `error`
+  - deterministic timeout/malformed stream error codes
+- Client alignment:
+  - `app/multi-chat/page.tsx` now consumes `/api/llm/stream` NDJSON
+  - `services/stream-client.ts` uses `/api/llm/stream` with matching payload shape
+- Test evidence:
+  - `test/api-llm-stream-route.test.ts`
+  - `test/stream-client.test.ts`
+
+## 09.3 conversation persistence lifecycle verification (verified)
+- Conversation route/service updates:
+  - `app/api/conversations/[id]/route.ts` adds `PUT` rename/update support.
+  - `services/conversation-service.db.ts` adds `updateConversationTitle()` with DB-first + fallback parity.
+  - `lib/api-client.ts` adds `updateConversation()` API helper.
+- UI contract updates:
+  - `app/multi-chat/page.tsx` adds rename controls in recent conversation list.
+  - Conversation actions now include explicit accessibility labels for reliable UI automation.
+- Verified lifecycle coverage:
+  - create
+  - load
+  - list
+  - update/rename
+  - delete
+  - refresh persistence across browser reload
+- Test evidence:
+  - `test/api-conversations-routes.test.ts`
+  - `test/conversation-service-db.test.ts`
+  - `test/e2e/conversation-persistence.spec.ts`
+
 ## Code-verified provider support
 From `lib/providers/*` and provider registration:
 - OpenAI

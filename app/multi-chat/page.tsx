@@ -6,7 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Send, Bot, User, RotateCcw, Settings, Plus, X, Trash2 } from 'lucide-react'
+import {
+  Send,
+  Bot,
+  User,
+  RotateCcw,
+  Settings,
+  Plus,
+  X,
+  Trash2,
+  Pencil,
+  Check,
+} from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
 import type { Conversation, Message as ConversationMessage } from '@/types/prisma'
@@ -56,6 +67,8 @@ export default function MultiChatPage() {
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [conversationList, setConversationList] = useState<Conversation[]>([])
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null)
+  const [editingConversationTitle, setEditingConversationTitle] = useState('')
   const [isLoadingConversationList, setIsLoadingConversationList] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const { toast } = useToast()
@@ -235,12 +248,65 @@ export default function MultiChatPage() {
     }
   }
 
+  const beginRenameConversation = (conversation: Conversation) => {
+    setEditingConversationId(conversation.id)
+    setEditingConversationTitle(conversation.title || '')
+  }
+
+  const cancelRenameConversation = () => {
+    setEditingConversationId(null)
+    setEditingConversationTitle('')
+  }
+
+  const renameConversationById = async (conversationId: string) => {
+    const nextTitle = editingConversationTitle.trim()
+    if (!nextTitle) {
+      toast({
+        title: 'Invalid title',
+        description: 'Conversation title cannot be empty.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      const updatedConversation = await apiClient.updateConversation(conversationId, {
+        title: nextTitle,
+      })
+
+      setConversationList(prev =>
+        prev.map(conversation =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                title: updatedConversation.title,
+                updatedAt: new Date(updatedConversation.updatedAt),
+              }
+            : conversation
+        )
+      )
+
+      cancelRenameConversation()
+    } catch (error) {
+      console.error('Failed to rename conversation:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to rename conversation.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const deleteConversationById = async (conversationId: string) => {
     try {
       await apiClient.deleteConversation(conversationId)
       setConversationList(prev =>
         prev.filter(conversation => conversation.id !== conversationId)
       )
+
+      if (editingConversationId === conversationId) {
+        cancelRenameConversation()
+      }
 
       if (activeConversationId === conversationId) {
         setActiveConversationId(null)
@@ -380,10 +446,10 @@ export default function MultiChatPage() {
     model: string,
     onChunk: (chunk: string) => void
   ) => {
-    const response = await fetch('/api/llm/chat', {
+    const response = await fetch('/api/llm/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, messages, model, stream: true })
+      body: JSON.stringify({ provider, messages, model })
     })
 
     if (!response.ok) {
@@ -409,21 +475,75 @@ export default function MultiChatPage() {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let fullContent = ''
+    let buffer = ''
+    let streamCompleted = false
+
+    const processLine = (line: string) => {
+      const trimmed = line.trim()
+      if (!trimmed) {
+        return
+      }
+
+      let event: {
+        type?: string
+        content?: unknown
+        error?: unknown
+        code?: unknown
+      }
+      try {
+        event = JSON.parse(trimmed)
+      } catch {
+        return
+      }
+
+      if (event.type === 'chunk' && typeof event.content === 'string') {
+        fullContent += event.content
+        onChunk(event.content)
+        return
+      }
+
+      if (event.type === 'error') {
+        const message =
+          typeof event.error === 'string' ? event.error : 'Stream error'
+        const code = typeof event.code === 'string' ? event.code : undefined
+        throw createProviderRequestError(message, 500, code)
+      }
+
+      if (event.type === 'done') {
+        streamCompleted = true
+      }
+    }
 
     try {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        if (chunk) {
-          fullContent += chunk
-          onChunk(chunk)
+
+        buffer += decoder.decode(value, { stream: true })
+        let lineBreakIndex = buffer.indexOf('\n')
+
+        while (lineBreakIndex !== -1) {
+          const line = buffer.slice(0, lineBreakIndex)
+          buffer = buffer.slice(lineBreakIndex + 1)
+          processLine(line)
+          lineBreakIndex = buffer.indexOf('\n')
         }
       }
+
       const finalChunk = decoder.decode()
       if (finalChunk) {
-        fullContent += finalChunk
-        onChunk(finalChunk)
+        buffer += finalChunk
+      }
+      if (buffer.trim()) {
+        processLine(buffer)
+      }
+
+      if (!streamCompleted && fullContent.length === 0) {
+        throw createProviderRequestError(
+          'No streamed content received',
+          502,
+          'STREAM_EMPTY'
+        )
       }
     } finally {
       reader.releaseLock()
@@ -566,6 +686,7 @@ export default function MultiChatPage() {
 
   const clearChat = () => {
     setActiveConversationId(null)
+    cancelRenameConversation()
     setChatState(prev => ({
       ...prev,
       messages: [],
@@ -683,7 +804,11 @@ export default function MultiChatPage() {
               disabled={isBusy}
               className="flex-1"
             />
-            <Button type="submit" disabled={isBusy || !chatState.input.trim()}>
+            <Button
+              type="submit"
+              disabled={isBusy || !chatState.input.trim()}
+              aria-label="Send message"
+            >
               <Send className="h-4 w-4" />
             </Button>
           </form>
@@ -777,29 +902,94 @@ export default function MultiChatPage() {
                           : 'bg-muted/20'
                       }`}
                     >
-                      <button
-                        type="button"
-                        className="flex-1 text-left"
-                        onClick={() => void loadConversationById(conversation.id)}
-                        disabled={isBusy}
-                      >
-                        <p className="truncate text-xs font-medium">
-                          {conversation.title || 'Untitled conversation'}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {formatConversationTimestamp(conversation.updatedAt)}
-                        </p>
-                      </button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => void deleteConversationById(conversation.id)}
-                        disabled={isBusy}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      {editingConversationId === conversation.id ? (
+                        <div className="flex w-full items-center gap-2">
+                          <div className="flex-1 space-y-1">
+                            <Input
+                              value={editingConversationTitle}
+                              onChange={event =>
+                                setEditingConversationTitle(event.target.value)
+                              }
+                              onKeyDown={event => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  void renameConversationById(conversation.id)
+                                } else if (event.key === 'Escape') {
+                                  cancelRenameConversation()
+                                }
+                              }}
+                              className="h-7 text-xs"
+                              disabled={isBusy}
+                              autoFocus
+                              aria-label="Conversation title"
+                            />
+                            <p className="text-[11px] text-muted-foreground">
+                              {formatConversationTimestamp(conversation.updatedAt)}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => void renameConversationById(conversation.id)}
+                            disabled={isBusy}
+                            aria-label="Save conversation title"
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={cancelRenameConversation}
+                            disabled={isBusy}
+                            aria-label="Cancel conversation rename"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="flex-1 text-left"
+                            onClick={() => void loadConversationById(conversation.id)}
+                            disabled={isBusy}
+                            aria-label={`Load conversation ${conversation.title || conversation.id}`}
+                          >
+                            <p className="truncate text-xs font-medium">
+                              {conversation.title || 'Untitled conversation'}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {formatConversationTimestamp(conversation.updatedAt)}
+                            </p>
+                          </button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => beginRenameConversation(conversation)}
+                            disabled={isBusy}
+                            aria-label={`Rename conversation ${conversation.title || conversation.id}`}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => void deleteConversationById(conversation.id)}
+                            disabled={isBusy}
+                            aria-label={`Delete conversation ${conversation.title || conversation.id}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   ))
                 )}

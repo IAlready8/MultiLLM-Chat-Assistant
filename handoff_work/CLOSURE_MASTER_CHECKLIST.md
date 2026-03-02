@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-02 03:48:39 EST` (`2026-03-02T08:48:39Z`)
+- Last updated: `2026-03-02 07:46:53 EST` (`2026-03-02T12:46:53Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -26,7 +26,25 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `03.3` Kill unsupported production fallback paths (PASS)
 - [x] `04.1` Audit `.env.example` against code (PASS)
 - [x] `04.2` Add startup validation for required env (PASS)
-- [ ] `04.3` Align verification scripts to real env rules (next)
+- [x] `04.3` Align verification scripts to real env rules (PASS)
+- [x] `05.1` Rewrite stale status docs (PASS)
+- [x] `05.2` Mark incomplete subsystems honestly (PASS)
+- [x] `05.3` Archive or demote dead/confusing guidance (PASS)
+- [x] `06.1` Verify auth mode split (PASS)
+- [x] `06.2` Close auth fallback ambiguity (PASS)
+- [x] `06.3` Verify protected route behavior (PASS)
+- [x] `07.1` Confirm Prisma schema reality (PASS)
+- [x] `07.2` Map DB-first vs fallback behavior (PASS)
+- [x] `07.3` Remove unsupported persistence ambiguity (PASS)
+- [x] `07.4` Verify migration path (PASS)
+- [x] `08.1` Verify provider registry truth (PASS)
+- [x] `08.2` Verify provider config routes (PASS)
+- [x] `08.3` Verify key encryption contract (PASS)
+- [x] `08.4` Verify provider-specific failure behavior (PASS)
+- [x] `09.1` Verify chat route contract (PASS)
+- [x] `09.2` Verify stream route contract (PASS)
+- [x] `09.3` Verify conversation persistence (PASS)
+- [ ] `09.4` Verify main chat UI flow (next)
 
 ---
 
@@ -61,49 +79,49 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 |---|---|---|---|---|---|---|---|
 | 04.1 ✅ | Audit `.env.example` against code | 03.2 | Trace env usage in auth, provider config, db, billing, verify scripts, sidecar bridge, rate limiting | PASS (closed 2026-03-02) | `.skill`, `CLAUDE.md`, `.currentstatus` | LLM | Env classification + missing-var gap list in `llminstructions.md`, `skill.md`, and `currentstatus.md` |
 | 04.2 ✅ | Add startup validation for required env | 04.1 | Ensure app fails fast on missing required env for chosen production shape; ensure disabled features do not require unrelated env | PASS (closed 2026-03-02) | code files in `lib/`, `app/api/`, or startup entry points | LLM | `lib/startup-validation.ts` + targeted tests + type-check output |
-| 04.3 | Align verification scripts to real env rules | 04.2 | Update `scripts/verify-production.sh` and related docs to reflect current required vars and optional modes | PASS when verify script agrees with chosen topology and docs | `scripts/verify-production.sh`, `README.md`, `ARCHITECTURE.md` | LLM | script diff + successful run evidence |
+| 04.3 ✅ | Align verification scripts to real env rules | 04.2 | Update `scripts/verify-production.sh` and related docs to reflect current required vars and optional modes | PASS (closed 2026-03-02) | `scripts/verify-production.sh`, `README.md`, `ARCHITECTURE.md` | LLM | script diff + successful run evidence against local Postgres (`multillm_verify_20260302`) |
 
 ## 05. Resolve documentation drift before code polishing
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 05.1 | Rewrite stale status docs | 01.3, 03.1 | Replace stale branch names, route counts, provider counts, runtime statements, completion claims | PASS when no stale doc contradicts repo | `STATUS_UPDATE.md`, `COMPLETION_REPORT.md`, `README.md`, `ARCHITECTURE.md`, existing `CLAUDE.md` or generated replacement | LLM | before/after mismatch matrix |
-| 05.2 | Mark incomplete subsystems honestly | 05.1 | Explicitly document Python sidecar limitation (`src/core/main.py` TODO for stream), fallback behavior, guest mode semantics, optional Stripe scope | PASS when no incomplete subsystem is implied to be fully complete | docs above + `PYTHON_INTEGRATION.md` | LLM | exact code citation paths |
-| 05.3 | Archive or demote dead/confusing guidance | 05.2 | Remove or archive docs that no longer match current branch or workflow | PASS when one authoritative doc set remains | top-level docs | Repo operator + LLM | doc manifest with retained/archived decisions |
+| 05.1 ✅ | Rewrite stale status docs | 01.3, 03.1 | Replace stale branch names, route counts, provider counts, runtime statements, completion claims | PASS (closed 2026-03-02) | `STATUS_UPDATE.md`, `COMPLETION_REPORT.md`, `README.md`, `ARCHITECTURE.md`, existing `CLAUDE.md` or generated replacement | LLM | Rewrote stale files; no stale-pattern matches remain in authoritative docs |
+| 05.2 ✅ | Mark incomplete subsystems honestly | 05.1 | Explicitly document Python sidecar limitation (`src/core/main.py` TODO for stream), fallback behavior, guest mode semantics, optional Stripe scope | PASS (closed 2026-03-02) | docs above + `PYTHON_INTEGRATION.md` | LLM | Python stream TODO + fallback/auth/optional billing notes now explicit |
+| 05.3 ✅ | Archive or demote dead/confusing guidance | 05.2 | Remove or archive docs that no longer match current branch or workflow | PASS (closed 2026-03-02) | top-level docs | Repo operator + LLM | `DOCS_SOURCE_OF_TRUTH.md` defines authoritative vs historical docs |
 
 ## 06. Harden auth and identity flows
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 06.1 | Verify auth mode split | 03.1, 04.2 | Review `proxy.ts`, `lib/auth.ts`, `lib/api-auth.ts`, demo/guest helpers, auth pages, route guards | PASS when strict mode and guest/demo mode behavior is fully defined and tested | `proxy.ts`, `lib/auth.ts`, related auth files | LLM | test results and behavior matrix |
-| 06.2 | Close auth fallback ambiguity | 06.1 | Decide whether in-memory auth user creation is allowed outside local/dev; if not, gate it | PASS when auth persistence rules are explicit | `lib/auth.ts`, docs | LLM + Repo operator | diff + tests |
-| 06.3 | Verify protected route behavior | 06.1 | Test page redirects, API 401s, auth misconfiguration 500s, callback URL behavior | PASS when e2e and route tests cover protected pages and APIs | `test/middleware-auth-routing.test.ts`, `test/api-auth.test.ts`, `test/e2e/auth-flow.spec.ts` | LLM | test output |
+| 06.1 ✅ | Verify auth mode split | 03.1, 04.2 | Review `proxy.ts`, `lib/auth.ts`, `lib/api-auth.ts`, demo/guest helpers, auth pages, route guards | PASS (closed 2026-03-02) | `proxy.ts`, `lib/auth.ts`, related auth files | LLM | auth behavior matrix in `llminstructions.md` + passing auth test suite |
+| 06.2 ✅ | Close auth fallback ambiguity | 06.1 | Decide whether in-memory auth user creation is allowed outside local/dev; if not, gate it | PASS (closed 2026-03-02) | `lib/auth.ts`, docs | LLM + Repo operator | `isInMemoryAuthFallbackAllowed()` policy + auth tests |
+| 06.3 ✅ | Verify protected route behavior | 06.1 | Test page redirects, API 401s, auth misconfiguration 500s, callback URL behavior | PASS (closed 2026-03-02) | `test/middleware-auth-routing.test.ts`, `test/api-auth.test.ts`, `test/e2e/auth-flow.spec.ts` | LLM | route tests + strict-auth chromium e2e + runtime HTTP probe output |
 
 ## 07. Harden data model and persistence
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 07.1 | Confirm Prisma schema reality | 03.1 | Review `prisma/schema.prisma`, migrations, service layer expectations | PASS when all runtime entities used by supported features exist and are migrated | `prisma/schema.prisma`, `prisma/migrations/*` | LLM | migration status output |
-| 07.2 | Map DB-first vs fallback behavior | 07.1 | Trace fallback use in `lib/prisma.ts`, `lib/db-fallback.ts`, `lib/api-key-service.ts`, `services/*db.ts`, `services/analytics-service.ts` | PASS when each domain object has one source-of-truth rule in production and one local/dev rule if applicable | `.currentstatus`, `.plan`, code/docs as needed | LLM | service matrix |
-| 07.3 | Remove unsupported persistence ambiguity | 07.2 | For production, eliminate any silent dependence on in-memory stores for supported features | PASS when a restart does not silently destroy supported production data | service files + docs | LLM + Repo operator | restart test evidence |
-| 07.4 | Verify migration path | 07.1 | Run `prisma migrate status`; run `prisma migrate deploy` in test/prod-like env; confirm no pending mismatch | PASS when migration deploy is clean | prisma + verification docs | Repo operator | command output |
+| 07.1 ✅ | Confirm Prisma schema reality | 03.1 | Review `prisma/schema.prisma`, migrations, service layer expectations | PASS (closed 2026-03-02) | `prisma/schema.prisma`, `prisma/migrations/*` | LLM | schema model inventory + runtime usage scan + `prisma migrate status` output |
+| 07.2 ✅ | Map DB-first vs fallback behavior | 07.1 | Trace fallback use in `lib/prisma.ts`, `lib/db-fallback.ts`, `lib/api-key-service.ts`, `services/*db.ts`, `services/analytics-service.ts` | PASS (closed 2026-03-02) | `.currentstatus`, `.plan`, code/docs as needed | LLM | service matrix + production read-path fallback regression tests for goals/personas |
+| 07.3 ✅ | Remove unsupported persistence ambiguity | 07.2 | For production, eliminate any silent dependence on in-memory stores for supported features | PASS (closed 2026-03-02) | service files + docs | LLM + Repo operator | production fail-closed tests + separate-process restart proof against Postgres |
+| 07.4 ✅ | Verify migration path | 07.1 | Run `prisma migrate status`; run `prisma migrate deploy` in test/prod-like env; confirm no pending mismatch | PASS (closed 2026-03-02) | prisma + verification docs | Repo operator | clean status + deploy + status outputs on verification Postgres |
 
 ## 08. Harden provider configuration and key lifecycle
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 08.1 | Verify provider registry truth | 02.2 | Confirm provider adapters and registry entries for OpenAI, Anthropic, Google AI, OpenRouter, Grok | PASS when providers listed in docs equal providers in code | `lib/providers/*`, `README.md`, `CLAUDE.md` | LLM | path list |
-| 08.2 | Verify provider config routes | 07.3 | Test `/api/config`, `/api/provider-configs`, `/api/test-api-key` in guest and strict auth modes | PASS when save/list/delete/test flows are deterministic | route files + tests | LLM | API test evidence |
-| 08.3 | Verify key encryption contract | 08.2 | Trace `API_KEY_ENCRYPTION_SEED`, encryption/decryption path, masked display rules, storage behavior | PASS when keys never leak in logs or UI and decryption works only server-side | `lib/api-key-service.ts`, `lib/crypto.ts`, UI files | LLM | targeted tests |
-| 08.4 | Verify provider-specific failure behavior | 08.2 | Test invalid key, upstream timeout, upstream 401, upstream 429, malformed response, missing provider config | PASS when errors are classified and surfaced consistently | `app/api/llm/chat/route.ts`, `app/api/llm/stream/route.ts`, `lib/providers/errors.ts` | LLM | test output |
+| 08.1 ✅ | Verify provider registry truth | 02.2 | Confirm provider adapters and registry entries for OpenAI, Anthropic, Google AI, OpenRouter, Grok | PASS (closed 2026-03-02) | `lib/providers/*`, `README.md`, `CLAUDE.md` | LLM | adapter/registry/type path list + README provider list alignment |
+| 08.2 ✅ | Verify provider config routes | 07.3 | Test `/api/config`, `/api/provider-configs`, `/api/test-api-key` in guest and strict auth modes | PASS (closed 2026-03-02) | route files + tests | LLM | deterministic route tests + explicit 500 handling for internal failures |
+| 08.3 ✅ | Verify key encryption contract | 08.2 | Trace `API_KEY_ENCRYPTION_SEED`, encryption/decryption path, masked display rules, storage behavior | PASS (closed 2026-03-02) | `lib/api-key-service.ts`, `lib/crypto.ts`, UI files | LLM | targeted encryption/redaction/runtime-seed tests |
+| 08.4 ✅ | Verify provider-specific failure behavior | 08.2 | Test invalid key, upstream timeout, upstream 401, upstream 429, malformed response, missing provider config | PASS (closed 2026-03-02) | `app/api/llm/chat/route.ts`, `app/api/llm/stream/route.ts`, `lib/providers/errors.ts` | LLM | expanded chat/stream route tests + deterministic error classifier update |
 
 ## 09. Harden core chat and streaming
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 09.1 | Verify chat route contract | 08.4 | Test success, auth failure, validation failure, provider failure, DB failure, guest mode, strict mode | PASS when `/api/llm/chat` contract is stable | `app/api/llm/chat/route.ts`, related tests | LLM | test output |
-| 09.2 | Verify stream route contract | 09.1 | Test NDJSON stream event types, abort path, provider failure path, browser rendering path | PASS when stream route and UI agree on stream protocol | `app/api/llm/stream/route.ts`, `services/ndjson.ts`, `services/stream-client.ts`, tests | LLM | test output + UI evidence |
-| 09.3 | Verify conversation persistence | 07.3, 09.1 | Test create, load, rename, delete, list, refresh persistence across sessions | PASS when conversation lifecycle works in supported modes | `app/api/conversations/*.ts`, `services/conversation-service*.ts`, UI components | LLM | route + e2e output |
+| 09.1 ✅ | Verify chat route contract | 08.4 | Test success, auth failure, validation failure, provider failure, DB failure, guest mode, strict mode | PASS (closed 2026-03-02) | `app/api/llm/chat/route.ts`, related tests | LLM | expanded chat route contract tests |
+| 09.2 ✅ | Verify stream route contract | 09.1 | Test NDJSON stream event types, abort path, provider failure path, browser rendering path | PASS (closed 2026-03-02) | `app/api/llm/stream/route.ts`, `services/ndjson.ts`, `services/stream-client.ts`, tests | LLM | NDJSON route + stream-client tests + multi-chat protocol alignment |
+| 09.3 ✅ | Verify conversation persistence | 07.3, 09.1 | Test create, load, rename, delete, list, refresh persistence across sessions | PASS (closed 2026-03-02) | `app/api/conversations/*.ts`, `services/conversation-service*.ts`, UI components | LLM | conversation route/service lifecycle tests + refresh e2e (`test/e2e/conversation-persistence.spec.ts`) |
 | 09.4 | Verify main chat UI flow | 09.1, 09.2, 09.3 | Run page-level tests for `/multi-chat`; include loading, empty, success, error, refresh, provider change | PASS when user can complete full chat roundtrip | `app/multi-chat/page.tsx`, `components/conversation-manager.tsx` | LLM | e2e evidence |
 
 ## 10. Resolve Python sidecar truth

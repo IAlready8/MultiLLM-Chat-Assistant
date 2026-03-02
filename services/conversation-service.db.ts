@@ -165,6 +165,9 @@ export const ConversationService = {
     } catch (error) {
       const dbUnavailable = db.markUnavailableIfNeeded(error)
       const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('createConversation', 'conversation', error)
       } else if (!dbUnavailable) {
@@ -239,9 +242,72 @@ export const ConversationService = {
     } catch (error) {
       const dbUnavailable = db.markUnavailableIfNeeded(error)
       const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('addMessages', 'conversation', error)
       } else if (!dbUnavailable) {
+        throw error
+      }
+      return saveToFallback()
+    }
+  },
+
+  /**
+   * Update an existing conversation title.
+   */
+  async updateConversationTitle(
+    id: string,
+    userId: string,
+    title: string
+  ): Promise<Conversation | null> {
+    const saveToFallback = () => {
+      const store = getFallbackUserStore(userId)
+      const existingConversation = store.get(id)
+      if (!existingConversation) {
+        return null
+      }
+
+      const updatedConversation: ConversationWithMessages = {
+        ...existingConversation,
+        title,
+        updatedAt: new Date(),
+      }
+
+      store.set(id, updatedConversation)
+      return toConversation(updatedConversation)
+    }
+
+    if (db.isKnownUnavailable()) {
+      return saveToFallback()
+    }
+
+    try {
+      const existingConversation = await prisma.conversation.findFirst({
+        where: {
+          id,
+          userId,
+        },
+      })
+
+      if (!existingConversation) {
+        return null
+      }
+
+      return await prisma.conversation.update({
+        where: { id },
+        data: {
+          title,
+          updatedAt: new Date(),
+        },
+      })
+    } catch (error) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
+      if (!dbUnavailable) {
         throw error
       }
       return saveToFallback()
@@ -281,6 +347,9 @@ export const ConversationService = {
     } catch (error) {
       const dbUnavailable = db.markUnavailableIfNeeded(error)
       const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('deleteConversation', 'conversation', error)
       } else if (!dbUnavailable) {

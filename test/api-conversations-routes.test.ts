@@ -7,6 +7,7 @@ const mockConversationService = {
   createConversation: vi.fn(),
   getFullConversation: vi.fn(),
   addMessages: vi.fn(),
+  updateConversationTitle: vi.fn(),
   deleteConversation: vi.fn(),
 }
 
@@ -23,6 +24,8 @@ vi.mock('@/services/conversation-service.db', () => ({
     getFullConversation: (...args: unknown[]) =>
       mockConversationService.getFullConversation(...args),
     addMessages: (...args: unknown[]) => mockConversationService.addMessages(...args),
+    updateConversationTitle: (...args: unknown[]) =>
+      mockConversationService.updateConversationTitle(...args),
     deleteConversation: (...args: unknown[]) =>
       mockConversationService.deleteConversation(...args),
   },
@@ -44,6 +47,7 @@ import {
 import {
   GET as getConversationById,
   POST as addMessages,
+  PUT as updateConversation,
   DELETE as deleteConversation,
 } from '@/app/api/conversations/[id]/route'
 
@@ -210,6 +214,70 @@ describe('/api/conversations routes', () => {
         },
       ]
     )
+  })
+
+  it('id PUT validates title payload', async () => {
+    const response = await updateConversation(
+      new Request('http://localhost/api/conversations/conv-1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: '' }),
+      }),
+      idRouteContext('conv-1')
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Invalid input',
+    })
+  })
+
+  it('id PUT updates an existing conversation title', async () => {
+    mockConversationService.updateConversationTitle.mockResolvedValue({
+      id: 'conv-1',
+      title: 'Renamed Conversation',
+      userId: 'user-1',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    })
+
+    const response = await updateConversation(
+      new Request('http://localhost/api/conversations/conv-1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Renamed Conversation' }),
+      }),
+      idRouteContext('conv-1')
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockConversationService.updateConversationTitle).toHaveBeenCalledWith(
+      'conv-1',
+      'user-1',
+      'Renamed Conversation'
+    )
+    await expect(response.json()).resolves.toMatchObject({
+      id: 'conv-1',
+      title: 'Renamed Conversation',
+    })
+  })
+
+  it('id PUT returns 404 when conversation is missing', async () => {
+    mockConversationService.updateConversationTitle.mockResolvedValue(null)
+
+    const response = await updateConversation(
+      new Request('http://localhost/api/conversations/conv-1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Renamed Conversation' }),
+      }),
+      idRouteContext('conv-1')
+    )
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Conversation not found',
+    })
   })
 
   it('id DELETE returns 404 when delete fails', async () => {

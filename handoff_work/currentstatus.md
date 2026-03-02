@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-02 03:48:39 EST
-timestamp_utc: 2026-03-02T08:48:39Z
+timestamp_local: 2026-03-02 07:46:53 EST
+timestamp_utc: 2026-03-02T12:46:53Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -17,21 +17,36 @@ source: direct repo inspection + command evidence in this session
 - `03.3` PASS: production fallback paths aligned with locked runtime in code + docs.
 - `04.1` PASS: `.env.example` variables classified as required-all / required-conditional / optional / dead; code/env gap list captured.
 - `04.2` PASS: centralized startup env validation added and wired into startup-critical modules with passing tests.
+- `04.3` PASS: production verification script aligned to locked env/runtime rules and successfully executed end-to-end.
+- `05.1` PASS: stale top-level status/runtime docs rewritten to match current repo truth.
+- `05.2` PASS: incomplete subsystems and optional scope documented explicitly.
+- `05.3` PASS: authoritative doc set defined; historical/confusing guidance demoted.
+- `06.1` PASS: strict vs guest/demo auth behavior defined and validated with targeted tests.
+- `06.2` PASS: auth fallback persistence policy is explicit in code and validated by tests.
+- `06.3` PASS: protected route behavior verified through route tests, strict-auth e2e checks, and runtime HTTP probes.
+- `07.1` PASS: Prisma schema, migration set, and runtime model usage are aligned for supported runtime entities.
+- `07.2` PASS: DB-first vs fallback rules are now explicit per domain, with production-safe guards added for goals/personas and regression tests.
+- `07.3` PASS: silent production dependence on in-memory fallback removed for supported persistence paths; restart-proof evidence captured.
+- `07.4` PASS: migration status/deploy path validated against the production-like verification Postgres database.
+- `08.1` PASS: provider registry truth verified and docs aligned to exact code-backed provider set (OpenAI, Anthropic, Google AI, OpenRouter, Grok).
+- `08.2` PASS: provider config routes now have deterministic save/list/delete/test behavior with explicit strict-auth and internal-error handling coverage.
+- `08.3` PASS: API key encryption contract verified end-to-end (encrypted-at-rest behavior, route/UI redaction, and server-side-only decryption path for DB-backed keys).
+- `08.4` PASS: provider-specific failure behavior verified and normalized for chat/stream routes (invalid key, timeout, 401, 429, malformed upstream response, missing config).
+- `09.1` PASS: `/api/llm/chat` contract validated across success/auth/validation/provider/DB failure modes plus guest/strict auth behavior.
+- `09.2` PASS: `/api/llm/stream` NDJSON contract verified and aligned with client-side stream protocol consumers.
+- `09.3` PASS: conversation persistence lifecycle verified across create/load/list/update/delete and refresh behavior with route/service tests plus browser e2e evidence.
 
 ## failed
 - none for `01.*` through `03.1`.
 
 ## unverified
-- `npm ci`, `npm run type-check`, `npm run lint`, `npm run test:run`, `npm run build`.
-- `prisma migrate status` and `prisma migrate deploy` against real DB.
+- `npm ci`, `npm run lint`, full-repo `npm run test:run`, `npm run build`.
 - preview/production deploy + rollback verification.
 - Stripe checkout/portal/webhook live loop.
 - full successful `scripts/verify-production.sh` execution against reachable production-like DB.
 
 ## blockers
-1. `04.3` verification script is updated but full success run is blocked by missing reachable Postgres in this environment.
-2. Python stream parity in sidecar is still explicitly TODO (`src/core/main.py:198`).
-3. Multiple top-level docs still drift from code truth (`05.*` pending).
+1. Python stream parity in sidecar is still explicitly TODO (`src/core/main.py:198`).
 
 ## 01.1 evidence (raw)
 ```text
@@ -131,7 +146,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Complete `04.3` by running `scripts/verify-production.sh` successfully against a reachable DB/base URL and capturing pass evidence.
+Start `09.4`: verify main `/multi-chat` UI flow (loading/empty/success/error/refresh/provider-change) now that `09.3` lifecycle persistence is closed.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -260,17 +275,349 @@ TOTAL (22)
   - `npm run type-check`
     - result: passed.
 
-## 04.3 progress (in progress, not closed)
+## 04.3 evidence (closed)
 - Changes made:
   - Updated `scripts/verify-production.sh` for locked runtime rules:
     - `NEXTAUTH_SECRET` or `AUTH_SECRET` accepted
     - OAuth pair validation
     - Stripe partial-config fail-fast
     - optional sidecar health check via `--require-sidecar`
+    - fixed `--apply-migrations` flow to apply pending migrations then re-check status
   - Updated docs:
     - `README.md` verification/env/runtime notes
     - `ARCHITECTURE.md` verification/runtime/fallback notes
 - Command evidence:
   - `bash scripts/verify-production.sh --help` -> passes and shows new options.
   - `bash scripts/verify-production.sh` -> fails fast on missing `NEXTAUTH_URL` (expected).
-  - `NEXTAUTH_URL=... NEXTAUTH_SECRET=... API_KEY_ENCRYPTION_SEED=... DATABASE_URL=postgresql://localhost:5432/test bash scripts/verify-production.sh` -> DB reachability fails (`EPERM`), so full PASS evidence is still pending.
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --apply-migrations` -> passed end-to-end.
+
+## 05.1 evidence (stale docs rewritten)
+- Files rewritten/updated:
+  - `STATUS_UPDATE.md`
+  - `COMPLETION_REPORT.md`
+  - `CLAUDE.md`
+  - `README.md`
+  - `ARCHITECTURE.md`
+- Stale-claim scan:
+  - `rg -n "chore-next16-migration|Next.js 14|100% completed|production-ready|12 endpoints|4 providers|Prisma stubs|not integrated with Next.js runtime" STATUS_UPDATE.md COMPLETION_REPORT.md README.md CLAUDE.md ARCHITECTURE.md`
+  - Result: no stale contradiction strings remained.
+
+## 05.2 evidence (incomplete subsystems documented)
+- Updated:
+  - `PYTHON_INTEGRATION.md` (explicit `/api/v1/llm/stream` TODO limitation and auth-mode semantics)
+  - `README.md` (production strict auth and optional billing scope)
+  - `ARCHITECTURE.md` and `CLAUDE.md` (fallback/optional/runtime notes)
+
+## 05.3 evidence (authoritative docs set)
+- Added `DOCS_SOURCE_OF_TRUTH.md` with:
+  - authoritative docs list
+  - demoted historical docs (`COMPLETION_REPORT.md`)
+  - closure gate reference to checklist pass criteria
+
+## 06.1 evidence (auth mode split)
+- Exact files changed:
+  - `test/demo-account.test.ts`
+  - `test/middleware-auth-routing.test.ts`
+- Verification commands:
+  - `npm run test:run -- test/demo-account.test.ts test/middleware-auth-routing.test.ts test/api-auth.test.ts`
+    - result: `3` files passed, `18` tests passed.
+  - `npm run type-check`
+    - result: passed.
+- Behavior matrix source:
+  - `llminstructions.md` section `06.1 auth behavior matrix (verified)`.
+
+## 06.2 evidence (auth fallback ambiguity closed)
+- Exact files changed:
+  - `lib/demo-account.ts`
+  - `lib/auth.ts`
+  - `test/demo-account.test.ts`
+- Verification commands:
+  - `npm run test:run -- test/demo-account.test.ts test/middleware-auth-routing.test.ts test/api-auth.test.ts`
+    - result: `3` files passed, `19` tests passed.
+  - `npm run type-check`
+    - result: passed.
+
+## 06.3 evidence (protected routes)
+- Route/API verification:
+  - `npm run test:run -- test/middleware-auth-routing.test.ts test/api-auth.test.ts`
+    - result: `2` files passed, `15` tests passed.
+- E2E verification:
+  - `CI=1 AUTH_REQUIRE_LOGIN=true NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=true NEXTAUTH_SECRET=... NEXTAUTH_URL=http://localhost:3000 API_KEY_ENCRYPTION_SEED=... npx playwright test test/e2e/auth-flow.spec.ts --project=chromium --grep "redirect unauthenticated users|preserve redirect URL"`
+    - result: `2` tests passed.
+- Runtime HTTP probe verification:
+  - `/settings` -> `307` redirect to `/auth/signin?callbackUrl=%2Fsettings`
+  - `/api/conversations` -> `401` JSON `{"error":"Unauthorized"}`
+
+## 07.1 evidence (Prisma schema reality)
+- Commands/evidence:
+  - `rg -n "^model\\s+" prisma/schema.prisma`
+  - `ls -la prisma/migrations`
+  - `rg -n "prisma\\.(user|conversation|message|persona|goal|analytics|providerConfig|subscription|team|account|session|verificationToken)" app lib services`
+  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+- Result:
+  - Schema contains all runtime entities referenced by supported feature surfaces.
+  - Migration status is up to date on verification DB.
+
+## 07.2 evidence (DB-first vs fallback behavior mapped)
+- Shared fallback policy anchors:
+  - `lib/db-fallback.ts`: in-memory fallback allowed only when `NODE_ENV !== 'production'`; `getOrCreateUserStore()` asserts this policy.
+  - `lib/prisma.ts`: production fails fast if `DATABASE_URL` is missing.
+- Service matrix:
+  - Provider config + API keys (`lib/api-key-service.ts`):
+    - production: DB is source of truth; fallback writes are blocked by `getOrCreateUserStore` assertion
+    - local/dev: in-memory fallback store is used on DB-unavailable errors
+  - Conversations (`services/conversation-service.db.ts`):
+    - production: DB is source of truth
+    - local/dev: in-memory per-user conversation fallback when DB is unavailable (or guest FK fallback path)
+  - Goals (`services/goal-service.db.ts`):
+    - production: DB is source of truth; successful reads no longer touch fallback stores; missing DB rows return `null`/`false` instead of creating fallback
+    - local/dev: in-memory fallback allowed for DB-unavailable or guest FK cases
+  - Personas (`services/persona-service.db.ts`):
+    - production: DB is source of truth; successful reads no longer touch fallback stores; missing DB rows return `null`/`false` instead of creating fallback
+    - local/dev: in-memory fallback allowed for DB-unavailable or guest FK cases
+  - Analytics (`services/analytics-service.ts`):
+    - production: DB is source of truth; memory event reads are gated off (`db.isFallbackAllowed() === false`)
+    - local/dev: fallback events are recorded/read when DB is unavailable
+  - Teams (`services/team-service.db.ts`) + config manager (`lib/config-manager.ts`):
+    - production: DB-only behavior; no in-memory fallback paths
+    - local/dev: same (DB-only in current implementation)
+- `07.2` fix applied in this pass:
+  - `services/goal-service.db.ts`: switched fallback read paths to non-creating peeks and gated fallback usage behind `db.isFallbackAllowed()`.
+  - `services/persona-service.db.ts`: same production-safe fallback gating pattern.
+  - Added production regression tests:
+    - `test/goal-service-db.test.ts`
+    - `test/persona-service-db.test.ts`
+- Verification commands run:
+  - `rg -n "isInMemoryFallbackAllowed|assertInMemoryFallbackAllowed|createDbAvailabilityTracker|isFallbackAllowed|isKnownUnavailable|markUnavailableIfNeeded|getOrCreateUserStore" lib/db-fallback.ts lib/prisma.ts lib/api-key-service.ts services/conversation-service.db.ts services/goal-service.db.ts services/persona-service.db.ts services/analytics-service.ts services/team-service.db.ts lib/config-manager.ts`
+  - `npm run test:run -- test/goal-service-db.test.ts test/persona-service-db.test.ts test/db-fallback.test.ts test/analytics-service.test.ts`
+  - `npm run test:run -- test/goal-service-db.test.ts test/persona-service-db.test.ts`
+  - `npm run type-check`
+- Result:
+  - Every mapped persistence domain now has one explicit production source-of-truth rule and one local/dev fallback rule when applicable.
+
+## 07.3 evidence (unsupported persistence ambiguity removed)
+- Code hardening for production fail-closed behavior:
+  - `lib/api-key-service.ts`
+    - production now throws on DB read/write errors instead of silently returning empty/null config data
+    - fallback map reads/writes are gated by `db.isFallbackAllowed()`
+  - `services/analytics-service.ts`
+    - production now throws on analytics DB read/write errors instead of silently emitting empty data
+  - `services/conversation-service.db.ts`
+    - production now throws original DB/FK errors before any fallback attempt
+- New/updated production tests:
+  - `test/api-key-service.test.ts` (new): production DB unavailability causes read/write API-key operations to throw
+  - `test/analytics-service.test.ts`: added production fail-closed coverage
+  - `test/conversation-service-db.test.ts`: added production FK-path fail-closed coverage
+  - existing production read-path tests retained:
+    - `test/goal-service-db.test.ts`
+    - `test/persona-service-db.test.ts`
+- Verification commands run:
+  - `npm run test:run -- test/api-key-service.test.ts test/analytics-service.test.ts test/conversation-service-db.test.ts test/goal-service-db.test.ts test/persona-service-db.test.ts test/db-fallback.test.ts`
+  - `npm run type-check`
+- Restart-proof persistence evidence (separate-process check):
+  - process A (production-mode Prisma adapter client): created user+goal+persona+conversation+message in `multillm_verify_20260302` and wrote user id to `/tmp/multillm_restart_proof_user_id.txt`
+  - process B (new production-mode Prisma adapter client): read counts for same user and confirmed:
+    - `goalCount: 1`
+    - `personaCount: 1`
+    - `conversationCount: 1`
+    - `messageCount: 1`
+  - cleanup: deleted temporary user record after proof capture
+- Result:
+  - Supported production persistence paths no longer silently fall back to in-memory stores.
+  - Persistence survives process boundary/restart when backed by Postgres.
+
+## 07.4 evidence (migration path verified)
+- Database target:
+  - `postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302`
+- Commands run:
+  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+    - output: `Database schema is up to date!`
+  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate deploy`
+    - output: `No pending migrations to apply.`
+  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status` (post-deploy recheck)
+    - output: `Database schema is up to date!`
+- Result:
+  - Migration deploy path is clean in production-like mode with no drift or pending mismatch.
+
+## 08.1 evidence (provider registry truth verified)
+- Provider adapters present in code:
+  - `lib/providers/openai.ts`
+  - `lib/providers/anthropic.ts`
+  - `lib/providers/googleai.ts`
+  - `lib/providers/openrouter.ts`
+  - `lib/providers/grok.ts`
+- Provider ID truth anchors:
+  - `lib/providers/types.ts` -> `ProviderId` union includes:
+    - `openai`
+    - `openrouter`
+    - `anthropic`
+    - `googleai`
+    - `grok`
+  - `lib/providers/registry.ts` maps each provider ID to a concrete adapter and exports `supportedProviderIds`.
+- Docs alignment changes:
+  - `README.md` now explicitly lists: `OpenAI, Anthropic, Google AI, OpenRouter, Grok`.
+  - `CLAUDE.md` provider list already matched and remains unchanged.
+- Verification commands:
+  - `ls -1 lib/providers`
+  - `sed -n '1,240p' lib/providers/registry.ts`
+  - `sed -n '1,120p' lib/providers/types.ts`
+  - `rg -n "Supported providers|OpenAI|Anthropic|Google AI|OpenRouter|Grok" README.md CLAUDE.md`
+  - `rg -n "openai|anthropic|googleai|openrouter|grok|supportedProviderIds|ProviderId" lib/providers/registry.ts lib/providers/types.ts`
+- Result:
+  - Providers listed in docs now match providers wired in code exactly.
+
+## 08.2 evidence (provider config routes verified)
+- Routes verified:
+  - `/api/config` (`app/api/config/route.ts`)
+  - `/api/provider-configs` (`app/api/provider-configs/route.ts`)
+  - `/api/test-api-key` (`app/api/test-api-key/route.ts`)
+- Determinism hardening implemented:
+  - `app/api/config/route.ts`
+    - `GET` now catches provider-config lookup failures and returns explicit JSON `500`.
+    - empty-key delete path now returns explicit JSON `500` if deletion fails (no false success).
+  - `app/api/test-api-key/route.ts`
+    - wrapped processing in try/catch with explicit JSON `500` for unexpected internal failures.
+- Strict vs guest mode evidence:
+  - strict-auth rejection path validated by auth-forwarding tests (`401`).
+  - guest-allowed mode validated by asserting `getAuthenticatedUser({ allowGuest: true })` in route tests.
+- Test coverage executed:
+  - `test/api-config-route.test.ts`
+    - includes list/save/delete behavior + new failure-path assertions
+  - `test/api-provider-configs-route.test.ts`
+    - includes list/update/delete/test behavior + guest-allowed auth assertion
+  - `test/api-test-api-key-route.test.ts`
+    - includes provided/saved-key test behavior + new internal-failure `500` assertion
+- Verification commands:
+  - `npm run test:run -- test/api-config-route.test.ts test/api-provider-configs-route.test.ts test/api-test-api-key-route.test.ts`
+  - `npm run type-check`
+- Result:
+  - Save/list/delete/test flows are deterministic across strict-auth rejection and guest-allowed execution modes.
+
+## 08.3 evidence (key encryption contract verified)
+- Encryption seed/runtime enforcement:
+  - `lib/runtime-secrets.ts`:
+    - production requires `API_KEY_ENCRYPTION_SEED`
+    - non-production uses stable local fallback seed with single warning
+  - `test/runtime-secrets.test.ts` verifies all three branches
+- Encryption/decryption flow:
+  - `lib/api-key-service.ts`:
+    - `storeUserApiKey()` derives key from seed and writes encrypted token via `aesGcmEncrypt`
+    - `getUserApiKey()` decrypts server-side via `aesGcmDecrypt`
+    - `getUserProviderConfigs()` returns metadata/settings only (no API key field)
+  - `test/api-key-service.test.ts` (new contract case) verifies:
+    - stored value is encrypted representation (not raw key)
+    - decrypted roundtrip is returned only through server helper path
+    - provider-config listing never includes plaintext key
+- Redaction in route/UI outputs:
+  - `/api/provider-configs` returns `apiKey: ''` placeholder
+  - `components/api-key-form.tsx` keeps key inputs as password fields and clears input after save
+  - route tests assert redacted response behavior
+- Log-hardening changes:
+  - `app/api/config/route.ts` and `app/api/test-api-key/route.ts` now log generic key-operation failure messages without dumping raw error objects.
+- Verification commands:
+  - `npm run test:run -- test/api-key-service.test.ts test/runtime-secrets.test.ts test/api-config-route.test.ts test/api-provider-configs-route.test.ts test/api-test-api-key-route.test.ts`
+  - `npm run type-check`
+- Result:
+  - DB-backed key storage is encrypted-at-rest, decryption is server-side helper mediated, and route/UI surfaces remain redacted.
+
+## 08.4 evidence (provider-specific failure behavior verified)
+- Error classification hardening:
+  - `lib/providers/errors.ts`
+    - added `PROVIDER_MALFORMED_RESPONSE` classification (`502`) for SyntaxError/malformed payload conditions
+    - preserved deterministic mapping for auth (`401`), rate limit (`429`), timeout (`504`), network (`503`)
+- Chat route hardening:
+  - `app/api/llm/chat/route.ts`
+    - request JSON parsing now handled explicitly in-route (`INVALID_JSON`) before provider error classification
+- Test coverage updates:
+  - `test/api-llm-chat-route.test.ts`
+    - added timeout mapping case (`PROVIDER_TIMEOUT`)
+    - added malformed upstream JSON case (`PROVIDER_MALFORMED_RESPONSE`)
+  - `test/api-llm-stream-route.test.ts`
+    - added NDJSON timeout error code case (`PROVIDER_TIMEOUT`)
+    - added missing-stream-body malformed case (`PROVIDER_MALFORMED_RESPONSE`)
+  - existing cases already covered:
+    - invalid key format
+    - missing provider config
+    - upstream 401 auth rejection
+    - upstream 429 rate-limited
+- Verification commands:
+  - `npm run test:run -- test/api-llm-chat-route.test.ts test/api-llm-stream-route.test.ts`
+  - `npm run type-check`
+- Result:
+  - Required provider-failure modes now map to deterministic status/code responses across both `/api/llm/chat` and `/api/llm/stream`.
+
+## 09.1 evidence (`/api/llm/chat` contract verified)
+- Verified behavior categories:
+  - auth failure forwarding (`401`)
+  - guest-mode success path (`allowGuest` user)
+  - validation errors (missing messages, invalid JSON)
+  - missing provider config/key handling
+  - invalid key format handling
+  - upstream failures (401, 429, timeout, malformed payload)
+  - DB/service failure propagation (`INTERNAL_ERROR`)
+  - non-stream success payload flow
+- Test file:
+  - `test/api-llm-chat-route.test.ts`
+    - expanded to include explicit guest-mode and provider-config DB-failure cases
+- Verification commands:
+  - `npm run test:run -- test/api-llm-chat-route.test.ts`
+  - `npm run type-check`
+- Result:
+  - Chat route contract is stable and deterministic for required success/failure/auth scenarios.
+
+## 09.2 evidence (`/api/llm/stream` contract verified)
+- Protocol alignment changes:
+  - `app/multi-chat/page.tsx`
+    - switched streaming fetch path from `/api/llm/chat` plaintext to `/api/llm/stream` NDJSON
+    - added NDJSON event parsing for `chunk`, `done`, and `error`
+  - `services/stream-client.ts`
+    - corrected endpoint to `/api/llm/stream`
+    - aligned payload shape to route contract (`provider`, `messages`, `model`, `temperature`, `max_tokens`)
+- Stream route verification:
+  - `test/api-llm-stream-route.test.ts`
+    - validates NDJSON chunk/done/error events
+    - validates timeout and malformed-body error codes
+- Client protocol verification:
+  - `test/stream-client.test.ts` (new)
+    - validates endpoint/payload contract
+    - validates NDJSON chunk/done handling
+    - validates NDJSON error + non-OK HTTP error behavior
+- Verification commands:
+  - `npm run test:run -- test/stream-client.test.ts test/api-llm-stream-route.test.ts`
+  - `npm run type-check`
+- Result:
+  - Stream route and client-side protocol consumers now agree on NDJSON event contract.
+
+## 09.3 evidence (conversation persistence lifecycle verified)
+- Conversation route contract updates:
+  - `app/api/conversations/[id]/route.ts`
+    - added `PUT` handler for conversation metadata updates (title rename)
+    - validated `title` payload via zod (`min(1)`, `max(255)`)
+    - deterministic `400`/`404`/`500` outcomes for invalid/missing/internal paths
+- Conversation service updates:
+  - `services/conversation-service.db.ts`
+    - added `updateConversationTitle(id, userId, title)` with DB-first behavior
+    - fallback path mirrors title update + `updatedAt` touch when DB is unavailable
+- Client/UI updates:
+  - `lib/api-client.ts` adds `updateConversation(id, { title })`
+  - `app/multi-chat/page.tsx` adds rename controls for recent conversations
+  - a11y/testability improvements:
+    - send button label (`aria-label="Send message"`)
+    - rename/load/delete control labels for conversation rows
+- Route + service lifecycle tests:
+  - `test/api-conversations-routes.test.ts`
+    - covers create/list/load/add/delete
+    - added `PUT` validation + success + not-found cases
+  - `test/conversation-service-db.test.ts`
+    - covers create/load/list/add/rename/delete fallback lifecycle
+    - added DB-backed reinitialization test proving lifecycle state survives service refresh
+- Browser refresh evidence:
+  - `test/e2e/conversation-persistence.spec.ts` (new)
+    - verifies create/load/list/update/delete flow through `/multi-chat`
+    - verifies renamed conversation and messages persist after page reload
+- Verification commands:
+  - `npm run test:run -- test/api-conversations-routes.test.ts test/conversation-service-db.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/conversation-persistence.spec.ts --project=chromium`
+  - `npm run type-check`
+- Result:
+  - `09.3` is PASS with explicit evidence for create/load/list/update/delete plus refresh persistence behavior.

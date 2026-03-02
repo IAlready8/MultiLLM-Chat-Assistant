@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-02 03:48 EST)
+## Progress snapshot (2026-03-02 07:46 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -19,13 +19,30 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `03.3` Align production fallback behavior with locked topology
   - `04.1` Classify env vars as required/conditional/optional/dead
   - `04.2` Implement startup validation for required envs
+  - `04.3` Align verification script and capture successful end-to-end run
+  - `05.1` Rewrite stale top-level status/runtime docs
+  - `05.2` Document incomplete subsystems and optional scope honestly
+  - `05.3` Establish authoritative documentation set and demote historical docs
+  - `06.1` Verify strict-vs-guest auth split with tests and behavior matrix
+  - `06.2` Make auth fallback persistence policy explicit and tested
+  - `06.3` Verify protected routes via route tests + strict-auth e2e subset
+  - `07.1` Confirm Prisma schema + migration reality against runtime usage
+  - `07.2` Map DB-first vs fallback behavior and close production read-path fallback leakage in goals/personas
+  - `07.3` Remove silent production in-memory persistence dependence; add restart-proof evidence
+  - `07.4` Verify migration status/deploy path against production-like verification DB
+  - `08.1` Verify provider registry truth and align README provider list with code
+  - `08.2` Verify provider config routes in strict+guest modes with deterministic failure handling
+  - `08.3` Verify key encryption contract (seed policy, encrypted storage, redaction, server-side decryption path)
+  - `08.4` Verify provider-specific failure behavior for chat/stream + error classification
+  - `09.1` Verify `/api/llm/chat` contract across required success/failure/auth paths
+  - `09.2` Verify `/api/llm/stream` protocol and align NDJSON client consumption
+  - `09.3` Verify conversation persistence lifecycle (create/load/list/update/delete + refresh continuity)
 - failed:
   - none
 - unverified:
   - runtime/build/test/deploy proof steps not executed yet
 - blockers:
-  - `04.3` needs a successful verify run against reachable DB/base URL
-  - stale docs not rewritten yet (`05.*`)
+  - Python sidecar stream parity still pending (`src/core/main.py` TODO endpoint)
 
 ## Phase A - truth locking
 1. [x] Reconfirm repo baseline
@@ -83,7 +100,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 
 ## 04.3 status
 - Script and doc alignment completed (`scripts/verify-production.sh`, `README.md`, `ARCHITECTURE.md`).
-- Full close pending: need one successful end-to-end `verify-production.sh` run against a reachable Postgres instance (and base URL checks if provided).
+- Successful end-to-end verify proof captured against local Postgres (`multillm_verify_20260302`) with `--apply-migrations`.
 
 ## Phase B - runtime lock
 5. [x] Decide the official production topology:
@@ -97,49 +114,269 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
    - optional
    - dead
 7. [x] Implement startup validation aligned to chosen topology
-8. [ ] Align `scripts/verify-production.sh` to the chosen topology
+8. [x] Align `scripts/verify-production.sh` to the chosen topology
 
 ## Phase C - code/docs alignment
-9. [ ] Rewrite stale docs only after the topology decision is made
-10. [ ] Replace stale `CLAUDE.md` with the generated version or merge it carefully
-11. [ ] Update README/architecture/status/completion/python docs so code and docs match
+9. [x] Rewrite stale docs only after the topology decision is made
+10. [x] Replace stale `CLAUDE.md` with the generated version or merge it carefully
+11. [x] Update README/architecture/status/completion/python docs so code and docs match
+
+## 05.* implementation evidence
+- Rewritten/updated docs:
+  - `STATUS_UPDATE.md`
+  - `COMPLETION_REPORT.md`
+  - `CLAUDE.md`
+  - `README.md`
+  - `ARCHITECTURE.md`
+  - `PYTHON_INTEGRATION.md`
+  - `DOCS_SOURCE_OF_TRUTH.md` (new)
+- Stale-pattern check command:
+  - `rg -n "Next.js 14|12 endpoints|4 providers|100%|FULLY COMPLETE|not integrated with Next.js runtime|Prisma stubs|chore-next16-migration|production-ready" ...`
+  - Result: no stale claims in authoritative docs (only historical reference note in `COMPLETION_REPORT.md`).
+
+## 06.1 implementation evidence
+- Code/tests updated:
+  - `test/demo-account.test.ts` (new)
+  - `test/middleware-auth-routing.test.ts` (added production strict-enforcement test)
+- Verification commands:
+  - `npm run test:run -- test/demo-account.test.ts test/middleware-auth-routing.test.ts test/api-auth.test.ts`
+  - `npm run type-check`
+
+## 06.2 implementation evidence
+- Code changes:
+  - `lib/demo-account.ts` added `isInMemoryAuthFallbackAllowed()`
+  - `lib/auth.ts` now uses the policy helper to gate in-memory auth fallback
+  - `test/demo-account.test.ts` extended with fallback policy assertions
+- Verification commands:
+  - `npm run test:run -- test/demo-account.test.ts test/middleware-auth-routing.test.ts test/api-auth.test.ts`
+  - `npm run type-check`
+
+## 06.3 implementation evidence
+- Updated e2e assertions in `test/e2e/auth-flow.spec.ts` to match strict-auth callback URL behavior and optional OAuth-button presence.
+- Verification commands:
+  - `npm run test:run -- test/middleware-auth-routing.test.ts test/api-auth.test.ts`
+  - `CI=1 AUTH_REQUIRE_LOGIN=true NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=true NEXTAUTH_SECRET=... NEXTAUTH_URL=http://localhost:3000 API_KEY_ENCRYPTION_SEED=... npx playwright test test/e2e/auth-flow.spec.ts --project=chromium --grep "redirect unauthenticated users|preserve redirect URL"`
+  - strict runtime probe:
+    - `/settings` -> `307 /auth/signin?callbackUrl=...`
+    - `/api/conversations` -> `401 {"error":"Unauthorized"}`
+
+## 07.1 implementation evidence
+- Schema/migration inventory:
+  - `prisma/schema.prisma` model list includes all core/optional runtime entities.
+  - `prisma/migrations/20260117134259_init` present.
+- Usage scan:
+  - `rg -n "prisma\\.(...)" app lib services` confirms active model usage paths.
+- Migration status command:
+  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+  - output: `Database schema is up to date!`
+
+## 07.2 implementation evidence
+- Persistence matrix completed for:
+  - `lib/api-key-service.ts`
+  - `services/conversation-service.db.ts`
+  - `services/goal-service.db.ts`
+  - `services/persona-service.db.ts`
+  - `services/analytics-service.ts`
+  - `services/team-service.db.ts`
+  - `lib/config-manager.ts`
+  - policy anchors: `lib/db-fallback.ts`, `lib/prisma.ts`
+- Code hardening applied:
+  - `services/goal-service.db.ts`
+    - non-creating fallback reads via peek map access
+    - fallback operations gated with `db.isFallbackAllowed()`
+    - production paths now return DB truth (`null`/`false`) instead of attempting fallback creation
+  - `services/persona-service.db.ts`
+    - same gating + non-creating fallback reads
+- Regression tests added/updated:
+  - `test/goal-service-db.test.ts` (production read-path DB-first assertion)
+  - `test/persona-service-db.test.ts` (production read-path DB-first assertion)
+- Verification commands:
+  - `npm run test:run -- test/goal-service-db.test.ts test/persona-service-db.test.ts test/db-fallback.test.ts test/analytics-service.test.ts`
+  - `npm run test:run -- test/goal-service-db.test.ts test/persona-service-db.test.ts`
+  - `npm run type-check`
+
+## 07.3 implementation evidence
+- Production fail-closed code updates:
+  - `lib/api-key-service.ts`
+  - `services/analytics-service.ts`
+  - `services/conversation-service.db.ts`
+- Added/updated tests:
+  - `test/api-key-service.test.ts` (new)
+  - `test/analytics-service.test.ts`
+  - `test/conversation-service-db.test.ts`
+- Verification commands:
+  - `npm run test:run -- test/api-key-service.test.ts test/analytics-service.test.ts test/conversation-service-db.test.ts test/goal-service-db.test.ts test/persona-service-db.test.ts test/db-fallback.test.ts`
+  - `npm run type-check`
+- Restart-proof evidence:
+  - Production-mode process A created DB-backed user/goal/persona/conversation/message.
+  - Production-mode process B (new process) read the same records with counts `1/1/1/1`.
+  - Temporary proof record cleaned from DB after capture.
+
+## 07.4 implementation evidence
+- Verification database:
+  - `postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302`
+- Commands:
+  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate deploy`
+  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status` (recheck)
+- Outcome:
+  - `Database schema is up to date!`
+  - `No pending migrations to apply.`
+
+## 08.1 implementation evidence
+- Code truth sources:
+  - `lib/providers/registry.ts`
+  - `lib/providers/types.ts`
+  - `lib/providers/{openai,anthropic,googleai,openrouter,grok}.ts`
+- Docs alignment:
+  - updated `README.md` highlights with explicit provider list:
+    - OpenAI, Anthropic, Google AI, OpenRouter, Grok
+  - `CLAUDE.md` already matched code-backed provider set
+- Verification commands:
+  - `ls -1 lib/providers`
+  - `sed -n '1,240p' lib/providers/registry.ts`
+  - `sed -n '1,120p' lib/providers/types.ts`
+  - `rg -n "Supported providers|OpenAI|Anthropic|Google AI|OpenRouter|Grok" README.md CLAUDE.md`
+  - `rg -n "openai|anthropic|googleai|openrouter|grok|supportedProviderIds|ProviderId" lib/providers/registry.ts lib/providers/types.ts`
+
+## 08.2 implementation evidence
+- Route hardening changes:
+  - `app/api/config/route.ts`
+    - explicit `500` for provider-config lookup failure
+    - explicit `500` when clearing provider config fails
+  - `app/api/test-api-key/route.ts`
+    - explicit `500` for unexpected internal test failures
+- Route test updates:
+  - `test/api-config-route.test.ts`
+  - `test/api-provider-configs-route.test.ts`
+  - `test/api-test-api-key-route.test.ts`
+- Verification commands:
+  - `npm run test:run -- test/api-config-route.test.ts test/api-provider-configs-route.test.ts test/api-test-api-key-route.test.ts`
+  - `npm run type-check`
+
+## 08.3 implementation evidence
+- Code + test updates:
+  - `test/api-key-service.test.ts`
+    - added encryption contract roundtrip + redaction assertions
+  - `app/api/config/route.ts`
+    - removed raw error object logging for key operations
+  - `app/api/test-api-key/route.ts`
+    - removed raw error object logging for key test failures
+- Existing enforcement/coverage reused:
+  - `lib/runtime-secrets.ts` + `test/runtime-secrets.test.ts`
+  - `test/api-provider-configs-route.test.ts` redaction assertion (`apiKey: ''`)
+- Verification commands:
+  - `npm run test:run -- test/api-key-service.test.ts test/runtime-secrets.test.ts test/api-config-route.test.ts test/api-provider-configs-route.test.ts test/api-test-api-key-route.test.ts`
+  - `npm run type-check`
+
+## 08.4 implementation evidence
+- Code changes:
+  - `lib/providers/errors.ts`
+    - added deterministic malformed-provider classification
+  - `app/api/llm/chat/route.ts`
+    - explicit request JSON parsing branch for `INVALID_JSON`
+- Test expansions:
+  - `test/api-llm-chat-route.test.ts`
+  - `test/api-llm-stream-route.test.ts`
+- Verified failure modes:
+  - invalid key format
+  - missing provider config/key
+  - upstream 401
+  - upstream 429
+  - provider timeout
+  - malformed upstream payload/body
+- Verification commands:
+  - `npm run test:run -- test/api-llm-chat-route.test.ts test/api-llm-stream-route.test.ts`
+  - `npm run type-check`
+
+## 09.1 implementation evidence
+- Test updates:
+  - `test/api-llm-chat-route.test.ts`
+    - added guest-mode success path assertion
+    - added provider-config DB-failure/internal-error assertion
+- Existing chat contract coverage retained:
+  - auth forwarding
+  - validation failures
+  - missing config/key
+  - invalid key format
+  - upstream 401/429/timeout/malformed
+  - non-stream success
+- Verification commands:
+  - `npm run test:run -- test/api-llm-chat-route.test.ts`
+  - `npm run type-check`
+
+## 09.2 implementation evidence
+- Contract alignment changes:
+  - `app/multi-chat/page.tsx` now consumes `/api/llm/stream` NDJSON events
+  - `services/stream-client.ts` endpoint/payload aligned to `/api/llm/stream`
+- New/updated tests:
+  - `test/api-llm-stream-route.test.ts`
+  - `test/stream-client.test.ts` (new)
+- Verification commands:
+  - `npm run test:run -- test/stream-client.test.ts test/api-llm-stream-route.test.ts`
+  - `npm run type-check`
+
+## 09.3 implementation evidence
+- Conversation lifecycle implementation updates:
+  - `services/conversation-service.db.ts`
+    - added `updateConversationTitle()` for rename/update support
+  - `app/api/conversations/[id]/route.ts`
+    - added `PUT` route with validated title payload and deterministic error handling
+  - `lib/api-client.ts`
+    - added `updateConversation()` client helper
+  - `app/multi-chat/page.tsx`
+    - added rename controls in recent conversations
+    - added control labels (`aria-label`) for stable UI automation and accessibility
+- Tests/evidence updates:
+  - `test/api-conversations-routes.test.ts`
+    - covers create/load/list/update/delete route behavior
+  - `test/conversation-service-db.test.ts`
+    - covers lifecycle with rename and reinitialization refresh continuity
+  - `test/e2e/conversation-persistence.spec.ts` (new)
+    - verifies `/multi-chat` create/load/list/update/delete flow
+    - verifies conversation state persists after page reload
+- Verification commands:
+  - `npm run test:run -- test/api-conversations-routes.test.ts test/conversation-service-db.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/conversation-persistence.spec.ts --project=chromium`
+  - `npm run type-check`
 
 ## Phase D - core runtime hardening
-12. [ ] Verify auth split:
+12. [x] Verify auth split:
    - guest mode
    - strict mode
    - misconfigured strict mode
-13. [ ] Verify DB-first persistence and remove unsupported production fallback ambiguity
-14. [ ] Verify provider config lifecycle and API key encryption flow
-15. [ ] Verify `/api/llm/chat`
-16. [ ] Verify `/api/llm/stream`
-17. [ ] Verify conversations end-to-end
+13. [x] Verify DB-first persistence and remove unsupported production fallback ambiguity
+14. [x] Verify migration path in production-like mode
+15. [x] Verify provider config lifecycle and API key encryption flow
+16. [x] Verify `/api/llm/chat`
+17. [x] Verify `/api/llm/stream`
+18. [x] Verify conversations end-to-end
 
 ## Phase E - feature acceptance
-18. [ ] Goals
-19. [ ] Personas
-20. [ ] Analytics
-21. [ ] Comparison
-22. [ ] Pipeline
-23. [ ] AI roundtable
-24. [ ] Admin routes
-25. [ ] Teams route
-26. [ ] Billing + webhook only if billing remains in production scope
+19. [ ] Goals
+20. [ ] Personas
+21. [ ] Analytics
+22. [ ] Comparison
+23. [ ] Pipeline
+24. [ ] AI roundtable
+25. [ ] Admin routes
+26. [ ] Teams route
+27. [ ] Billing + webhook only if billing remains in production scope
 
 ## Phase F - proof
-27. [ ] Fill coverage gaps in route/service/e2e tests
-28. [ ] Upgrade smoke script to cover actual supported flows
-29. [ ] Upgrade production verification script
-30. [ ] Align CI with real release gates
-31. [ ] Run clean local install -> type-check -> lint -> tests -> build
-32. [ ] Run preview deploy verification
-33. [ ] Run production deploy verification
-34. [ ] Run rollback proof
+28. [ ] Fill coverage gaps in route/service/e2e tests
+29. [ ] Upgrade smoke script to cover actual supported flows
+30. [ ] Upgrade production verification script
+31. [ ] Align CI with real release gates
+32. [ ] Run clean local install -> type-check -> lint -> tests -> build
+33. [ ] Run preview deploy verification
+34. [ ] Run production deploy verification
+35. [ ] Run rollback proof
 
 ## Phase G - handoff
-35. [ ] Re-run doc/code mismatch check
-36. [ ] Build final handoff bundle
-37. [ ] Mark handoff-ready only when all checklist pass gates are green
+36. [ ] Re-run doc/code mismatch check
+37. [ ] Build final handoff bundle
+38. [ ] Mark handoff-ready only when all checklist pass gates are green
 
 ## Mandatory reporting format for every next update
 - done
