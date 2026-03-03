@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-03 02:34:13 EST
-timestamp_utc: 2026-03-03T07:34:13Z
+timestamp_local: 2026-03-03 02:44:44 EST
+timestamp_utc: 2026-03-03T07:44:44Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -43,6 +43,7 @@ source: direct repo inspection + command evidence in this session
 - `11.3` PASS: Analytics contract verified across `/api/analytics` and `/analytics` with explicit empty/live/failure semantics and UI recovery behavior.
 - `11.4` PASS: Comparison feature verified with executable model-metrics and response-comparison browser flow plus failure-retry recovery behavior.
 - `11.5` PASS: Pipeline feature verified with orchestration success flow, fallback metadata rendering, input/provider validation, and API-failure handling.
+- `11.6` PASS: AI roundtable explicitly demoted from supported production scope and retained as experimental-only (non-blocking for release acceptance).
 
 ## failed
 - none for `01.*` through `03.1`.
@@ -154,7 +155,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `11.6`: verify AI roundtable feature (`/ai-roundtable`) as real tested behavior or explicitly demote it from supported scope.
+Start `11.7`: verify Settings feature (`/settings`) can fully manage supported provider configuration end-to-end.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -775,3 +776,13 @@ TOTAL (22)
   - `npm run type-check`
 - Result:
   - `11.5` PASS with executable browser evidence that `/pipeline` is real, interactive, and failure-aware.
+
+## 11.6 evidence (AI roundtable explicitly demoted)
+- Scope decision evidence:
+  - `handoff_work/llminstructions.md` (`02.3 production scope decision`) classifies `/ai-roundtable` as `Experimental`.
+  - `handoff_work/CLOSURE_MASTER_CHECKLIST.md` pass criteria for `11.6` allow explicit demotion from supported scope.
+- Demotion outcome:
+  - `/ai-roundtable` remains accessible as beta/experimental UI but is not part of supported production acceptance gates.
+  - No release-blocking contract is claimed for roundtable behavior in this handoff phase.
+- Result:
+  - `11.6` PASS via explicit demotion path (experimental-only, out-of-contract for supported release scope).

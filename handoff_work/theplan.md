@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-03 02:34 EST)
+## Progress snapshot (2026-03-03 02:44 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -45,6 +45,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `11.3` Verify Analytics feature contract for `/api/analytics` + `/analytics`
   - `11.4` Verify Comparison feature contract for `/comparison`
   - `11.5` Verify Pipeline feature contract for `/pipeline`
+  - `11.6` Demote AI roundtable from supported production scope (experimental-only)
 - failed:
   - none
 - unverified:
@@ -447,6 +448,15 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/pipeline-flow.spec.ts --project=chromium`
   - `npm run type-check`
 
+## 11.6 implementation evidence
+- Decision:
+  - closed via explicit demotion path (allowed by checklist) instead of supported-flow acceptance.
+- Evidence anchors:
+  - `handoff_work/llminstructions.md` marks `/ai-roundtable` experimental under locked scope (`02.3`).
+  - `handoff_work/CLOSURE_MASTER_CHECKLIST.md` `11.6` pass gate allows explicit demotion/remove from supported scope.
+- Outcome:
+  - roundtable remains experimental/beta and is excluded from supported production release gates.
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -465,7 +475,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 21. [x] Analytics
 22. [x] Comparison
 23. [x] Pipeline
-24. [ ] AI roundtable
+24. [x] AI roundtable (demoted)
 25. [ ] Admin routes
 26. [ ] Teams route
 27. [ ] Billing + webhook only if billing remains in production scope
