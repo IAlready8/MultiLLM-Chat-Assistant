@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-03 02:58:00 EST
-timestamp_utc: 2026-03-03T07:58:00Z
+timestamp_local: 2026-03-03 03:50:29 EST
+timestamp_utc: 2026-03-03T08:50:29Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -46,6 +46,7 @@ source: direct repo inspection + command evidence in this session
 - `11.6` PASS: AI roundtable explicitly demoted from supported production scope and retained as experimental-only (non-blocking for release acceptance).
 - `11.7` PASS: Settings page now has current-contract route+UI evidence for provider key lifecycle management end-to-end.
 - `12.1` PASS: Admin surface remains explicitly demoted/experimental, with admin route auth+truth verified via deterministic route tests.
+- `12.2` PASS: `/api/teams` explicitly remains removed from supported production scope (no UI contract), so it is non-blocking for release acceptance.
 
 ## failed
 - none for `01.*` through `03.1`.
@@ -157,7 +158,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `12.2`: verify `/api/teams` implementation/auth/persistence and close via support proof or explicit removal from supported scope.
+Start `12.3`: verify billing page/routes/webhook contract as optional feature (supported when configured, explicit degradation when absent).
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -824,3 +825,13 @@ TOTAL (22)
   - `npm run test:run -- test/api-admin-status-route.test.ts test/api-admin-errors-stats-route.test.ts`
 - Result:
   - `12.1` PASS via explicit demotion + verified route truth/auth behavior for the experimental admin surface.
+
+## 12.2 evidence (Teams route closed via removal-from-scope path)
+- Scope anchor:
+  - `handoff_work/llminstructions.md` (`02.3 production scope decision`) marks `app/api/teams/route.ts` as **Remove from production scope**.
+- Surface reality:
+  - route exists (`app/api/teams/route.ts`) and service exists (`services/team-service.db.ts`), but there is no linked UI contract in the supported page surface.
+- Outcome:
+  - teams route remains out-of-contract for supported production acceptance and is treated as non-blocking in this handoff phase.
+- Result:
+  - `12.2` PASS via explicit removal-from-supported-scope decision.

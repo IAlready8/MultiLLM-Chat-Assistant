@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-03 02:58 EST)
+## Progress snapshot (2026-03-03 03:50 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -48,6 +48,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `11.6` Demote AI roundtable from supported production scope (experimental-only)
   - `11.7` Verify `/settings` provider configuration management end-to-end
   - `12.1` Verify admin routes truth/auth and close via experimental demotion path
+  - `12.2` Close `/api/teams` via explicit removal-from-supported-scope path
 - failed:
   - none
 - unverified:
@@ -487,6 +488,15 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - Outcome:
   - admin routes remain non-blocking for supported production acceptance; route auth/truth behavior is still executable and covered.
 
+## 12.2 implementation evidence
+- Decision:
+  - closed by explicit removal path from supported production scope (not by support/acceptance path).
+- Evidence anchors:
+  - `handoff_work/llminstructions.md` `02.3` classification already marks `/api/teams` as remove-from-scope.
+  - route/service reality confirmed at `app/api/teams/route.ts` + `services/team-service.db.ts` with no supported UI surface tie-in.
+- Outcome:
+  - teams route remains out-of-contract and non-blocking for supported release acceptance.
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -507,7 +517,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 23. [x] Pipeline
 24. [x] AI roundtable (demoted)
 25. [x] Admin routes (demoted)
-26. [ ] Teams route
+26. [x] Teams route (removed)
 27. [ ] Billing + webhook only if billing remains in production scope
 
 ## Phase F - proof
