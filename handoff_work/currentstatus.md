@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-03 03:50:29 EST
-timestamp_utc: 2026-03-03T08:50:29Z
+timestamp_local: 2026-03-03 06:06:52 EST
+timestamp_utc: 2026-03-03T11:06:52Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -47,6 +47,7 @@ source: direct repo inspection + command evidence in this session
 - `11.7` PASS: Settings page now has current-contract route+UI evidence for provider key lifecycle management end-to-end.
 - `12.1` PASS: Admin surface remains explicitly demoted/experimental, with admin route auth+truth verified via deterministic route tests.
 - `12.2` PASS: `/api/teams` explicitly remains removed from supported production scope (no UI contract), so it is non-blocking for release acceptance.
+- `12.3` PASS: Billing is closed via optional-feature gate with tested checkout/manage/webhook route contracts and explicit Stripe-unconfigured degradation behavior.
 
 ## failed
 - none for `01.*` through `03.1`.
@@ -158,7 +159,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `12.3`: verify billing page/routes/webhook contract as optional feature (supported when configured, explicit degradation when absent).
+Start `12.4`: verify webhook-specific production checks/gates and finalize billing-owner-dependent validation boundaries.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -835,3 +836,21 @@ TOTAL (22)
   - teams route remains out-of-contract for supported production acceptance and is treated as non-blocking in this handoff phase.
 - Result:
   - `12.2` PASS via explicit removal-from-supported-scope decision.
+
+## 12.3 evidence (Billing closed via optional-feature gate)
+- Topology anchor:
+  - `03.1` locked runtime marks Stripe billing as optional.
+- Route evidence:
+  - `test/api-subscriptions-routes.test.ts`
+    - checkout session creation path
+    - manage portal session creation path
+    - explicit 503 behavior when Stripe is not configured
+  - `test/api-stripe-webhook-route.test.ts`
+    - signature verification handling
+    - webhook-not-configured 503 behavior
+    - checkout/subscription/invoice event processing paths
+- Verification commands:
+  - `npm run test:run -- test/api-subscriptions-routes.test.ts test/api-stripe-webhook-route.test.ts`
+  - `npm run type-check`
+- Result:
+  - `12.3` PASS via optional-feature contract: billing is supported when configured and explicitly degraded when Stripe config is absent.

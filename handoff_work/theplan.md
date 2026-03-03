@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-03 03:50 EST)
+## Progress snapshot (2026-03-03 06:06 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -49,6 +49,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `11.7` Verify `/settings` provider configuration management end-to-end
   - `12.1` Verify admin routes truth/auth and close via experimental demotion path
   - `12.2` Close `/api/teams` via explicit removal-from-supported-scope path
+  - `12.3` Close billing via optional-feature gate with route/webhook contract tests
 - failed:
   - none
 - unverified:
@@ -497,6 +498,18 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - Outcome:
   - teams route remains out-of-contract and non-blocking for supported release acceptance.
 
+## 12.3 implementation evidence
+- Optional-scope handling:
+  - billing remains optional per locked topology (`03.1`), so closure uses optional-feature gate.
+- Route evidence:
+  - `test/api-subscriptions-routes.test.ts`
+  - `test/api-stripe-webhook-route.test.ts`
+- Verification commands:
+  - `npm run test:run -- test/api-subscriptions-routes.test.ts test/api-stripe-webhook-route.test.ts`
+  - `npm run type-check`
+- Outcome:
+  - billing/subscription/webhook routes are executable when configured and fail safely/explicitly when Stripe config is absent.
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -518,7 +531,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 24. [x] AI roundtable (demoted)
 25. [x] Admin routes (demoted)
 26. [x] Teams route (removed)
-27. [ ] Billing + webhook only if billing remains in production scope
+27. [x] Billing + webhook (optional gate)
 
 ## Phase F - proof
 28. [ ] Fill coverage gaps in route/service/e2e tests
