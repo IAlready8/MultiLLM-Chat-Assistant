@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-03 02:28:03 EST` (`2026-03-03T07:28:03Z`)
+- Last updated: `2026-03-03 02:34:13 EST` (`2026-03-03T07:34:13Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -51,7 +51,8 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `11.2` Personas feature (PASS)
 - [x] `11.3` Analytics feature (PASS)
 - [x] `11.4` Comparison feature (PASS)
-- [ ] `11.5` Pipeline feature (next)
+- [x] `11.5` Pipeline feature (PASS)
+- [ ] `11.6` AI roundtable feature (next)
 
 ---
 
@@ -147,7 +148,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 | 11.2 ✅ | Personas feature | 07.3 | Verify create/edit/delete/list/use in routes and UI | PASS (closed 2026-03-02) | persona files + tests | LLM | API route tests + personas e2e flow (`test/api-personas-routes.test.ts`, `test/e2e/personas-flow.spec.ts`) |
 | 11.3 ✅ | Analytics feature | 07.3 | Verify `/analytics` and `/api/analytics` do not show fake or broken data and handle empty state | PASS (closed 2026-03-03) | analytics files + tests | LLM | strengthened route assertions + analytics e2e flow (`test/api-analytics-route.test.ts`, `test/e2e/analytics-flow.spec.ts`, `app/analytics/page.tsx`) |
 | 11.4 ✅ | Comparison feature | 09.1, 09.2 | Verify `/comparison` can execute and render real comparison flow or explicitly demote it | PASS (closed 2026-03-03) | comparison page + any backing code/tests | LLM | comparison e2e flow + failure recovery (`test/e2e/comparison-flow.spec.ts`) |
-| 11.5 | Pipeline feature | 09.1 | Verify `/pipeline` is real and tested or explicitly demote/remove from scope | PASS when no decorative unsupported pipeline remains in supported scope | pipeline page + docs | LLM + Repo operator | decision + tests |
+| 11.5 ✅ | Pipeline feature | 09.1 | Verify `/pipeline` is real and tested or explicitly demote/remove from scope | PASS (closed 2026-03-03) | pipeline page + docs | LLM + Repo operator | pipeline e2e flow + validation/failure handling (`test/e2e/pipeline-flow.spec.ts`) |
 | 11.6 | AI roundtable feature | 09.1 | Verify `/ai-roundtable` is real and tested or explicitly demote/remove from scope | PASS when no decorative unsupported roundtable remains in supported scope | ai-roundtable page + docs | LLM + Repo operator | decision + tests |
 | 11.7 | Settings page | 08.2 | Verify provider config and related controls work end-to-end from `/settings` | PASS when settings page can fully manage supported config | `app/settings/page.tsx`, related components | LLM | e2e evidence |
 

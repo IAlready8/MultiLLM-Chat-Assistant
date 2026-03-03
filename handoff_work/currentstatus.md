@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-03 02:28:03 EST
-timestamp_utc: 2026-03-03T07:28:03Z
+timestamp_local: 2026-03-03 02:34:13 EST
+timestamp_utc: 2026-03-03T07:34:13Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -42,6 +42,7 @@ source: direct repo inspection + command evidence in this session
 - `11.2` PASS: Personas feature contract verified across `/api/personas*` and `/personas` with route + UI evidence (create/edit/delete/list/use flow).
 - `11.3` PASS: Analytics contract verified across `/api/analytics` and `/analytics` with explicit empty/live/failure semantics and UI recovery behavior.
 - `11.4` PASS: Comparison feature verified with executable model-metrics and response-comparison browser flow plus failure-retry recovery behavior.
+- `11.5` PASS: Pipeline feature verified with orchestration success flow, fallback metadata rendering, input/provider validation, and API-failure handling.
 
 ## failed
 - none for `01.*` through `03.1`.
@@ -153,7 +154,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `11.5`: verify Pipeline feature (`/pipeline`) as real tested behavior or explicitly demote it from supported scope.
+Start `11.6`: verify AI roundtable feature (`/ai-roundtable`) as real tested behavior or explicitly demote it from supported scope.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -759,3 +760,18 @@ TOTAL (22)
   - `npm run type-check`
 - Result:
   - `11.4` PASS with executable browser evidence that `/comparison` is functional (not decorative) in the current contract.
+
+## 11.5 evidence (Pipeline feature verified)
+- UI flow evidence:
+  - `test/e2e/pipeline-flow.spec.ts` (new)
+    - verifies configured-provider load from `/api/config`
+    - verifies orchestration submit to `/api/llm/orchestrate` and result rendering
+    - verifies fallback metadata badge rendering from response header
+    - verifies summary metrics + clear-results behavior
+    - verifies local validation (missing prompt, no enabled provider)
+    - verifies API failure surface for orchestration errors
+- Verification commands:
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/pipeline-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+- Result:
+  - `11.5` PASS with executable browser evidence that `/pipeline` is real, interactive, and failure-aware.

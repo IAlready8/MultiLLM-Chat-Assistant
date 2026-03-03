@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-03 02:28 EST)
+## Progress snapshot (2026-03-03 02:34 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -44,6 +44,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `11.2` Verify Personas feature contract for `/api/personas*` + `/personas`
   - `11.3` Verify Analytics feature contract for `/api/analytics` + `/analytics`
   - `11.4` Verify Comparison feature contract for `/comparison`
+  - `11.5` Verify Pipeline feature contract for `/pipeline`
 - failed:
   - none
 - unverified:
@@ -434,6 +435,18 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/comparison-flow.spec.ts --project=chromium`
   - `npm run type-check`
 
+## 11.5 implementation evidence
+- New UI flow coverage:
+  - `test/e2e/pipeline-flow.spec.ts` (new)
+    - configured provider loading
+    - orchestration run + result cards + fallback badge
+    - local prompt/provider validation
+    - orchestration failure handling
+    - clear-results state reset
+- Verification commands:
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/pipeline-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -451,7 +464,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 20. [x] Personas
 21. [x] Analytics
 22. [x] Comparison
-23. [ ] Pipeline
+23. [x] Pipeline
 24. [ ] AI roundtable
 25. [ ] Admin routes
 26. [ ] Teams route
