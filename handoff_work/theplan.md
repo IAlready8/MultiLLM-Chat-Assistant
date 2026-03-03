@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-03 02:55 EST)
+## Progress snapshot (2026-03-03 02:58 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -47,6 +47,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `11.5` Verify Pipeline feature contract for `/pipeline`
   - `11.6` Demote AI roundtable from supported production scope (experimental-only)
   - `11.7` Verify `/settings` provider configuration management end-to-end
+  - `12.1` Verify admin routes truth/auth and close via experimental demotion path
 - failed:
   - none
 - unverified:
@@ -475,6 +476,17 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/provider-configuration.spec.ts --project=chromium`
   - `npm run type-check`
 
+## 12.1 implementation evidence
+- Scope handling:
+  - kept admin surface in experimental/demoted scope per locked `02.3` contract.
+- Route evidence:
+  - `test/api-admin-status-route.test.ts`
+  - `test/api-admin-errors-stats-route.test.ts`
+- Verification command:
+  - `npm run test:run -- test/api-admin-status-route.test.ts test/api-admin-errors-stats-route.test.ts`
+- Outcome:
+  - admin routes remain non-blocking for supported production acceptance; route auth/truth behavior is still executable and covered.
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -494,7 +506,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 22. [x] Comparison
 23. [x] Pipeline
 24. [x] AI roundtable (demoted)
-25. [ ] Admin routes
+25. [x] Admin routes (demoted)
 26. [ ] Teams route
 27. [ ] Billing + webhook only if billing remains in production scope
 

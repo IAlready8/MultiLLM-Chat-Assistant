@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-03 02:55:22 EST
-timestamp_utc: 2026-03-03T07:55:22Z
+timestamp_local: 2026-03-03 02:58:00 EST
+timestamp_utc: 2026-03-03T07:58:00Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -45,6 +45,7 @@ source: direct repo inspection + command evidence in this session
 - `11.5` PASS: Pipeline feature verified with orchestration success flow, fallback metadata rendering, input/provider validation, and API-failure handling.
 - `11.6` PASS: AI roundtable explicitly demoted from supported production scope and retained as experimental-only (non-blocking for release acceptance).
 - `11.7` PASS: Settings page now has current-contract route+UI evidence for provider key lifecycle management end-to-end.
+- `12.1` PASS: Admin surface remains explicitly demoted/experimental, with admin route auth+truth verified via deterministic route tests.
 
 ## failed
 - none for `01.*` through `03.1`.
@@ -156,7 +157,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `12.1`: verify admin routes/pages (`/api/admin/status`, `/api/admin/errors/stats`, admin UI) for truthful behavior or explicit demotion.
+Start `12.2`: verify `/api/teams` implementation/auth/persistence and close via support proof or explicit removal from supported scope.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -807,3 +808,19 @@ TOTAL (22)
   - `npm run type-check`
 - Result:
   - `11.7` PASS: `/settings` can manage supported provider configuration end-to-end with executable evidence.
+
+## 12.1 evidence (Admin surface verified via demotion path)
+- Scope evidence:
+  - admin UI/routes are classified `Experimental` in `handoff_work/llminstructions.md` (`02.3`), so they are out-of-contract for supported production release.
+- Route truth/auth evidence:
+  - `test/api-admin-status-route.test.ts`
+    - auth-forwarding behavior
+    - healthy/warning/error system-status payload paths
+  - `test/api-admin-errors-stats-route.test.ts`
+    - auth-forwarding behavior
+    - date-range validation
+    - merged app-error + analytics-error aggregation behavior
+- Verification command:
+  - `npm run test:run -- test/api-admin-status-route.test.ts test/api-admin-errors-stats-route.test.ts`
+- Result:
+  - `12.1` PASS via explicit demotion + verified route truth/auth behavior for the experimental admin surface.
