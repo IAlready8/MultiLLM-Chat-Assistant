@@ -213,14 +213,21 @@ fi
 
 echo "==> Checking database migration status"
 if ! npx prisma migrate status; then
-  echo "ERROR: Prisma migration status check failed."
-  echo "Hint: verify DATABASE_URL credentials/network and that Prisma engines match current platform."
-  exit 1
-fi
-
-if [[ "${APPLY_MIGRATIONS}" == "true" ]]; then
-  echo "==> Applying database migrations"
-  npx prisma migrate deploy
+  if [[ "${APPLY_MIGRATIONS}" == "true" ]]; then
+    echo "Migration status check reported pending/invalid state; attempting deploy because --apply-migrations is enabled."
+    echo "==> Applying database migrations"
+    npx prisma migrate deploy
+    echo "==> Re-checking database migration status"
+    if ! npx prisma migrate status; then
+      echo "ERROR: Prisma migration status still failing after migrate deploy."
+      echo "Hint: verify DATABASE_URL credentials/network and that Prisma engines match current platform."
+      exit 1
+    fi
+  else
+    echo "ERROR: Prisma migration status check failed."
+    echo "Hint: run with --apply-migrations to auto-apply pending migrations, or verify DATABASE_URL credentials/network and Prisma engine compatibility."
+    exit 1
+  fi
 fi
 
 if [[ -n "${BASE_URL}" ]]; then

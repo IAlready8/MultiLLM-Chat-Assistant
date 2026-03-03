@@ -67,8 +67,10 @@ const createGoalId = () => {
 const getFallbackUserStore = (userId: string) =>
   getOrCreateUserStore(fallbackGoals, userId)
 
+const peekFallbackUserStore = (userId: string) => fallbackGoals.get(userId)
+
 const listFallbackGoals = (userId: string): Goal[] =>
-  Array.from(getFallbackUserStore(userId).values())
+  Array.from(peekFallbackUserStore(userId)?.values() ?? [])
     .map(cloneGoal)
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
 
@@ -99,6 +101,10 @@ export const GoalService = {
         where: { userId },
         orderBy: { updatedAt: 'desc' },
       })
+      if (!db.isFallbackAllowed()) {
+        return goals.map((goal) => withNormalizedStatus(goal))
+      }
+
       const fallback = listFallbackGoals(userId)
       if (fallback.length === 0) {
         return goals.map((goal) => withNormalizedStatus(goal))
@@ -106,6 +112,9 @@ export const GoalService = {
 
       return mergeGoalsById(goals, fallback)
     } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('getGoalsByUserId', 'goal', error)
       }
@@ -127,13 +136,18 @@ export const GoalService = {
         return withNormalizedStatus(goal)
       }
 
-      const fallbackGoal = getFallbackUserStore(userId).get(id)
+      const fallbackGoal = db.isFallbackAllowed()
+        ? peekFallbackUserStore(userId)?.get(id)
+        : undefined
       return fallbackGoal ? cloneGoal(fallbackGoal) : null
     } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('getGoalById', 'goal', error)
       }
-      const goal = getFallbackUserStore(userId).get(id)
+      const goal = peekFallbackUserStore(userId)?.get(id)
       return goal ? cloneGoal(goal) : null
     }
   },
@@ -171,6 +185,9 @@ export const GoalService = {
     } catch (error) {
       const dbUnavailable = db.markUnavailableIfNeeded(error)
       const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('createGoal', 'goal', error)
       } else if (!dbUnavailable) {
@@ -220,7 +237,7 @@ export const GoalService = {
       })
 
       if (!existing) {
-        return saveToFallback()
+        return db.isFallbackAllowed() ? saveToFallback() : null
       }
 
       const updated = await prisma.goal.update({
@@ -240,6 +257,9 @@ export const GoalService = {
     } catch (error) {
       const dbUnavailable = db.markUnavailableIfNeeded(error)
       const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('updateGoal', 'goal', error)
       } else if (!dbUnavailable) {
@@ -260,7 +280,7 @@ export const GoalService = {
       })
 
       if (!existing) {
-        return getFallbackUserStore(userId).delete(id)
+        return db.isFallbackAllowed() ? getFallbackUserStore(userId).delete(id) : false
       }
 
       await prisma.goal.delete({
@@ -270,6 +290,9 @@ export const GoalService = {
     } catch (error) {
       const dbUnavailable = db.markUnavailableIfNeeded(error)
       const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('deleteGoal', 'goal', error)
       } else if (!dbUnavailable) {

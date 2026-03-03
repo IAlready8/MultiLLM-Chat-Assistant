@@ -1,55 +1,56 @@
-# Project Status Update (February 20, 2026)
+# Project Status Update (2026-03-02)
 
-## Repository Health
-- Working branch: `chore-next16-migration`
-- Base branch: `main` (synced with `origin/main`)
-- Latest upstream commit on `main`: `9d56ca1` (`chore(ci): harden branch protection defaults (#14)`, 2026-02-11)
+## Repository Identity (Observed)
+- Branch ref: `codex/protected-main-push-20260302`
+- HEAD commit: `3a5081be3a69f57cbf56c06d179f58d85eec4b03`
+- Remote: `https://github.com/IAlready8/MultiLLM-Chat-Assistant.git`
 
-## Verified Checks (Current Branch)
-- `npm run type-check` passed
-- `npm run lint` passed
-- `npm run test:run` passed (28 files, 191 tests)
-- `npm run build` passed with required env vars:
-  - `NEXTAUTH_SECRET`
-  - `NEXTAUTH_URL`
-  - `API_KEY_ENCRYPTION_SEED`
-  - `DATABASE_URL`
+## Runtime/Scope Contract (Locked)
+- Production topology:
+  - Postgres required (`DATABASE_URL`)
+  - Strict auth required (always in production)
+  - Stripe optional
+  - Python sidecar optional
+  - Redis optional
+- In-memory fallback:
+  - Allowed for local/dev only
+  - Disabled/fail-closed for production-critical paths
 
-## What Landed In This Migration Branch
-1. Dependency migration and hardening:
-   - `next` -> `16.1.1`
-   - `eslint` -> `9.x`
-   - `eslint-config-next` -> `16.1.1`
-   - `@playwright/test` moved to `devDependencies`
-   - `vercel` moved to `devDependencies`
-2. Prisma compatibility alignment:
-   - `@prisma/adapter-pg` -> `7.3.0`
-   - `@prisma/client` -> `^7.3.0`
-   - `prisma` -> `^7.3.0`
-3. Next 16 compatibility code updates:
-   - migrated route usage to async `headers()` / `cookies()`
-   - updated API route context typing to Promise-based `params`
-   - added flat ESLint config (`eslint.config.mjs`) and removed `.eslintrc.json`
-4. Build/runtime migration controls:
-   - removed deprecated `swcMinify` config key
-   - pinned scripts to webpack mode during migration (`next dev --webpack`, `next build --webpack`)
+## Current Closure Progress
+- Completed checklist sections:
+  - `01.*` baseline + topology + stale-doc reconciliation
+  - `02.*` scope + acceptance matrix
+  - `03.*` runtime lock + fallback hardening
+  - `04.1` env audit
+  - `04.2` startup validation
+  - `04.3` verify script alignment + successful end-to-end run against local Postgres
+- In progress:
+  - `05.*` top-level documentation drift cleanup
 
-## Security Posture (Current)
+## Verified This Session
+- Targeted tests passed:
+  - `test/startup-validation.test.ts`
+  - `test/middleware-auth-routing.test.ts`
+  - `test/db-fallback.test.ts`
+  - `test/analytics-service.test.ts`
+  - `test/api-auth.test.ts`
+- `npm run type-check` passed.
+- `scripts/verify-production.sh --apply-migrations` passed with:
+  - local Postgres reachability
+  - migration deploy
+  - final schema status up to date
 
-### Full dependency graph (`npm audit`)
-- `53` total (`42 high`, `11 moderate`, `0 low`, `0 critical`)
-
-### Production-focused (`npm audit --omit=dev`)
-- `9` total (`1 high`, `8 moderate`, `0 low`, `0 critical`)
+## Not Yet Verified In This Session
+- Full repo-wide `npm run lint`
+- Full repo-wide `npm run test:run`
+- Full repo-wide `npm run build`
+- Preview/production deployment verification and rollback proof
+- Live Stripe checkout/portal/webhook loop
 
 ## Known Open Items
-1. One production high-severity advisory remains on `next@16.1.1` (current latest published at time of update).
-2. Next.js warns that `middleware.ts` file convention is deprecated in favor of `proxy.ts` (build still succeeds).
-3. Most remaining high findings are in dev/tooling dependency chains (`eslint` ecosystem and `vercel` transitive graph).
+- Python sidecar stream parity is incomplete (`src/core/main.py` contains TODO for `/api/v1/llm/stream`).
+- Feature-level acceptance verification beyond core runtime hardening remains open in later checklist phases.
 
-## Immediate Next Actions
-1. Upgrade to the next patched Next.js release as soon as it is published and re-run full/production audits.
-2. Migrate `middleware.ts` convention to `proxy.ts` and update tests accordingly.
-3. Decide CI policy split:
-   - strict gate on production-focused audit findings
-   - informational tracking for dev-tooling advisories
+## Source Of Truth
+- Checklist sequencing and closure gates: `CLOSURE_MASTER_CHECKLIST.md`
+- Current execution status + evidence log: `currentstatus.md` (handoff pack)

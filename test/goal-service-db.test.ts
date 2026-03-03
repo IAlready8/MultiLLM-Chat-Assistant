@@ -122,6 +122,48 @@ describe('GoalService DB fallback', () => {
     expect(deleted).toBe(true)
   })
 
+  it('keeps production reads DB-first without creating fallback stores', async () => {
+    const env = process.env as Record<string, string | undefined>
+    const previousNodeEnv = env.NODE_ENV
+    env.NODE_ENV = 'production'
+
+    try {
+      const prismaMock: PrismaMock = {
+        goal: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: 'goal-1',
+              userId: 'user-1',
+              title: 'Persisted goal',
+              description: 'Loaded from DB',
+              status: 'pending',
+              createdAt: new Date('2026-03-02T00:00:00.000Z'),
+              updatedAt: new Date('2026-03-02T00:00:00.000Z'),
+            },
+          ]),
+          findFirst: vi.fn(),
+          create: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn(),
+        },
+      }
+
+      const { GoalService } = await loadServiceWithPrismaMock(prismaMock)
+      const goals = await GoalService.getGoalsByUserId('user-1')
+
+      expect(goals).toHaveLength(1)
+      expect(goals[0].status).toBe('not-started')
+      const store = (
+        globalThis as {
+          __multiLlmGoalFallbackStore?: Map<string, Map<string, unknown>>
+        }
+      ).__multiLlmGoalFallbackStore
+      expect(store?.size ?? 0).toBe(0)
+    } finally {
+      env.NODE_ENV = previousNodeEnv
+    }
+  })
+
   it('throws unexpected write errors instead of silently falling back', async () => {
     const unexpectedError = new Error('Unique constraint failed on Goal.title')
 

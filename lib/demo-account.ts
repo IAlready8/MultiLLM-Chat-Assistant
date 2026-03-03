@@ -29,6 +29,9 @@ export const isStrictAuthRequired = (): boolean =>
   process.env.AUTH_REQUIRE_LOGIN === 'true' ||
   process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN === 'true'
 
+export const isInMemoryAuthFallbackAllowed = (): boolean =>
+  !isStrictAuthRequired() && process.env.NODE_ENV !== 'production'
+
 export const getDemoAccountContext = (): DemoAccountContext => {
   const isDevelopment = !isProduction
   const rawEnabled =

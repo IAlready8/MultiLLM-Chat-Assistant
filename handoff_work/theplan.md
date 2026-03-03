@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-02 08:20 EST)
+## Progress snapshot (2026-03-03 01:40 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -42,6 +42,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `10.2` Verify optional sidecar isolation with orchestrate fallback route tests
   - `11.1` Verify Goals feature contract for `/api/goals*` + `/goal-hub`
   - `11.2` Verify Personas feature contract for `/api/personas*` + `/personas`
+  - `11.3` Verify Analytics feature contract for `/api/analytics` + `/analytics`
 - failed:
   - none
 - unverified:
@@ -405,6 +406,23 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/personas-flow.spec.ts --project=chromium`
   - `npm run type-check`
 
+## 11.3 implementation evidence
+- API route truthfulness coverage strengthened:
+  - `test/api-analytics-route.test.ts`
+    - explicit empty telemetry assertions
+    - hard 500 behavior on analytics-service failure
+- New UI flow coverage:
+  - `test/e2e/analytics-flow.spec.ts` (new)
+    - loading/empty/refresh/live/timeframe-switch/error+retry coverage
+- UI support hardening:
+  - `app/analytics/page.tsx`
+    - fixed empty-state detection to avoid false non-empty dashboards from zero-filled trends
+    - added top refresh action label for deterministic accessibility automation
+- Verification commands:
+  - `npm run test:run -- test/api-analytics-route.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/analytics-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -420,7 +438,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 ## Phase E - feature acceptance
 19. [x] Goals
 20. [x] Personas
-21. [ ] Analytics
+21. [x] Analytics
 22. [ ] Comparison
 23. [ ] Pipeline
 24. [ ] AI roundtable

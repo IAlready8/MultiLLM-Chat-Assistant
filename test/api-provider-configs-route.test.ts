@@ -85,6 +85,7 @@ describe('/api/provider-configs route', () => {
       models: ['gpt-4'],
       rateLimits: { requests: 15, window: 60000 },
     })
+    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
   })
 
   it('POST rejects unsupported providers', async () => {

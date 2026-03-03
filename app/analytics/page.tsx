@@ -62,6 +62,7 @@ export default function AnalyticsPage() {
     totalErrors: 0,
     avgResponseTime: 0
   })
+  const [isTelemetryEmpty, setIsTelemetryEmpty] = useState(false)
   const [sourceLabel, setSourceLabel] = useState<'Live data' | 'No telemetry yet'>('Live data')
   const [loadError, setLoadError] = useState<string | null>(null)
   const { toast } = useToast()
@@ -91,6 +92,12 @@ export default function AnalyticsPage() {
           avgResponseTime: 0,
         }
       )
+      const source = data.meta?.source
+      const inferredEmpty =
+        (data.providerData?.length ?? 0) === 0 &&
+        (data.modelComparisonData?.length ?? 0) === 0 &&
+        (data.totalStats?.totalRequests ?? 0) === 0
+      setIsTelemetryEmpty(source === 'empty' || (source !== 'live' && inferredEmpty))
       setSourceLabel(data.meta?.source === 'empty' ? 'No telemetry yet' : 'Live data')
     } catch (err) {
       console.error('Failed to load analytics data:', err)
@@ -125,7 +132,14 @@ export default function AnalyticsPage() {
     )
   }
 
-  const hasData = providerData.length > 0 || usageTrends.length > 0 || totalStats.totalRequests > 0
+  const hasUsageTrendData = usageTrends.some(
+    point => point.requests > 0 || point.tokens > 0
+  )
+  const hasData =
+    providerData.length > 0 ||
+    modelComparisonData.length > 0 ||
+    totalStats.totalRequests > 0 ||
+    hasUsageTrendData
 
   if (loadError && !hasData) {
     return (
@@ -145,7 +159,7 @@ export default function AnalyticsPage() {
     )
   }
 
-  if (!hasData) {
+  if (!hasData && isTelemetryEmpty) {
     return (
       <div className="container mx-auto p-6">
         <Card>
@@ -196,7 +210,11 @@ export default function AnalyticsPage() {
           >
             30D
           </Button>
-          <Button variant="outline" onClick={loadAnalyticsData}>
+          <Button
+            variant="outline"
+            onClick={loadAnalyticsData}
+            aria-label="Refresh analytics"
+          >
             <RotateCcw className="h-4 w-4" />
           </Button>
         </div>

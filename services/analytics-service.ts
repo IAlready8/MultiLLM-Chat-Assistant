@@ -224,6 +224,9 @@ const loadStoredEvents = async (
         userId: event.userId,
       }))
     } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('loadStoredEvents', 'analytics', error)
       }
@@ -263,6 +266,9 @@ export async function recordAnalyticsEvent(event: AnalyticsEvent): Promise<void>
       },
     })
   } catch (error) {
+    if (!db.isFallbackAllowed()) {
+      throw error
+    }
     if (!db.markUnavailableIfNeeded(error)) {
       db.logWarningOnce('recordAnalyticsEvent', 'analytics', error)
     }

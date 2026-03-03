@@ -30,22 +30,23 @@ function parseUpstreamStatus(message: string): number | null {
  * Classify an arbitrary thrown value into a deterministic HTTP error shape.
  *
  * Order of precedence:
- *  1. SyntaxError        -> 400 INVALID_JSON
+ *  1. SyntaxError         -> 502 PROVIDER_MALFORMED_RESPONSE
  *  2. NotImplementedError -> 501 FEATURE_NOT_IMPLEMENTED
- *  3. Upstream 401/403   -> 401 PROVIDER_AUTH_ERROR
- *  4. Upstream 429       -> 429 RATE_LIMITED
- *  5. Upstream 5xx       -> 503 PROVIDER_UNAVAILABLE
- *  6. Timeout / abort    -> 504 PROVIDER_TIMEOUT
- *  7. Network errors     -> 503 NETWORK_ERROR
- *  8. Other 4xx          -> 400 PROVIDER_REQUEST_ERROR
- *  9. Fallback           -> 500 INTERNAL_ERROR
+ *  3. Upstream 401/403    -> 401 PROVIDER_AUTH_ERROR
+ *  4. Upstream 429        -> 429 RATE_LIMITED
+ *  5. Upstream 5xx        -> 503 PROVIDER_UNAVAILABLE
+ *  6. Timeout / abort     -> 504 PROVIDER_TIMEOUT
+ *  7. Malformed payload   -> 502 PROVIDER_MALFORMED_RESPONSE
+ *  8. Network errors      -> 503 NETWORK_ERROR
+ *  9. Other 4xx           -> 400 PROVIDER_REQUEST_ERROR
+ * 10. Fallback            -> 500 INTERNAL_ERROR
  */
 export function classifyProviderError(error: unknown): ClassifiedError {
   if (error instanceof SyntaxError) {
     return {
-      status: 400,
-      code: 'INVALID_JSON',
-      error: 'Request body must be valid JSON',
+      status: 502,
+      code: 'PROVIDER_MALFORMED_RESPONSE',
+      error: 'Provider returned malformed response',
     }
   }
 
@@ -95,6 +96,18 @@ export function classifyProviderError(error: unknown): ClassifiedError {
       status: 504,
       code: 'PROVIDER_TIMEOUT',
       error: 'Provider request timed out',
+    }
+  }
+
+  if (
+    lower.includes('malformed') ||
+    lower.includes('invalid json') ||
+    lower.includes('no response body')
+  ) {
+    return {
+      status: 502,
+      code: 'PROVIDER_MALFORMED_RESPONSE',
+      error: 'Provider returned malformed response',
     }
   }
 

@@ -10,6 +10,7 @@ import { validateStartupEnvironment } from '@/lib/startup-validation'
 import {
   createDemoAuthUser,
   getDemoAccountContext,
+  isInMemoryAuthFallbackAllowed,
   isDemoCredentials,
   isDemoEmail,
   isStrictAuthRequired,
@@ -58,6 +59,7 @@ const inMemoryAuthUsers = new Map<string, InMemoryAuthUser>()
 const normalizeEmail = (email: string) => email.toLowerCase().trim()
 validateStartupEnvironment()
 const strictAuth = isStrictAuthRequired()
+const allowInMemoryAuthFallback = isInMemoryAuthFallbackAllowed()
 
 const resolveAuthSecret = (): string => {
   const configuredSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET

@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-02 08:20:11 EST
-timestamp_utc: 2026-03-02T13:20:11Z
+timestamp_local: 2026-03-03 01:40:57 EST
+timestamp_utc: 2026-03-03T06:40:57Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -40,6 +40,7 @@ source: direct repo inspection + command evidence in this session
 - `10.2` PASS: optional sidecar path is isolated and tested; `/api/llm/orchestrate` succeeds with Python sidecar and falls back locally on sidecar failure/timeouts/network issues.
 - `11.1` PASS: Goals feature contract verified across `/api/goals*` and `/goal-hub` with route + UI evidence (create/edit/delete/list/update status).
 - `11.2` PASS: Personas feature contract verified across `/api/personas*` and `/personas` with route + UI evidence (create/edit/delete/list/use flow).
+- `11.3` PASS: Analytics contract verified across `/api/analytics` and `/analytics` with explicit empty/live/failure semantics and UI recovery behavior.
 
 ## failed
 - none for `01.*` through `03.1`.
@@ -151,7 +152,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `11.3`: verify Analytics feature (`/analytics`, `/api/analytics`) for truthfulness and empty-state behavior with API + UI evidence.
+Start `11.4`: verify Comparison feature (`/comparison`) either as accepted tested behavior or explicitly demoted from supported scope.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -718,3 +719,28 @@ TOTAL (22)
   - `npm run type-check`
 - Result:
   - `11.2` PASS with route and page-level evidence for the locked personas feature contract.
+
+## 11.3 evidence (Analytics feature verified)
+- API contract evidence:
+  - `test/api-analytics-route.test.ts`
+    - verifies auth forwarding behavior
+    - verifies default timeframe payload composition for live events
+    - verifies explicit empty telemetry payload semantics (`meta.source='empty'`, zero totals, non-fabricated arrays)
+    - verifies backend failure returns hard `500` error payload (no fabricated success response)
+- UI flow evidence:
+  - `test/e2e/analytics-flow.spec.ts` (new)
+    - loading state
+    - empty telemetry state
+    - refresh to live data
+    - timeframe switch (`7d` to `24h`) with live payload update
+    - backend failure state + retry recovery
+- UI correctness hardening:
+  - `app/analytics/page.tsx`
+    - fixed empty-state detection to avoid false non-empty dashboards from zero-filled trend buckets
+    - added accessible label for top refresh action
+- Verification commands:
+  - `npm run test:run -- test/api-analytics-route.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/analytics-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+- Result:
+  - `11.3` PASS with explicit route and page-level truthfulness/empty-state/failure-handling evidence.

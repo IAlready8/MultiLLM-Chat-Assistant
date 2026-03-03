@@ -62,7 +62,22 @@ describe('/api/config route', () => {
       configuredProviders: ['openai', 'anthropic'],
     })
     expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
     expect(mockGetUserProviderConfigs).toHaveBeenCalledWith('user-1')
+  })
+
+  it('GET returns 500 when provider config lookup fails', async () => {
+    mockGetUserProviderConfigs.mockRejectedValue(new Error('db unavailable'))
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const response = await GET()
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Failed to load provider configuration',
+    })
+
+    consoleSpy.mockRestore()
   })
 
   it('POST returns 400 when provider is missing', async () => {
@@ -97,6 +112,23 @@ describe('/api/config route', () => {
     await expect(response.json()).resolves.toEqual({ success: true })
     expect(mockDeleteUserProviderConfig).toHaveBeenCalledWith('user-1', 'openai')
     expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('POST returns 500 when clearing provider config fails', async () => {
+    mockDeleteUserProviderConfig.mockRejectedValue(new Error('delete failed'))
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const response = await POST(
+      makePostRequest({ provider: 'OpenAI', apiKey: '   ' })
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Failed to clear provider configuration',
+    })
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+
+    consoleSpy.mockRestore()
   })
 
   it('POST stores normalized provider key with default models and rate limits', async () => {

@@ -27,6 +27,8 @@ const db = createDbAvailabilityTracker()
 const getFallbackUserStore = (userId: string) =>
   getOrCreateUserStore(fallbackPersonas, userId)
 
+const peekFallbackUserStore = (userId: string) => fallbackPersonas.get(userId)
+
 const clonePersona = (persona: Persona): Persona => ({
   ...persona,
   createdAt: new Date(persona.createdAt),
@@ -41,7 +43,7 @@ const createId = () => {
 }
 
 const listFallbackPersonas = (userId: string): Persona[] =>
-  Array.from(getFallbackUserStore(userId).values())
+  Array.from(peekFallbackUserStore(userId)?.values() ?? [])
     .map(clonePersona)
     .sort((a, b) => a.title.localeCompare(b.title))
 
@@ -80,6 +82,10 @@ export const PersonaService = {
         },
       })
 
+      if (!db.isFallbackAllowed()) {
+        return personas
+      }
+
       const fallback = listFallbackPersonas(userId)
       if (fallback.length === 0) {
         return personas
@@ -87,6 +93,9 @@ export const PersonaService = {
 
       return mergePersonasById(personas, fallback)
     } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('getPersonasByUserId', 'persona', error)
       }
@@ -112,13 +121,18 @@ export const PersonaService = {
         return persona
       }
 
-      const fallbackPersona = getFallbackUserStore(userId).get(id)
+      const fallbackPersona = db.isFallbackAllowed()
+        ? peekFallbackUserStore(userId)?.get(id)
+        : undefined
       return fallbackPersona ? clonePersona(fallbackPersona) : null
     } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('getPersonaById', 'persona', error)
       }
-      const persona = getFallbackUserStore(userId).get(id)
+      const persona = peekFallbackUserStore(userId)?.get(id)
       return persona ? clonePersona(persona) : null
     }
   },
@@ -153,6 +167,9 @@ export const PersonaService = {
     } catch (error) {
       const dbUnavailable = db.markUnavailableIfNeeded(error)
       const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('createPersona', 'persona', error)
       } else if (!dbUnavailable) {
@@ -200,7 +217,7 @@ export const PersonaService = {
       })
 
       if (!existingPersona) {
-        return saveToFallback()
+        return db.isFallbackAllowed() ? saveToFallback() : null
       }
 
       return await prisma.persona.update({
@@ -212,6 +229,9 @@ export const PersonaService = {
     } catch (error) {
       const dbUnavailable = db.markUnavailableIfNeeded(error)
       const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('updatePersona', 'persona', error)
       } else if (!dbUnavailable) {
@@ -235,7 +255,7 @@ export const PersonaService = {
       })
 
       if (!existingPersona) {
-        return getFallbackUserStore(userId).delete(id)
+        return db.isFallbackAllowed() ? getFallbackUserStore(userId).delete(id) : false
       }
 
       await prisma.persona.delete({
@@ -248,6 +268,9 @@ export const PersonaService = {
     } catch (error) {
       const dbUnavailable = db.markUnavailableIfNeeded(error)
       const userForeignKeyError = isUserForeignKeyConstraintError(error)
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!dbUnavailable && userForeignKeyError) {
         db.logWarningOnce('deletePersona', 'persona', error)
       } else if (!dbUnavailable) {

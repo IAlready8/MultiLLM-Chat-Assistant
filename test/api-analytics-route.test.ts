@@ -101,7 +101,7 @@ describe('/api/analytics route', () => {
     expect(mockGetParsedAnalyticsEvents).toHaveBeenCalledWith('user-1', 7)
   })
 
-  it('supports 24h timeframe and produces hourly trends', async () => {
+  it('returns explicit empty telemetry payload for 24h timeframe', async () => {
     mockGetParsedAnalyticsEvents.mockResolvedValue([])
 
     const response = await GET(
@@ -113,7 +113,16 @@ describe('/api/analytics route', () => {
     const body = await response.json()
 
     expect(body.timeframe).toBe('24h')
+    expect(body.providerData).toEqual([])
+    expect(body.modelComparisonData).toEqual([])
     expect(body.usageTrends).toHaveLength(24)
+    expect(body.totalStats).toEqual({
+      totalRequests: 0,
+      totalTokens: 0,
+      totalErrors: 0,
+      avgResponseTime: 0,
+    })
+    expect(body.meta).toEqual({ source: 'empty', eventCount: 0 })
     expect(mockGetParsedAnalyticsEvents).toHaveBeenCalledWith('user-1', 1)
   })
 

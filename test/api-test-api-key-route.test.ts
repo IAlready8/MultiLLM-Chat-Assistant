@@ -74,6 +74,7 @@ describe('/api/test-api-key route', () => {
       valid: true,
       reason: 'ok',
     })
+    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
     expect(mockGetUserApiKey).toHaveBeenCalledWith('user-1', 'openai')
   })
 
@@ -89,6 +90,24 @@ describe('/api/test-api-key route', () => {
       valid: false,
       reason: 'invalid',
     })
+  })
+
+  it('returns 500 when saved key lookup throws', async () => {
+    mockGetUserApiKey.mockRejectedValue(new Error('db down'))
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const response = await POST(
+      makeRequest({ provider: 'openai', testSaved: true })
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      valid: false,
+      reason: 'unreachable',
+      message: 'Failed to test API key.',
+    })
+
+    consoleSpy.mockRestore()
   })
 
   it('returns format error for invalid provided keys', async () => {

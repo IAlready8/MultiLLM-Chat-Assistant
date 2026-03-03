@@ -11,6 +11,7 @@ Multi-LLM web app for chat, personas, analytics, comparison workflows, pipelines
 
 ## Highlights
 - Multi-provider chat endpoints with streaming support
+- Supported providers: OpenAI, Anthropic, Google AI, OpenRouter, Grok
 - Configurable provider keys from app settings
 - Auth modes for demo/guest and strict login
 - Optional Python orchestration sidecar (`src/core`)
@@ -36,6 +37,9 @@ Package manager:
 - `pnpm-lock.yaml` is retained as an archival snapshot and is not used by CI.
 
 ## Auth Modes
+- Production:
+  - Strict auth is always enforced in production runtime.
+  - `NEXTAUTH_SECRET` (or `AUTH_SECRET`) and `NEXTAUTH_URL` are required.
 - Guest/demo mode (default for local dev):
   - `AUTH_REQUIRE_LOGIN=false`
   - `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false`
@@ -171,6 +175,7 @@ Configure once in Vercel Project Settings:
 After this setup, every `git push origin main` should trigger a production deployment automatically via Vercel Git integration.
 
 ## Additional Docs
+- `DOCS_SOURCE_OF_TRUTH.md`: authoritative-vs-historical doc map
 - `DOCUMENTATION.md`: API/services/components reference
 - `DESIGN_SYSTEM.md`: design tokens and UI conventions
 - `ROADMAP.md`: roadmap and planned work

@@ -8,14 +8,14 @@ test.describe('Authentication Flow', () => {
 
   test('should redirect unauthenticated users to sign in', async ({ page }) => {
     // Should redirect to sign-in page
-    await expect(page).toHaveURL('/auth/signin')
+    await expect(page).toHaveURL(/\/auth\/signin/)
     
     // Should show sign in form
     await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible()
     
-    // Should show authentication options
-    await expect(page.getByRole('button', { name: /sign in with google/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /sign in with github/i })).toBeVisible()
+    // Provider buttons are optional; credentials form should always be present.
+    await expect(page.getByLabel(/email/i)).toBeVisible()
+    await expect(page.getByLabel(/password/i)).toBeVisible()
   })
 
   test('should show credential sign in form', async ({ page }) => {

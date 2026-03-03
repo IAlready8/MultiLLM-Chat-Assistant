@@ -125,6 +125,48 @@ describe('PersonaService DB fallback', () => {
     expect(deleted).toBe(true)
   })
 
+  it('keeps production reads DB-first without creating fallback stores', async () => {
+    const env = process.env as Record<string, string | undefined>
+    const previousNodeEnv = env.NODE_ENV
+    env.NODE_ENV = 'production'
+
+    try {
+      const prismaMock: PrismaMock = {
+        persona: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: 'persona-1',
+              userId: 'user-1',
+              title: 'Persisted persona',
+              description: 'Loaded from DB',
+              prompt: 'Use DB data only.',
+              createdAt: new Date('2026-03-02T00:00:00.000Z'),
+              updatedAt: new Date('2026-03-02T00:00:00.000Z'),
+            },
+          ]),
+          findFirst: vi.fn(),
+          create: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn(),
+        },
+      }
+
+      const { PersonaService } = await loadServiceWithPrismaMock(prismaMock)
+      const personas = await PersonaService.getPersonasByUserId('user-1')
+
+      expect(personas).toHaveLength(1)
+      expect(personas[0].title).toBe('Persisted persona')
+      const store = (
+        globalThis as {
+          __multiLlmPersonaFallbackStore?: Map<string, Map<string, unknown>>
+        }
+      ).__multiLlmPersonaFallbackStore
+      expect(store?.size ?? 0).toBe(0)
+    } finally {
+      env.NODE_ENV = previousNodeEnv
+    }
+  })
+
   it('throws unexpected write errors instead of silently falling back', async () => {
     const unexpectedError = new Error('Unique constraint failed on title')
 

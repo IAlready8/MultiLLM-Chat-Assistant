@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-02 08:20:11 EST` (`2026-03-02T13:20:11Z`)
+- Last updated: `2026-03-03 01:40:57 EST` (`2026-03-03T06:40:57Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -49,7 +49,8 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `10.2` If optional: isolate cleanly (PASS)
 - [x] `11.1` Goals feature (PASS)
 - [x] `11.2` Personas feature (PASS)
-- [ ] `11.3` Analytics feature (next)
+- [x] `11.3` Analytics feature (PASS)
+- [ ] `11.4` Comparison feature (next)
 
 ---
 
@@ -143,7 +144,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 |---|---|---|---|---|---|---|---|
 | 11.1 ✅ | Goals feature | 07.3 | Verify create/edit/delete/list/update status in routes and UI | PASS (closed 2026-03-02) | goal files + tests | LLM | API route tests + goal-hub e2e flow (`test/api-goals-routes.test.ts`, `test/e2e/goal-hub-flow.spec.ts`) |
 | 11.2 ✅ | Personas feature | 07.3 | Verify create/edit/delete/list/use in routes and UI | PASS (closed 2026-03-02) | persona files + tests | LLM | API route tests + personas e2e flow (`test/api-personas-routes.test.ts`, `test/e2e/personas-flow.spec.ts`) |
-| 11.3 | Analytics feature | 07.3 | Verify `/analytics` and `/api/analytics` do not show fake or broken data and handle empty state | PASS when analytics truthfulness is proven | analytics files + tests | LLM | route + UI tests |
+| 11.3 ✅ | Analytics feature | 07.3 | Verify `/analytics` and `/api/analytics` do not show fake or broken data and handle empty state | PASS (closed 2026-03-03) | analytics files + tests | LLM | strengthened route assertions + analytics e2e flow (`test/api-analytics-route.test.ts`, `test/e2e/analytics-flow.spec.ts`, `app/analytics/page.tsx`) |
 | 11.4 | Comparison feature | 09.1, 09.2 | Verify `/comparison` can execute and render real comparison flow or explicitly demote it | PASS when feature is either accepted or demoted | comparison page + any backing code/tests | LLM | evidence attached |
 | 11.5 | Pipeline feature | 09.1 | Verify `/pipeline` is real and tested or explicitly demote/remove from scope | PASS when no decorative unsupported pipeline remains in supported scope | pipeline page + docs | LLM + Repo operator | decision + tests |
 | 11.6 | AI roundtable feature | 09.1 | Verify `/ai-roundtable` is real and tested or explicitly demote/remove from scope | PASS when no decorative unsupported roundtable remains in supported scope | ai-roundtable page + docs | LLM + Repo operator | decision + tests |

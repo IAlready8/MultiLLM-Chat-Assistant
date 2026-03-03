@@ -110,4 +110,30 @@ describe('analytics-service DB fallback', () => {
     expect(events[0].payload.provider).toBe('anthropic')
     expect(events[1].payload.provider).toBe('openai')
   })
+
+  it('fails closed in production when analytics DB access is unavailable', async () => {
+    const env = process.env as Record<string, string | undefined>
+    const previousNodeEnv = env.NODE_ENV
+    env.NODE_ENV = 'production'
+
+    try {
+      const prismaMock = makePrismaMock()
+      const { getParsedAnalyticsEvents, recordAnalyticsEvent } =
+        await loadServiceWithPrismaMock(prismaMock)
+
+      await expect(getParsedAnalyticsEvents('user-1', 7)).rejects.toThrow(
+        DB_UNAVAILABLE_ERROR.message
+      )
+
+      await expect(
+        recordAnalyticsEvent({
+          event: 'llm_request',
+          userId: 'user-1',
+          payload: { provider: 'openai', tokens: 42 },
+        })
+      ).rejects.toThrow(DB_UNAVAILABLE_ERROR.message)
+    } finally {
+      env.NODE_ENV = previousNodeEnv
+    }
+  })
 })
