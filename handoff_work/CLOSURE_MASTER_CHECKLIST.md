@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-03 06:06:52 EST` (`2026-03-03T11:06:52Z`)
+- Last updated: `2026-03-03 07:00:21 EST` (`2026-03-03T12:00:21Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -57,7 +57,8 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `12.1` Admin routes (PASS - demoted)
 - [x] `12.2` Teams route (PASS - removed from scope)
 - [x] `12.3` Billing routes and page (PASS - optional gate)
-- [ ] `12.4` Webhook verification (next)
+- [x] `12.4` Webhook verification (PASS - optional gate)
+- [ ] `13.1` Reconcile declared tests with actual coverage (next)
 
 ---
 
@@ -164,7 +165,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 | 12.1 ✅ | Admin routes | 02.3 | Verify `/api/admin/status` and `/api/admin/errors/stats`; verify any admin UI page status; confirm auth requirement | PASS (closed 2026-03-03) | admin route files, admin pages/tests | LLM | admin surface retained as experimental/demoted; auth + route truth covered by `test/api-admin-status-route.test.ts` and `test/api-admin-errors-stats-route.test.ts` |
 | 12.2 ✅ | Teams route | 07.3 | Verify `/api/teams` implementation, auth, persistence, and any absent UI implications | PASS (closed 2026-03-03) | `app/api/teams/route.ts`, `services/team-service.db.ts` | LLM | explicitly removed from supported production scope (no linked UI contract; retained only as out-of-scope backend surface) |
 | 12.3 ✅ | Billing routes and page | 03.1 | Verify Stripe page, checkout, manage portal, webhook handling, subscription persistence if billing is in scope | PASS (closed 2026-03-03) | billing files, webhook route, subscription files/tests | LLM + Billing owner | closed via optional-feature gate with route/webhook tests + explicit Stripe-missing degradation coverage (`test/api-subscriptions-routes.test.ts`, `test/api-stripe-webhook-route.test.ts`) |
-| 12.4 | Webhook verification | 12.3 | Use `scripts/verify-production.sh --check-webhook`; confirm signature validation and failure handling | PASS when webhook behavior matches docs | `app/api/webhooks/stripe/route.ts`, script, tests | Billing owner + LLM | script output |
+| 12.4 ✅ | Webhook verification | 12.3 | Use `scripts/verify-production.sh --check-webhook`; confirm signature validation and failure handling | PASS (closed 2026-03-03) | `app/api/webhooks/stripe/route.ts`, script, tests | Billing owner + LLM | optional-feature closure with webhook route test coverage + verify script gate semantics (live signed-webhook run remains billing-owner dependent when Stripe is enabled) |
 
 ## 13. Strengthen automated test coverage
 

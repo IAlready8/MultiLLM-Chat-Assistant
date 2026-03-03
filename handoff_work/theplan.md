@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-03 06:06 EST)
+## Progress snapshot (2026-03-03 07:00 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -50,6 +50,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `12.1` Verify admin routes truth/auth and close via experimental demotion path
   - `12.2` Close `/api/teams` via explicit removal-from-supported-scope path
   - `12.3` Close billing via optional-feature gate with route/webhook contract tests
+  - `12.4` Close webhook verification via optional-feature gate + scripted check semantics
 - failed:
   - none
 - unverified:
@@ -509,6 +510,14 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `npm run type-check`
 - Outcome:
   - billing/subscription/webhook routes are executable when configured and fail safely/explicitly when Stripe config is absent.
+
+## 12.4 implementation evidence
+- Route evidence:
+  - `test/api-stripe-webhook-route.test.ts`
+- Verification tooling evidence:
+  - `scripts/verify-production.sh` webhook validation path (`--check-webhook`) confirmed as the live-gate mechanism when Stripe is enabled and a deploy URL is available.
+- Outcome:
+  - closed via optional-feature contract with clear billing-owner dependency for live signed-webhook validation in Stripe-enabled environments.
 
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:

@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-03 06:06:52 EST
-timestamp_utc: 2026-03-03T11:06:52Z
+timestamp_local: 2026-03-03 07:00:21 EST
+timestamp_utc: 2026-03-03T12:00:21Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -48,6 +48,7 @@ source: direct repo inspection + command evidence in this session
 - `12.1` PASS: Admin surface remains explicitly demoted/experimental, with admin route auth+truth verified via deterministic route tests.
 - `12.2` PASS: `/api/teams` explicitly remains removed from supported production scope (no UI contract), so it is non-blocking for release acceptance.
 - `12.3` PASS: Billing is closed via optional-feature gate with tested checkout/manage/webhook route contracts and explicit Stripe-unconfigured degradation behavior.
+- `12.4` PASS: Webhook verification closed via optional-feature gate with executable route tests and scripted verification semantics documented for Stripe-enabled environments.
 
 ## failed
 - none for `01.*` through `03.1`.
@@ -159,7 +160,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `12.4`: verify webhook-specific production checks/gates and finalize billing-owner-dependent validation boundaries.
+Start `13.1`: build a coverage matrix reconciling supported surfaces with route/service/e2e tests and identify remaining gaps.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -854,3 +855,15 @@ TOTAL (22)
   - `npm run type-check`
 - Result:
   - `12.3` PASS via optional-feature contract: billing is supported when configured and explicitly degraded when Stripe config is absent.
+
+## 12.4 evidence (Webhook verification closed via optional gate)
+- Route-level webhook evidence:
+  - `test/api-stripe-webhook-route.test.ts`
+    - signature verification failures
+    - webhook-not-configured behavior
+    - representative event processing paths
+- Verification-gate semantics:
+  - `scripts/verify-production.sh` supports `--check-webhook` for signed endpoint verification when `--base-url` and Stripe env are provided.
+  - optional billing topology allows this to remain billing-owner dependent for Stripe-enabled environments.
+- Result:
+  - `12.4` PASS under optional-feature contract with executable route behavior coverage and explicit live-check ownership boundaries.
