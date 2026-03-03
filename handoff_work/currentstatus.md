@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-03 02:44:44 EST
-timestamp_utc: 2026-03-03T07:44:44Z
+timestamp_local: 2026-03-03 02:55:22 EST
+timestamp_utc: 2026-03-03T07:55:22Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -44,6 +44,7 @@ source: direct repo inspection + command evidence in this session
 - `11.4` PASS: Comparison feature verified with executable model-metrics and response-comparison browser flow plus failure-retry recovery behavior.
 - `11.5` PASS: Pipeline feature verified with orchestration success flow, fallback metadata rendering, input/provider validation, and API-failure handling.
 - `11.6` PASS: AI roundtable explicitly demoted from supported production scope and retained as experimental-only (non-blocking for release acceptance).
+- `11.7` PASS: Settings page now has current-contract route+UI evidence for provider key lifecycle management end-to-end.
 
 ## failed
 - none for `01.*` through `03.1`.
@@ -155,7 +156,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `11.7`: verify Settings feature (`/settings`) can fully manage supported provider configuration end-to-end.
+Start `12.1`: verify admin routes/pages (`/api/admin/status`, `/api/admin/errors/stats`, admin UI) for truthful behavior or explicit demotion.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -786,3 +787,23 @@ TOTAL (22)
   - No release-blocking contract is claimed for roundtable behavior in this handoff phase.
 - Result:
   - `11.6` PASS via explicit demotion path (experimental-only, out-of-contract for supported release scope).
+
+## 11.7 evidence (Settings page verified)
+- Route contract evidence:
+  - `test/api-config-route.test.ts`
+  - `test/api-provider-configs-route.test.ts`
+  - `test/api-test-api-key-route.test.ts`
+  - verified save/list/clear/test behavior and explicit failure handling for the provider config lifecycle.
+- UI flow evidence:
+  - `test/e2e/provider-configuration.spec.ts` (rewritten to current API contract)
+    - save/verify/clear provider key from `/settings` -> `API Providers` tab
+    - invalid key rejection without persistence
+- UI correctness fix:
+  - `app/settings/page.tsx`
+    - switched tabs to `defaultValue="general"` to restore reliable tab activation (fixes provider tab accessibility/interaction regression).
+- Verification commands:
+  - `npm run test:run -- test/api-config-route.test.ts test/api-provider-configs-route.test.ts test/api-test-api-key-route.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/provider-configuration.spec.ts --project=chromium`
+  - `npm run type-check`
+- Result:
+  - `11.7` PASS: `/settings` can manage supported provider configuration end-to-end with executable evidence.

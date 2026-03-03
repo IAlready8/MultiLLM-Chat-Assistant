@@ -94,7 +94,6 @@ const readAnalyticsToggle = (): boolean => {
 }
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState('general')
   const [profile, setProfile] = useState<ProfileSettings>(DEFAULT_PROFILE)
   const [fontSize, setFontSize] = useState<FontSizeOption>('normal')
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true)
@@ -253,7 +252,7 @@ export default function SettingsPage() {
         </CardHeader>
       </Card>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs defaultValue="general">
         <TabsList className="grid w-full grid-cols-3 lg:grid-cols-4">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="providers">API Providers</TabsTrigger>

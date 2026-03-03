@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-03 02:44:44 EST` (`2026-03-03T07:44:44Z`)
+- Last updated: `2026-03-03 02:55:22 EST` (`2026-03-03T07:55:22Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -53,7 +53,8 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `11.4` Comparison feature (PASS)
 - [x] `11.5` Pipeline feature (PASS)
 - [x] `11.6` AI roundtable feature (PASS - demoted)
-- [ ] `11.7` Settings page (next)
+- [x] `11.7` Settings page (PASS)
+- [ ] `12.1` Admin routes (next)
 
 ---
 
@@ -151,7 +152,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 | 11.4 ✅ | Comparison feature | 09.1, 09.2 | Verify `/comparison` can execute and render real comparison flow or explicitly demote it | PASS (closed 2026-03-03) | comparison page + any backing code/tests | LLM | comparison e2e flow + failure recovery (`test/e2e/comparison-flow.spec.ts`) |
 | 11.5 ✅ | Pipeline feature | 09.1 | Verify `/pipeline` is real and tested or explicitly demote/remove from scope | PASS (closed 2026-03-03) | pipeline page + docs | LLM + Repo operator | pipeline e2e flow + validation/failure handling (`test/e2e/pipeline-flow.spec.ts`) |
 | 11.6 ✅ | AI roundtable feature | 09.1 | Verify `/ai-roundtable` is real and tested or explicitly demote/remove from scope | PASS (closed 2026-03-03) | ai-roundtable page + docs | LLM + Repo operator | explicitly demoted from supported production scope (retained as experimental beta only; non-blocking for release gates) |
-| 11.7 | Settings page | 08.2 | Verify provider config and related controls work end-to-end from `/settings` | PASS when settings page can fully manage supported config | `app/settings/page.tsx`, related components | LLM | e2e evidence |
+| 11.7 ✅ | Settings page | 08.2 | Verify provider config and related controls work end-to-end from `/settings` | PASS (closed 2026-03-03) | `app/settings/page.tsx`, related components | LLM | updated provider e2e + route contract tests (`test/e2e/provider-configuration.spec.ts`, `test/api-config-route.test.ts`, `test/api-provider-configs-route.test.ts`, `test/api-test-api-key-route.test.ts`) |
 
 ## 12. Verify admin, teams, and billing truth
 

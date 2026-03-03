@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-03 02:44 EST)
+## Progress snapshot (2026-03-03 02:55 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -46,6 +46,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `11.4` Verify Comparison feature contract for `/comparison`
   - `11.5` Verify Pipeline feature contract for `/pipeline`
   - `11.6` Demote AI roundtable from supported production scope (experimental-only)
+  - `11.7` Verify `/settings` provider configuration management end-to-end
 - failed:
   - none
 - unverified:
@@ -456,6 +457,23 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `handoff_work/CLOSURE_MASTER_CHECKLIST.md` `11.6` pass gate allows explicit demotion/remove from supported scope.
 - Outcome:
   - roundtable remains experimental/beta and is excluded from supported production release gates.
+
+## 11.7 implementation evidence
+- Route/service evidence:
+  - `test/api-config-route.test.ts`
+  - `test/api-provider-configs-route.test.ts`
+  - `test/api-test-api-key-route.test.ts`
+- UI evidence:
+  - `test/e2e/provider-configuration.spec.ts` rewritten to current endpoint contract
+    - save/verify/clear provider key lifecycle from `/settings`
+    - invalid key rejection without persistence
+- UI fix:
+  - `app/settings/page.tsx`
+    - switched tabs root to `defaultValue="general"` to restore reliable provider-tab activation
+- Verification commands:
+  - `npm run test:run -- test/api-config-route.test.ts test/api-provider-configs-route.test.ts test/api-test-api-key-route.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/provider-configuration.spec.ts --project=chromium`
+  - `npm run type-check`
 
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
