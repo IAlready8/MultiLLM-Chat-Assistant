@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-03 01:40 EST)
+## Progress snapshot (2026-03-03 02:28 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -43,6 +43,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `11.1` Verify Goals feature contract for `/api/goals*` + `/goal-hub`
   - `11.2` Verify Personas feature contract for `/api/personas*` + `/personas`
   - `11.3` Verify Analytics feature contract for `/api/analytics` + `/analytics`
+  - `11.4` Verify Comparison feature contract for `/comparison`
 - failed:
   - none
 - unverified:
@@ -423,6 +424,16 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/analytics-flow.spec.ts --project=chromium`
   - `npm run type-check`
 
+## 11.4 implementation evidence
+- New UI flow coverage:
+  - `test/e2e/comparison-flow.spec.ts` (new)
+    - model-metrics tab verified with live analytics payload
+    - conversation-response tab verified with conversation/detail API payloads
+    - analytics load failure + retry recovery verified
+- Verification commands:
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/comparison-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -439,7 +450,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 19. [x] Goals
 20. [x] Personas
 21. [x] Analytics
-22. [ ] Comparison
+22. [x] Comparison
 23. [ ] Pipeline
 24. [ ] AI roundtable
 25. [ ] Admin routes
