@@ -67,42 +67,38 @@ describe('analytics-service DB fallback', () => {
   })
 
   it('merges database and fallback events when DB reads succeed', async () => {
+    // Use a generic error that won't mark DB as permanently unavailable
+    const TRANSIENT_ERROR = new Error('Transient write error')
+
     const prismaMock: PrismaMock = {
       analytics: {
-        create: vi.fn(),
+        // Mock create to reject with a transient error - fallback will be used
+        create: vi.fn().mockRejectedValue(TRANSIENT_ERROR),
+        // Mock findMany to succeed - DB reads work fine
         findMany: vi.fn().mockResolvedValue([
           {
             id: 'db-1',
             event: 'llm_request',
             payload: JSON.stringify({ provider: 'anthropic', tokens: 42 }),
-            createdAt: new Date('2026-02-01T10:00:00.000Z'),
+            createdAt: new Date('2026-03-01T10:00:00.000Z'),
             userId: 'user-1',
           },
         ]),
       },
     }
 
-    ;(
-      globalThis as {
-        __multiLlmAnalyticsFallbackStore?: Map<string, unknown[]>
-      }
-    ).__multiLlmAnalyticsFallbackStore = new Map([
-      [
-        'user-1',
-        [
-          {
-            id: 'mem-1',
-            event: 'llm_error',
-            payload: JSON.stringify({ provider: 'openai' }),
-            createdAt: new Date('2026-02-01T10:01:00.000Z'),
-            userId: 'user-1',
-          },
-        ],
-      ],
-    ])
+    const { getParsedAnalyticsEvents, recordAnalyticsEvent } =
+      await loadServiceWithPrismaMock(prismaMock)
 
-    const { getParsedAnalyticsEvents } = await loadServiceWithPrismaMock(prismaMock)
+    // Record an event - write will fail, event goes to fallback
+    await recordAnalyticsEvent({
+      event: 'llm_error',
+      userId: 'user-1',
+      payload: { provider: 'openai' },
+      createdAt: new Date('2026-03-01T10:01:00.000Z'),
+    })
 
+    // Read events - DB reads succeed, should merge DB events with fallback events
     const events = await getParsedAnalyticsEvents('user-1', 30)
     expect(events).toHaveLength(2)
     expect(events[0].event).toBe('llm_request')
