@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-04 05:24:02 EST
-timestamp_utc: 2026-03-04T10:24:02Z
+timestamp_local: 2026-03-04 06:25:07 EST
+timestamp_utc: 2026-03-04T11:25:07Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -50,9 +50,10 @@ source: direct repo inspection + command evidence in this session
 - `12.3` PASS: Billing is closed via optional-feature gate with tested checkout/manage/webhook route contracts and explicit Stripe-unconfigured degradation behavior.
 - `12.4` PASS: Webhook verification closed via optional-feature gate with executable route tests and scripted verification semantics documented for Stripe-enabled environments.
 - `13.1` PASS: supported core/optional surfaces now reconcile to executable route/service/e2e coverage with a documented matrix and no uncovered supported feature.
+- `13.2` PASS: supported API route/service surfaces now have explicit happy-path + failure-path test evidence with no unresolved matrix gaps.
 
 ## failed
-- none for `01.*` through `13.1`.
+- none for `01.*` through `13.2`.
 
 ## unverified
 - `npm ci`, `npm run lint`, full-repo `npm run test:run`, `npm run build`.
@@ -161,7 +162,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `13.2`: verify whether any supported API route/service still lacks required happy-path + failure-path tests after the `13.1` matrix reconciliation.
+Start `13.3`: verify browser e2e coverage completeness for the supported product contract (strict auth, guest mode, provider config, chat/stream, conversations, settings, goals, personas, analytics, and optional billing/API-test surfaces).
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -896,3 +897,27 @@ TOTAL (22)
   - `npm run type-check`
 - Result:
   - `13.1` PASS with all supported surfaces mapped to executable tests and no uncovered supported contract remaining.
+
+## 13.2 evidence (Route/service happy+failure test gate closed)
+- Supported API route/service gate matrix:
+
+| Supported API/service surface | Happy-path evidence | Failure-path evidence | Status |
+|---|---|---|---|
+| Auth contract + guest upgrade | `test/api-auth.test.ts`, `test/api-upgrade-guest-route.test.ts` | same files (`401`, `400`, `500`, token errors) | covered |
+| Chat route | `test/api-llm-chat-route.test.ts` (`provider response`, guest flow) | same file (`auth`, `validation`, provider config, 401/429/timeout/malformed, invalid JSON) | covered |
+| Stream route + client protocol | `test/api-llm-stream-route.test.ts`, `test/stream-client.test.ts` | same files (`auth`, invalid payload, rate-limit, provider failure/error events) | covered |
+| Conversations route + service | `test/api-conversations-routes.test.ts`, `test/conversation-service-db.test.ts` | same files (`404`, validation failures, auth forward, production fail-closed paths) | covered |
+| Provider config + key lifecycle | `test/api-config-route.test.ts`, `test/api-provider-configs-route.test.ts`, `test/api-test-api-key-route.test.ts`, `test/api-key-service.test.ts`, `test/runtime-secrets.test.ts` | same files (`400/500`, invalid format, unreachable provider, production DB fail-closed) | covered |
+| Goals route + service | `test/api-goals-routes.test.ts`, `test/goal-service-db.test.ts` | same files (validation errors, not-found paths, write-failure behavior) | covered |
+| Personas route + service | `test/api-personas-routes.test.ts`, `test/persona-service-db.test.ts` | same files (validation errors, not-found paths, write-failure behavior) | covered |
+| Analytics route + service | `test/api-analytics-route.test.ts`, `test/analytics-service.test.ts` | same files (explicit empty telemetry, `500` route path, production fail-closed behavior) | covered |
+| Health route | `test/api-health-route.test.ts` (healthy payload) | same file (degraded DB path) | covered |
+| Billing routes + webhook (optional) | `test/api-subscriptions-routes.test.ts`, `test/api-stripe-webhook-route.test.ts` | same files (`400/503/500`, signature failure, config-missing paths) | covered |
+| Orchestration route (optional) | `test/api-llm-orchestrate-route.test.ts` (sidecar success proxy) | same file (invalid payload, auth block, 5xx/network/timeout fallback, 429 non-fallback) | covered |
+
+- Verification command:
+  - `npm run test:run -- test/api-auth.test.ts test/api-upgrade-guest-route.test.ts test/middleware-auth-routing.test.ts test/api-llm-chat-route.test.ts test/api-llm-stream-route.test.ts test/stream-client.test.ts test/api-conversations-routes.test.ts test/conversation-service-db.test.ts test/api-config-route.test.ts test/api-provider-configs-route.test.ts test/api-test-api-key-route.test.ts test/api-key-service.test.ts test/runtime-secrets.test.ts test/api-goals-routes.test.ts test/goal-service-db.test.ts test/api-personas-routes.test.ts test/persona-service-db.test.ts test/api-analytics-route.test.ts test/analytics-service.test.ts test/api-health-route.test.ts test/api-subscriptions-routes.test.ts test/api-stripe-webhook-route.test.ts test/api-llm-orchestrate-route.test.ts`
+- Verification result:
+  - `23` test files passed, `150` tests passed.
+- Result:
+  - `13.2` PASS: no supported API route/service remains without explicit happy-path and failure-path coverage evidence.

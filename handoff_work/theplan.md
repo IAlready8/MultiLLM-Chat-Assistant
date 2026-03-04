@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-04 05:24 EST)
+## Progress snapshot (2026-03-04 06:25 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -52,6 +52,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `12.3` Close billing via optional-feature gate with route/webhook contract tests
   - `12.4` Close webhook verification via optional-feature gate + scripted check semantics
   - `13.1` Reconcile supported surfaces with executable route/service/e2e coverage and close matrix gaps
+  - `13.2` Confirm supported API route/service happy+failure coverage and close route/service matrix gaps
 - failed:
   - none
 - unverified:
@@ -537,6 +538,30 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - Outcome:
   - `13.1` PASS: supported-surface coverage is reconciled and executable.
 
+## 13.2 implementation evidence
+- Route/service gate basis:
+  - `13.2` requires happy-path + failure-path coverage for supported API route/service surfaces.
+- Validation method:
+  - extracted explicit test-case names across supported route/service files and reconciled each API surface against at least one happy-path and one failure-path assertion set.
+- Matrix result:
+  - all supported route/service surfaces are covered:
+    - auth + guest-upgrade contract
+    - chat + stream + stream-client protocol
+    - conversations route + service lifecycle
+    - provider config/key routes + key service/runtime secret contract
+    - goals route + service
+    - personas route + service
+    - analytics route + service
+    - health route
+    - optional billing routes + webhook
+    - optional orchestration route
+- Verification command:
+  - `npm run test:run -- test/api-auth.test.ts test/api-upgrade-guest-route.test.ts test/middleware-auth-routing.test.ts test/api-llm-chat-route.test.ts test/api-llm-stream-route.test.ts test/stream-client.test.ts test/api-conversations-routes.test.ts test/conversation-service-db.test.ts test/api-config-route.test.ts test/api-provider-configs-route.test.ts test/api-test-api-key-route.test.ts test/api-key-service.test.ts test/runtime-secrets.test.ts test/api-goals-routes.test.ts test/goal-service-db.test.ts test/api-personas-routes.test.ts test/persona-service-db.test.ts test/api-analytics-route.test.ts test/analytics-service.test.ts test/api-health-route.test.ts test/api-subscriptions-routes.test.ts test/api-stripe-webhook-route.test.ts test/api-llm-orchestrate-route.test.ts`
+- Verification result:
+  - `23` files passed, `150` tests passed.
+- Outcome:
+  - `13.2` PASS: no supported API route/service remains without explicit happy-path + failure-path evidence.
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -561,7 +586,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 27. [x] Billing + webhook (optional gate)
 
 ## Phase F - proof
-28. [x] Fill coverage gaps in route/service/e2e tests (13.1 matrix reconciliation complete)
+28. [x] Fill coverage gaps in route/service/e2e tests (13.1 + 13.2 matrix reconciliation complete)
 29. [ ] Upgrade smoke script to cover actual supported flows
 30. [ ] Upgrade production verification script
 31. [ ] Align CI with real release gates
