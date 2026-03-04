@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-04 06:46:15 EST` (`2026-03-04T11:46:15Z`)
+- Last updated: `2026-03-04 06:48:53 EST` (`2026-03-04T11:48:53Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -61,6 +61,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `13.1` Reconcile declared tests with actual coverage (PASS)
 - [x] `13.2` Add missing route/service tests (PASS)
 - [x] `13.3` Add/finish browser e2e (PASS)
+- [x] `13.4` Add chaos and degraded-mode tests (PASS)
 
 ---
 
@@ -176,7 +177,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 | 13.1 ✅ | Reconcile declared tests with actual coverage | 09.4, 11.*, 12.* | Map each supported feature to one or more test files; identify gaps | PASS (closed 2026-03-04) | `.plan`, `.currentstatus` | LLM | supported-surface coverage matrix completed; missing supported page gap closed via `test/e2e/home-and-api-test-flow.spec.ts`; consolidated route/service matrix run passed (`23` files, `150` tests) |
 | 13.2 ✅ | Add missing route/service tests | 13.1 | Fill route and service gaps found in matrix | PASS (closed 2026-03-04) | `test/*.test.ts`, `.currentstatus`, `.plan` | LLM | route/service gate matrix confirms happy+failure coverage across all supported API surfaces; consolidated route/service run passed (`23` files, `150` tests) |
 | 13.3 ✅ | Add/finish browser e2e | 13.1 | Expand Playwright specs for strict auth, guest mode, provider config, chat, stream, conversations, settings, goals, personas, analytics, comparison, billing if in scope | PASS (closed 2026-03-04) | `test/e2e/*.spec.ts`, `.currentstatus`, `.plan` | LLM | supported guest-mode e2e matrix passed (`10/10`); strict-auth subset passed (`2/2`); analytics/provider specs stabilized for deterministic execution |
-| 13.4 | Add chaos and degraded-mode tests | 13.1 | Cover DB unavailable, missing env, provider outage, sidecar outage, bad webhook, rate limits | PASS when degraded behavior is executable and documented | tests + docs | LLM | passing test output |
+| 13.4 ✅ | Add chaos and degraded-mode tests | 13.1 | Cover DB unavailable, missing env, provider outage, sidecar outage, bad webhook, rate limits | PASS (closed 2026-03-04) | `test/*.test.ts`, `.currentstatus`, `.plan` | LLM | degraded-mode bundle passed (`10` files, `64` tests) spanning DB/env/provider/sidecar/webhook/rate-limit failure classes |
 
 ## 14. Turn scripts into real release gates
 

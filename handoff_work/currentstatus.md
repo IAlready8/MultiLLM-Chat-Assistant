@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-04 06:46:15 EST
-timestamp_utc: 2026-03-04T11:46:15Z
+timestamp_local: 2026-03-04 06:48:53 EST
+timestamp_utc: 2026-03-04T11:48:53Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -52,9 +52,10 @@ source: direct repo inspection + command evidence in this session
 - `13.1` PASS: supported core/optional surfaces now reconcile to executable route/service/e2e coverage with a documented matrix and no uncovered supported feature.
 - `13.2` PASS: supported API route/service surfaces now have explicit happy-path + failure-path test evidence with no unresolved matrix gaps.
 - `13.3` PASS: supported browser contract coverage now passes for guest mode and strict-auth subset with stabilized analytics/provider e2e behavior.
+- `13.4` PASS: degraded-mode failure classes are now covered by executable chaos-focused tests across DB/env/provider/sidecar/webhook/rate-limit paths.
 
 ## failed
-- none for `01.*` through `13.3`.
+- none for `01.*` through `13.4`.
 
 ## unverified
 - `npm ci`, `npm run lint`, full-repo `npm run test:run`, `npm run build`.
@@ -163,7 +164,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `13.4`: add and verify degraded-mode/chaos tests (DB unavailable, missing env, provider outages, sidecar outage, bad webhook, rate-limit behavior) for supported scope.
+Start `14.1`: upgrade `scripts/smoke-test.sh` so it exercises real supported feature roundtrips instead of static page/status checks only.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -947,3 +948,19 @@ TOTAL (22)
   - `npm run type-check`
 - Result:
   - `13.3` PASS: supported browser-contract coverage now executes cleanly in guest and strict-auth modes.
+
+## 13.4 evidence (Degraded-mode/chaos gate closed)
+- Degraded-mode verification command:
+  - `npm run test:run -- test/startup-validation.test.ts test/api-key-service.test.ts test/analytics-service.test.ts test/conversation-service-db.test.ts test/goal-service-db.test.ts test/persona-service-db.test.ts test/api-llm-chat-route.test.ts test/api-llm-stream-route.test.ts test/api-llm-orchestrate-route.test.ts test/api-stripe-webhook-route.test.ts`
+- Bundle result:
+  - `10` files passed, `64` tests passed.
+- Failure classes explicitly covered by the executed bundle:
+  - Missing/invalid startup env contracts: `test/startup-validation.test.ts`
+  - DB unavailable + production fail-closed behavior: `test/api-key-service.test.ts`, `test/analytics-service.test.ts`, `test/conversation-service-db.test.ts`, `test/goal-service-db.test.ts`, `test/persona-service-db.test.ts`
+  - Provider outage/rate-limit/malformed responses: `test/api-llm-chat-route.test.ts`, `test/api-llm-stream-route.test.ts`
+  - Sidecar outage/network/timeout degradation: `test/api-llm-orchestrate-route.test.ts`
+  - Bad webhook signature/config errors: `test/api-stripe-webhook-route.test.ts`
+- Additional verification:
+  - `npm run type-check`
+- Result:
+  - `13.4` PASS: degraded behavior for required failure modes is executable and documented.

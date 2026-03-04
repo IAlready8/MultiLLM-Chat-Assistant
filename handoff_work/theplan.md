@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-04 06:46 EST)
+## Progress snapshot (2026-03-04 06:48 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -54,6 +54,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `13.1` Reconcile supported surfaces with executable route/service/e2e coverage and close matrix gaps
   - `13.2` Confirm supported API route/service happy+failure coverage and close route/service matrix gaps
   - `13.3` Validate supported browser contract in guest + strict-auth modes and stabilize flaky e2e specs
+  - `13.4` Validate degraded-mode failure classes with executable chaos-focused route/service tests
 - failed:
   - none
 - unverified:
@@ -586,6 +587,24 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - Outcome:
   - `13.3` PASS: supported browser e2e contract is executable and stable in both guest and strict-auth modes.
 
+## 13.4 implementation evidence
+- Chaos/degraded-mode gate basis:
+  - `13.4` requires executable coverage for DB unavailable, missing env, provider outage/rate-limits, sidecar outage, and bad webhook paths.
+- Verification command:
+  - `npm run test:run -- test/startup-validation.test.ts test/api-key-service.test.ts test/analytics-service.test.ts test/conversation-service-db.test.ts test/goal-service-db.test.ts test/persona-service-db.test.ts test/api-llm-chat-route.test.ts test/api-llm-stream-route.test.ts test/api-llm-orchestrate-route.test.ts test/api-stripe-webhook-route.test.ts`
+- Verification result:
+  - `10` files passed, `64` tests passed.
+- Coverage classes satisfied:
+  - missing/partial env contracts (`startup-validation`)
+  - DB unavailable + production fail-closed behavior (api-key/analytics/conversation/goal/persona services)
+  - provider outage/timeout/429/malformed (`api-llm-chat` + `api-llm-stream`)
+  - sidecar outage fallback semantics (`api-llm-orchestrate`)
+  - bad webhook signature/config handling (`api-stripe-webhook`)
+- Additional verification:
+  - `npm run type-check`
+- Outcome:
+  - `13.4` PASS: degraded behavior is executable and documented across required failure classes.
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -610,7 +629,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 27. [x] Billing + webhook (optional gate)
 
 ## Phase F - proof
-28. [x] Fill coverage gaps in route/service/e2e tests (13.1 + 13.2 + 13.3 reconciliation complete)
+28. [x] Fill coverage gaps in route/service/e2e tests (13.1 + 13.2 + 13.3 + 13.4 reconciliation complete)
 29. [ ] Upgrade smoke script to cover actual supported flows
 30. [ ] Upgrade production verification script
 31. [ ] Align CI with real release gates
