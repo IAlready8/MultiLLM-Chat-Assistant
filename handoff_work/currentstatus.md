@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-03 07:00:21 EST
-timestamp_utc: 2026-03-03T12:00:21Z
+timestamp_local: 2026-03-04 05:24:02 EST
+timestamp_utc: 2026-03-04T10:24:02Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -49,9 +49,10 @@ source: direct repo inspection + command evidence in this session
 - `12.2` PASS: `/api/teams` explicitly remains removed from supported production scope (no UI contract), so it is non-blocking for release acceptance.
 - `12.3` PASS: Billing is closed via optional-feature gate with tested checkout/manage/webhook route contracts and explicit Stripe-unconfigured degradation behavior.
 - `12.4` PASS: Webhook verification closed via optional-feature gate with executable route tests and scripted verification semantics documented for Stripe-enabled environments.
+- `13.1` PASS: supported core/optional surfaces now reconcile to executable route/service/e2e coverage with a documented matrix and no uncovered supported feature.
 
 ## failed
-- none for `01.*` through `03.1`.
+- none for `01.*` through `13.1`.
 
 ## unverified
 - `npm ci`, `npm run lint`, full-repo `npm run test:run`, `npm run build`.
@@ -160,7 +161,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `13.1`: build a coverage matrix reconciling supported surfaces with route/service/e2e tests and identify remaining gaps.
+Start `13.2`: verify whether any supported API route/service still lacks required happy-path + failure-path tests after the `13.1` matrix reconciliation.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -867,3 +868,31 @@ TOTAL (22)
   - optional billing topology allows this to remain billing-owner dependent for Stripe-enabled environments.
 - Result:
   - `12.4` PASS under optional-feature contract with executable route behavior coverage and explicit live-check ownership boundaries.
+
+## 13.1 evidence (Supported-surface coverage matrix reconciled)
+- Supported-surface matrix (core + optional from `handoff_work/llminstructions.md` `02.3/02.4`):
+
+| Supported surface | Coverage files (executable) | Status |
+|---|---|---|
+| Home shell | `test/e2e/home-and-api-test-flow.spec.ts` | covered |
+| Auth UX/routes | `test/api-auth.test.ts`, `test/api-upgrade-guest-route.test.ts`, `test/middleware-auth-routing.test.ts`, `test/e2e/auth-flow.spec.ts` | covered |
+| Chat + conversations | `test/api-llm-chat-route.test.ts`, `test/api-llm-stream-route.test.ts`, `test/stream-client.test.ts`, `test/api-conversations-routes.test.ts`, `test/conversation-service-db.test.ts`, `test/e2e/multi-chat-flow.spec.ts`, `test/e2e/conversation-persistence.spec.ts` | covered |
+| Provider configuration | `test/api-config-route.test.ts`, `test/api-provider-configs-route.test.ts`, `test/api-test-api-key-route.test.ts`, `test/api-key-service.test.ts`, `test/runtime-secrets.test.ts`, `test/e2e/provider-configuration.spec.ts` | covered |
+| Goals | `test/api-goals-routes.test.ts`, `test/goal-service-db.test.ts`, `test/e2e/goal-hub-flow.spec.ts` | covered |
+| Personas | `test/api-personas-routes.test.ts`, `test/persona-service-db.test.ts`, `test/e2e/personas-flow.spec.ts` | covered |
+| Analytics | `test/api-analytics-route.test.ts`, `test/analytics-service.test.ts`, `test/e2e/analytics-flow.spec.ts` | covered |
+| Health endpoint | `test/api-health-route.test.ts` | covered |
+| Billing (optional) | `test/api-subscriptions-routes.test.ts`, `test/api-stripe-webhook-route.test.ts` | covered |
+| Orchestration bridge (optional) | `test/api-llm-orchestrate-route.test.ts` | covered |
+| API test page (optional) | `test/e2e/home-and-api-test-flow.spec.ts` | covered |
+
+- Gap discovered and closed during reconciliation:
+  - `/api-test` had no durable supported-surface browser assertion in the matrix path. Added `test/e2e/home-and-api-test-flow.spec.ts` coverage for the live page contract.
+- Stability hardening applied during matrix verification:
+  - `test/analytics-service.test.ts` used fixed dates that became outside the 30-day window as calendar time advanced; updated to relative timestamps to keep the suite deterministic.
+- Verification commands:
+  - `npm run test:run -- test/api-auth.test.ts test/api-upgrade-guest-route.test.ts test/middleware-auth-routing.test.ts test/api-llm-chat-route.test.ts test/api-llm-stream-route.test.ts test/stream-client.test.ts test/api-conversations-routes.test.ts test/conversation-service-db.test.ts test/api-config-route.test.ts test/api-provider-configs-route.test.ts test/api-test-api-key-route.test.ts test/api-key-service.test.ts test/runtime-secrets.test.ts test/api-goals-routes.test.ts test/goal-service-db.test.ts test/api-personas-routes.test.ts test/persona-service-db.test.ts test/api-analytics-route.test.ts test/analytics-service.test.ts test/api-health-route.test.ts test/api-subscriptions-routes.test.ts test/api-stripe-webhook-route.test.ts test/api-llm-orchestrate-route.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/home-and-api-test-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+- Result:
+  - `13.1` PASS with all supported surfaces mapped to executable tests and no uncovered supported contract remaining.

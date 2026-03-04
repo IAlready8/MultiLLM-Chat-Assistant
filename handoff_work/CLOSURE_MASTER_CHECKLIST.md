@@ -1,6 +1,6 @@
 # CLOSURE_MASTER_CHECKLIST
 
-Source basis: direct inspection of the local repository at commit `3a5081be3a69f57cbf56c06d179f58d85eec4b03` on branch `codex/protected-main-push-20260302`.
+Source basis: direct inspection of the local repository at commit `1e7ca77fd8d51ff8b45f8dbd7ff77d40e0dcbdc0` on branch `codex/protected-main-push-20260302`.
 
 Repository remote: `https://github.com/IAlready8/MultiLLM-Chat-Assistant.git`
 
@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-03 07:00:21 EST` (`2026-03-03T12:00:21Z`)
+- Last updated: `2026-03-04 05:24:02 EST` (`2026-03-04T10:24:02Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -58,7 +58,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `12.2` Teams route (PASS - removed from scope)
 - [x] `12.3` Billing routes and page (PASS - optional gate)
 - [x] `12.4` Webhook verification (PASS - optional gate)
-- [ ] `13.1` Reconcile declared tests with actual coverage (next)
+- [x] `13.1` Reconcile declared tests with actual coverage (PASS)
 
 ---
 
@@ -171,7 +171,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 13.1 | Reconcile declared tests with actual coverage | 09.4, 11.*, 12.* | Map each supported feature to one or more test files; identify gaps | PASS when every supported feature has executable coverage | `.plan`, `CLAUDE.md` | LLM | coverage matrix |
+| 13.1 ✅ | Reconcile declared tests with actual coverage | 09.4, 11.*, 12.* | Map each supported feature to one or more test files; identify gaps | PASS (closed 2026-03-04) | `.plan`, `.currentstatus` | LLM | supported-surface coverage matrix completed; missing supported page gap closed via `test/e2e/home-and-api-test-flow.spec.ts`; consolidated route/service matrix run passed (`23` files, `150` tests) |
 | 13.2 | Add missing route/service tests | 13.1 | Fill route and service gaps found in matrix | PASS when all supported APIs have happy-path and failure-path tests | `test/*.test.ts` | LLM | passing test output |
 | 13.3 | Add/finish browser e2e | 13.1 | Expand Playwright specs for strict auth, guest mode, provider config, chat, stream, conversations, settings, goals, personas, analytics, comparison, billing if in scope | PASS when e2e suite covers supported product contract | `test/e2e/*.spec.ts` | LLM | passing e2e output |
 | 13.4 | Add chaos and degraded-mode tests | 13.1 | Cover DB unavailable, missing env, provider outage, sidecar outage, bad webhook, rate limits | PASS when degraded behavior is executable and documented | tests + docs | LLM | passing test output |

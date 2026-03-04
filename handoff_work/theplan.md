@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-03 07:00 EST)
+## Progress snapshot (2026-03-04 05:24 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -51,6 +51,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `12.2` Close `/api/teams` via explicit removal-from-supported-scope path
   - `12.3` Close billing via optional-feature gate with route/webhook contract tests
   - `12.4` Close webhook verification via optional-feature gate + scripted check semantics
+  - `13.1` Reconcile supported surfaces with executable route/service/e2e coverage and close matrix gaps
 - failed:
   - none
 - unverified:
@@ -519,6 +520,23 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - Outcome:
   - closed via optional-feature contract with clear billing-owner dependency for live signed-webhook validation in Stripe-enabled environments.
 
+## 13.1 implementation evidence
+- Supported-surface reconciliation basis:
+  - locked scope and acceptance matrix in `handoff_work/llminstructions.md` (`02.3`, `02.4`).
+- Coverage matrix completion:
+  - mapped every supported core/optional surface to one or more executable route/service/e2e tests.
+  - confirmed no uncovered supported surface remained.
+- Gap closure during reconciliation:
+  - added/updated `test/e2e/home-and-api-test-flow.spec.ts` so the supported `/api-test` utility page has explicit browser-contract coverage.
+- Stability hardening during matrix verification:
+  - updated `test/analytics-service.test.ts` to use relative timestamps (removed calendar-date drift causing intermittent `days=30` window failures).
+- Verification commands:
+  - `npm run test:run -- test/api-auth.test.ts test/api-upgrade-guest-route.test.ts test/middleware-auth-routing.test.ts test/api-llm-chat-route.test.ts test/api-llm-stream-route.test.ts test/stream-client.test.ts test/api-conversations-routes.test.ts test/conversation-service-db.test.ts test/api-config-route.test.ts test/api-provider-configs-route.test.ts test/api-test-api-key-route.test.ts test/api-key-service.test.ts test/runtime-secrets.test.ts test/api-goals-routes.test.ts test/goal-service-db.test.ts test/api-personas-routes.test.ts test/persona-service-db.test.ts test/api-analytics-route.test.ts test/analytics-service.test.ts test/api-health-route.test.ts test/api-subscriptions-routes.test.ts test/api-stripe-webhook-route.test.ts test/api-llm-orchestrate-route.test.ts`
+  - `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npx playwright test test/e2e/home-and-api-test-flow.spec.ts --project=chromium`
+  - `npm run type-check`
+- Outcome:
+  - `13.1` PASS: supported-surface coverage is reconciled and executable.
+
 ## Phase D - core runtime hardening
 12. [x] Verify auth split:
    - guest mode
@@ -543,7 +561,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 27. [x] Billing + webhook (optional gate)
 
 ## Phase F - proof
-28. [ ] Fill coverage gaps in route/service/e2e tests
+28. [x] Fill coverage gaps in route/service/e2e tests (13.1 matrix reconciliation complete)
 29. [ ] Upgrade smoke script to cover actual supported flows
 30. [ ] Upgrade production verification script
 31. [ ] Align CI with real release gates

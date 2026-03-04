@@ -67,6 +67,10 @@ describe('analytics-service DB fallback', () => {
   })
 
   it('merges database and fallback events when DB reads succeed', async () => {
+    const now = Date.now()
+    const dbEventTime = new Date(now - 2 * 60 * 1000)
+    const fallbackEventTime = new Date(now - 60 * 1000)
+
     const prismaMock: PrismaMock = {
       analytics: {
         create: vi.fn(),
@@ -75,7 +79,7 @@ describe('analytics-service DB fallback', () => {
             id: 'db-1',
             event: 'llm_request',
             payload: JSON.stringify({ provider: 'anthropic', tokens: 42 }),
-            createdAt: new Date('2026-02-01T10:00:00.000Z'),
+            createdAt: dbEventTime,
             userId: 'user-1',
           },
         ]),
@@ -94,7 +98,7 @@ describe('analytics-service DB fallback', () => {
             id: 'mem-1',
             event: 'llm_error',
             payload: JSON.stringify({ provider: 'openai' }),
-            createdAt: new Date('2026-02-01T10:01:00.000Z'),
+            createdAt: fallbackEventTime,
             userId: 'user-1',
           },
         ],
