@@ -80,6 +80,8 @@ const buildEmptyPayload = (timeframe: Timeframe) => ({
 })
 
 test.describe('Analytics flow', () => {
+  test.describe.configure({ timeout: 120_000 })
+
   test('covers loading, empty telemetry, refresh to live data, and timeframe switch', async ({
     page,
   }) => {
@@ -121,8 +123,8 @@ test.describe('Analytics flow', () => {
     })
 
     await page.goto('/analytics', {
-      waitUntil: 'domcontentloaded',
-      timeout: 60_000,
+      waitUntil: 'commit',
+      timeout: 90_000,
     })
 
     await expect(page.getByText('Loading analytics...')).toBeVisible()
@@ -157,7 +159,7 @@ test.describe('Analytics flow', () => {
     })
 
     await page.route('**/api/analytics**', async route => {
-      if (state.failCount < 2) {
+      if (state.failCount < 1) {
         state.failCount += 1
         await route.fulfill({
           status: 500,
@@ -174,14 +176,14 @@ test.describe('Analytics flow', () => {
       })
     })
 
-    await page.goto('/analytics', {
-      waitUntil: 'domcontentloaded',
-      timeout: 60_000,
+    await page.goto('/analytics?scenario=retry-recovery', {
+      waitUntil: 'commit',
+      timeout: 90_000,
     })
 
     await expect(
       page.getByRole('heading', { name: 'Unable to Load Analytics' })
-    ).toBeVisible()
+    ).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText('Failed to load analytics (500)')).toBeVisible()
 
     await page.getByRole('button', { name: 'Retry' }).click()

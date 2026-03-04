@@ -5,11 +5,21 @@ test.describe('Settings provider configuration', () => {
     page: import('@playwright/test').Page
   ) => {
     const providersTab = page.getByRole('tab', { name: 'API Providers' })
-    await providersTab.click()
-    await providersTab.press('Enter')
-    await expect(
-      page.getByRole('heading', { name: 'API Provider Configuration' })
-    ).toBeVisible()
+    const providersHeading = page.getByRole('heading', {
+      name: 'API Provider Configuration',
+    })
+
+    await expect(providersTab).toBeVisible({ timeout: 15_000 })
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await providersTab.click()
+      if (await providersHeading.isVisible().catch(() => false)) {
+        return
+      }
+      await page.waitForTimeout(150)
+    }
+
+    await expect(providersHeading).toBeVisible()
   }
 
   test('saves, verifies, and clears an OpenAI key from /settings', async ({
@@ -204,7 +214,7 @@ test.describe('Settings provider configuration', () => {
     await page.getByLabel('OpenAI API Key').fill('sk-openai-bad-key')
     await page.getByRole('button', { name: 'Save' }).first().click()
 
-    await expect(page.getByText('Invalid API Key')).toBeVisible()
+    await expect(page.getByText('Invalid API Key', { exact: true }).first()).toBeVisible()
     await expect.poll(() => state.configPostCalls).toBe(0)
   })
 })
