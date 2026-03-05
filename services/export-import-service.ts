@@ -29,23 +29,12 @@ export async function exportAllData(password: string): Promise<string> {
       }
     }
     
-    // Get API keys (encrypted)
-    const apiKeys: Record<string, string> = {};
-    const apiKeyPrefix = "apiKey_";
-    
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith(apiKeyPrefix)) {
-        apiKeys[key] = localStorage.getItem(key) || "";
-      }
-    }
-    
     // Create export data
     const exportData: ExportData = {
       version: "1.0",
       timestamp: Date.now(),
       conversations,
       settings,
-      apiKeys
     };
     
     // Encrypt and return
@@ -84,12 +73,7 @@ export async function importAllData(encryptedData: string, password: string): Pr
       }
     }
     
-    // Import API keys
-    if (importData.apiKeys) {
-      for (const [key, value] of Object.entries(importData.apiKeys)) {
-        localStorage.setItem(key, value);
-      }
-    }
+    // Legacy exports may contain API keys. Do not restore them.
   } catch (error) {
     console.error("Error importing data:", error);
     throw new Error("Failed to import data. Invalid password or corrupted data.");

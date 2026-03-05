@@ -164,7 +164,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `15.3`: verify secret handling/redaction across key storage, responses, logs, and export/import paths, then close any plaintext leakage gaps with tests.
+Start `16.1`: re-verify `/api/health` truthfulness against live DB/metrics/degraded behavior and close any mismatch between payload/status and actual dependency state.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1099,3 +1099,45 @@ TOTAL (22)
     - result: `33` files passed, `239` tests passed.
 - Result:
   - `15.2` PASS: no supported sensitive route remains under-protected; admin routes now require explicit admin-role access.
+
+## 15.3 evidence (Secret handling/redaction verified)
+- Existing redaction/storage contract reconfirmed:
+  - provider config GET returns redacted `apiKey: ''` only (`test/api-provider-configs-route.test.ts`)
+  - server-side provider config storage encrypts persisted keys and never exposes them through config listings (`test/api-key-service.test.ts`)
+  - runtime key retrieval stays server-side via `getUserApiKey()` only
+- Gap found:
+  - `services/export-import-service.ts` still included legacy `localStorage` `apiKey_*` entries in exported payloads and would restore them on import.
+- Fix applied:
+  - removed API key export/import from `services/export-import-service.ts`
+  - updated UI copy in:
+    - `components/export-import-dialog.tsx`
+    - `app/settings/page.tsx`
+    - exports now explicitly exclude provider API keys, and users are told they must re-enter them after import
+- Verification commands:
+  - `npm run test:run -- test/export-import-service.test.ts`
+    - result: `2` tests passed.
+  - `npm run type-check`
+    - result: passed.
+  - `npm run lint`
+    - result: passed.
+- Result:
+  - `15.3` PASS: no remaining verified plaintext key leakage path exists in the supported export/import flow, and existing provider-config/key redaction coverage remains intact.
+
+## 15.4 residual risk register
+- `RISK-001` Transitive dependency advisories remain open
+  - owner: Repo operator
+  - scope: `prisma` CLI tree (`@prisma/dev`, `hono`, `@hono/node-server`, `lodash`) and `vercel` dev tree advisories captured in `15.1`
+  - reason accepted now: fully clearing them currently requires breaking major-version shifts (`prisma@6.19.2`, `vercel@32.3.0`) rather than a safe in-place patch
+  - containment: captured explicitly in audit evidence; not ignored or hidden
+- `RISK-002` External preview/deploy integrations still create optional PR noise
+  - owner: Infra owner
+  - scope: Vercel/Netlify/Cloudflare statuses on PRs
+  - reason accepted now: branch protection only requires `Quality Checks` and `Smoke Tests`; the remaining noise is non-blocking but still operationally noisy until provider-side cleanup is done
+  - containment: required GitHub gates were narrowed and stable in `14.3`
+- `RISK-003` Python sidecar stream parity is still incomplete
+  - owner: Repo operator
+  - scope: `src/core/main.py` lacks the stream endpoint parity noted in the handoff pack; orchestration remains optional
+  - reason accepted now: sidecar is outside the locked core production contract, and the Next.js route has tested fallback behavior
+  - containment: optional scope only; no core release gate depends on it
+- Result:
+  - `15.4` PASS: remaining security/operational risks are explicit, owned, and bounded; no serious unknown security risk remains unregistered in the current pass.

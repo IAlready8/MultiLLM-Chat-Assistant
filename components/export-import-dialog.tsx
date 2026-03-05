@@ -131,6 +131,9 @@ export function ExportImportDialog({
               <p className="text-xs text-gray-500">
                 You&apos;ll need this password when importing your data
               </p>
+              <p className="text-xs text-gray-500">
+                Provider API keys are intentionally excluded from exports and must be re-entered after import.
+              </p>
             </div>
             
             {error && activeTab === "export" && (

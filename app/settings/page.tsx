@@ -385,7 +385,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Export Data</Label>
-                  <p className="text-sm text-muted-foreground">Export/import local workspace data with encryption</p>
+                  <p className="text-sm text-muted-foreground">Export/import local workspace data with encryption (API keys excluded)</p>
                 </div>
                 <ExportImportDialog
                   onExport={handleExportData}
