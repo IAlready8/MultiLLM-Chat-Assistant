@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
-import { getAuthenticatedUser } from '@/lib/api-auth'
+import { getAuthenticatedAdmin } from '@/lib/api-auth'
 import { errorManager } from '@/lib/error-system'
 import { getParsedAnalyticsEvents } from '@/services/analytics-service'
 
@@ -165,7 +165,7 @@ const getDateRange = async (request: Request): Promise<{ from: Date; to: Date } 
 }
 
 export const POST = withApiMetrics(async (request: Request) => {
-  const authCheck = await getAuthenticatedUser()
+  const authCheck = await getAuthenticatedAdmin()
   if (authCheck instanceof NextResponse) {
     return authCheck
   }

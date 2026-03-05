@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-05 18:20:12 EST` (`2026-03-05T18:20:12Z`)
+- Last updated: `2026-03-05 18:33:39 EST` (`2026-03-05T18:33:39Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -65,6 +65,8 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `14.1` Upgrade smoke test coverage (PASS)
 - [x] `14.2` Upgrade production verification (PASS)
 - [x] `14.3` Align CI to release gates (PASS)
+- [x] `15.1` Re-run dependency audit (PASS)
+- [x] `15.2` Close route-level auth gaps (PASS)
 
 ---
 
@@ -194,8 +196,8 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 15.1 | Re-run dependency audit | 14.3 | Run `npm audit` and `npm audit --omit=dev`; record exact findings | PASS when current findings are captured against current lockfile | `.currentstatus`, security docs | Repo operator | command output |
-| 15.2 | Close route-level auth gaps | 06.*, 12.* | Confirm admin, billing, team, config, CRUD, chat routes enforce intended identity rules | PASS when no supported sensitive route is under-protected | route files + tests | LLM | tests |
+| 15.1 ✅ | Re-run dependency audit | 14.3 | Run `npm audit` and `npm audit --omit=dev`; record exact findings | PASS when current findings are captured against current lockfile | `.currentstatus`, security docs | Repo operator | Closed 2026-03-05 with live audit capture: full tree = `36` vulnerabilities (`25` high, `10` moderate, `1` low); prod-only = `9` vulnerabilities (`4` high, `5` moderate), primarily via Prisma CLI transitive `hono`/`lodash` chain |
+| 15.2 ✅ | Close route-level auth gaps | 06.*, 12.* | Confirm admin, billing, team, config, CRUD, chat routes enforce intended identity rules | PASS when no supported sensitive route is under-protected | route files + tests | LLM | Closed 2026-03-05 after adding explicit admin-role enforcement for admin routes and re-running auth/admin/full-suite tests successfully (`33` files, `239` tests passed) |
 | 15.3 | Verify secret handling and redaction | 08.3 | Confirm no plaintext key leakage in logs, responses, UI, export/import flows | PASS when redaction rules are tested | `lib/api-key-service.ts`, `lib/crypto.ts`, `services/export-import-service.ts`, logs/tests | LLM | tests |
 | 15.4 | Create residual risk register | 15.1, 15.2, 15.3 | Document any accepted remaining risks with explicit owner and reason | PASS when no serious unknown risk remains | `.currentstatus` or security doc | Repo operator | risk register |
 

@@ -13,7 +13,7 @@ const mockGetRateLimitDiagnostics = vi.fn()
 const mockIsStrictAuthRequired = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
+  getAuthenticatedAdmin: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -75,7 +75,9 @@ describe('/api/admin/status route', () => {
     stripeState.checkoutConfigured = true
     stripeState.webhookConfigured = true
 
-    mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
+    mockGetAuthenticatedUser.mockResolvedValue({
+      user: { id: 'user-1', role: 'OWNER' },
+    })
     mockQueryRaw.mockResolvedValue([{ ok: 1 }])
     mockIsStrictAuthRequired.mockReturnValue(false)
     mockGetRateLimitDiagnostics.mockReturnValue({
@@ -106,6 +108,20 @@ describe('/api/admin/status route', () => {
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
+  })
+
+  it('returns 403 for non-admin users', async () => {
+    mockGetAuthenticatedUser.mockResolvedValue(
+      NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    )
+
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toEqual({ error: 'Forbidden' })
   })
 
   it('returns live status checks with overall ok when probes pass', async () => {

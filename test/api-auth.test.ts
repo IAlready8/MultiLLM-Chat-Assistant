@@ -46,7 +46,7 @@ vi.mock('@/lib/demo-account', () => ({
 }))
 
 // Import after mocks are set up
-import { getAuthenticatedUser } from '@/lib/api-auth'
+import { getAuthenticatedAdmin, getAuthenticatedUser } from '@/lib/api-auth'
 
 describe('getAuthenticatedUser', () => {
   beforeEach(() => {
@@ -150,5 +150,46 @@ describe('getAuthenticatedUser', () => {
     expect((result as { user: { id: string } }).user.id).toBe('guest-user')
 
     consoleSpy.mockRestore()
+  })
+
+  it('returns authenticated admin users for OWNER/ADMIN roles', async () => {
+    mockCookies.mockReturnValue({
+      get: (name: string) =>
+        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
+    })
+    mockAuth.mockResolvedValue({
+      user: {
+        id: 'owner-123',
+        name: 'Owner User',
+        email: 'owner@test.com',
+        role: 'OWNER',
+      },
+    })
+
+    const result = await getAuthenticatedAdmin()
+    expect(result).not.toBeInstanceOf(NextResponse)
+    expect((result as { user: { id: string; role: string } }).user).toMatchObject({
+      id: 'owner-123',
+      role: 'OWNER',
+    })
+  })
+
+  it('returns 403 for authenticated non-admin users', async () => {
+    mockCookies.mockReturnValue({
+      get: (name: string) =>
+        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
+    })
+    mockAuth.mockResolvedValue({
+      user: {
+        id: 'member-123',
+        name: 'Member User',
+        email: 'member@test.com',
+        role: 'MEMBER',
+      },
+    })
+
+    const result = await getAuthenticatedAdmin()
+    expect(result).toBeInstanceOf(NextResponse)
+    expect((result as NextResponse).status).toBe(403)
   })
 })

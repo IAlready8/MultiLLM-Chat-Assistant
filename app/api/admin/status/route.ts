@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
-import { getAuthenticatedUser } from '@/lib/api-auth'
+import { getAuthenticatedAdmin } from '@/lib/api-auth'
 import {
   getErrorMessage,
   isDatabaseUnavailableError,
@@ -76,7 +76,7 @@ const getOverallStatus = (checks: SystemCheck[]): CheckStatus => {
 }
 
 export const GET = withApiMetrics(async () => {
-  const authCheck = await getAuthenticatedUser()
+  const authCheck = await getAuthenticatedAdmin()
   if (authCheck instanceof NextResponse) {
     return authCheck
   }

@@ -164,7 +164,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `15.1`: run `npm audit` and `npm audit --omit=dev`, then record the exact current vulnerability set against the present lockfile.
+Start `15.3`: verify secret handling/redaction across key storage, responses, logs, and export/import paths, then close any plaintext leakage gaps with tests.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1046,3 +1046,56 @@ TOTAL (22)
     - result: passed with production-mode auth enforcement semantics (`19` passed, `0` failed, `13` skipped).
 - Result:
   - `14.3` PASS: required GitHub gates now map to the actual release contract, and non-required bot noise is reduced without changing the required check names.
+
+## 15.1 evidence (Dependency audit re-run against current lockfile)
+- Verification commands:
+  - `npm audit`
+  - `npm audit --omit=dev`
+- Full dependency tree result:
+  - `36` vulnerabilities total: `25` high, `10` moderate, `1` low.
+  - Dominant chains:
+    - `vercel` dev dependency tree -> `@vercel/*` -> `minimatch`, `path-to-regexp`, `undici`, `tar`, `@tootallnate/once`, `ajv`
+    - `prisma` CLI tree -> `@prisma/dev` -> `@hono/node-server`, `hono`, `@mrleebo/prisma-ast`, `lodash`
+- Production-only (`--omit=dev`) result:
+  - `9` vulnerabilities total: `4` high, `5` moderate.
+  - Remaining prod-impacting chains are still transitive through the Prisma CLI install tree:
+    - `@prisma/dev` -> `@hono/node-server` (high)
+    - `@prisma/dev` -> `hono` (high)
+    - `@prisma/dev` -> `@mrleebo/prisma-ast` -> `lodash` (moderate)
+- Remediation constraint captured by audit output:
+  - `npm audit fix` can reduce some issues.
+  - Fully clearing the remaining advisories currently requires breaking dependency shifts such as `prisma@6.19.2` or `vercel@32.3.0` via `npm audit fix --force`.
+- Result:
+  - `15.1` PASS: the current vulnerability set is captured honestly against the present lockfile and separated into full-tree vs prod-only impact.
+
+## 15.2 evidence (Route-level auth gaps closed)
+- Route review scope:
+  - audited sensitive surfaces across admin, billing, team, config/provider-config, test-api-key, goals, personas, conversations, analytics, chat, stream, orchestration, health, webhook, and guest-upgrade routes.
+- Findings from route review:
+  - Core/config/CRUD/chat routes already matched the locked model:
+    - `allowGuest: true` only on routes intentionally supporting guest/non-strict mode
+    - strict auth still enforced in production by runtime contract
+    - billing routes already require authenticated users
+    - Stripe webhook remains public-by-signature as intended
+    - health remains public
+    - guest-upgrade route already requires an authenticated session
+  - Real gap found:
+    - `app/api/admin/status/route.ts`
+    - `app/api/admin/errors/stats/route.ts`
+    - both routes previously accepted any authenticated user instead of requiring admin-level access
+- Fix applied:
+  - added `getAuthenticatedAdmin()` to `lib/api-auth.ts`
+    - forwards existing auth failure responses
+    - returns `403 Forbidden` unless `user.role` is `OWNER` or `ADMIN`
+  - switched both admin routes to `getAuthenticatedAdmin()`
+- Verification commands:
+  - `npm run test:run -- test/api-auth.test.ts test/api-admin-status-route.test.ts test/api-admin-errors-stats-route.test.ts`
+    - result: `3` files passed, `18` tests passed.
+  - `npm run type-check`
+    - result: passed.
+  - `npm run lint`
+    - result: passed.
+  - `npm run test:run`
+    - result: `33` files passed, `239` tests passed.
+- Result:
+  - `15.2` PASS: no supported sensitive route remains under-protected; admin routes now require explicit admin-role access.
