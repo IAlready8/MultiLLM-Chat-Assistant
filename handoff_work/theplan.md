@@ -630,9 +630,9 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 
 ## Phase F - proof
 28. [x] Fill coverage gaps in route/service/e2e tests (13.1 + 13.2 + 13.3 + 13.4 reconciliation complete)
-29. [ ] Upgrade smoke script to cover actual supported flows
-30. [ ] Upgrade production verification script
-31. [ ] Align CI with real release gates
+29. [x] Upgrade smoke script to cover actual supported flows
+30. [x] Upgrade production verification script
+31. [x] Align CI with real release gates
 32. [ ] Run clean local install -> type-check -> lint -> tests -> build
 33. [ ] Run preview deploy verification
 34. [ ] Run production deploy verification

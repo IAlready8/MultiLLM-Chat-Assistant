@@ -105,6 +105,8 @@ Before or immediately after a production deployment:
 npm run verify:prod -- --base-url https://<your-domain> --check-webhook
 ```
 
+`--check-webhook` requires `--base-url`.
+
 To apply pending DB migrations and enforce optional integrations:
 
 ```bash

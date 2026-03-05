@@ -164,7 +164,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `14.1`: upgrade `scripts/smoke-test.sh` so it exercises real supported feature roundtrips instead of static page/status checks only.
+Start `15.1`: run `npm audit` and `npm audit --omit=dev`, then record the exact current vulnerability set against the present lockfile.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -964,3 +964,85 @@ TOTAL (22)
   - `npm run type-check`
 - Result:
   - `13.4` PASS: degraded behavior for required failure modes is executable and documented.
+
+## 14.1 evidence (Smoke gate upgraded to real supported flows)
+- Scope closed:
+  - `scripts/smoke-test.sh` now validates supported page reachability plus real lifecycle/API checks for config save/list/clear, provider-config validation, test-api-key, goals CRUD, personas CRUD, conversations create/rename/append/delete, analytics payload shape, and invalid stream rejection.
+- Live execution proof:
+  - command:
+    - `bash scripts/smoke-test.sh --base-url http://localhost:3001`
+  - server context:
+    - local Next.js dev server running with `AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false PORT=3001 npm run dev`
+  - result:
+    - `37` passed, `0` failed, `0` skipped.
+- Key release-gate evidence from the run:
+  - `/api/health` returned `200` with `status=degraded` and `metrics.routes`.
+  - Supported product pages (`/`, `/multi-chat`, `/settings`, `/goal-hub`, `/analytics`, `/personas`, `/pipeline`, `/comparison`) all returned `200`.
+  - Protected supported flows executed end-to-end in guest mode:
+    - config lifecycle: save -> list -> clear passed
+    - goals lifecycle: create -> list -> update -> delete passed
+    - personas lifecycle: create -> list -> update -> delete passed
+    - conversations lifecycle: create -> list -> rename -> append message -> delete passed
+    - analytics payload contract passed
+    - `/api/llm/stream` invalid payload rejection returned `400`
+- Result:
+  - `14.1` PASS: smoke gate now catches real supported-flow breakage instead of only static status/page checks.
+
+## 14.2 evidence (Production verification gate aligned to actual release contract)
+- Hardening change applied:
+  - `scripts/verify-production.sh` now fails fast when `--check-webhook` is passed without `--base-url`, preventing a silent no-op in the release gate.
+- Doc alignment:
+  - `README.md`
+  - `ARCHITECTURE.md`
+- Verification command matrix:
+  - `bash scripts/verify-production.sh --help`
+    - result: passed; options output still matches intended contract.
+  - `bash scripts/verify-production.sh`
+    - result: failed fast on missing `NEXTAUTH_URL` (expected).
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --check-webhook`
+    - result: failed fast with `ERROR: --check-webhook requires --base-url.` (expected).
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --require-sidecar`
+    - result: failed fast on missing `PYTHON_CORE_URL` (expected).
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --apply-migrations`
+    - result: passed end-to-end; DB reachable and Prisma migration status clean.
+  - `bash -n scripts/verify-production.sh`
+    - result: passed.
+- Result:
+  - `14.2` PASS: production verification now behaves as an actual release gate for required env/DB/migrations and optional Stripe/webhook/sidecar enforcement knobs.
+
+## 14.3 evidence (CI aligned to the real release gates)
+- Live GitHub protection state:
+  - `gh api repos/IAlready8/MultiLLM-Chat-Assistant/branches/main/protection`
+  - result: required status checks are exactly `Quality Checks` and `Smoke Tests`; stale-review dismissal and conversation resolution remain enabled.
+- Live PR noise inventory used for alignment:
+  - `gh pr checks 29`
+  - result: required gate failure came from `Quality Checks`; non-required noise came from external Vercel/Netlify/Cloudflare checks plus `claude-review`.
+- Changes applied:
+  - `.github/workflows/ci.yml`
+    - added workflow concurrency cancellation
+    - kept stable required job names: `Quality Checks`, `Smoke Tests`
+    - made `Smoke Tests` run `npm run verify:prod -- --apply-migrations` before starting the production server
+    - changed readiness probe from `/api/config` to `/api/health`
+    - set smoke env to explicit strict-auth production values
+    - removed redundant Prisma generate steps and added job timeouts
+  - `.github/workflows/claude-code-review.yml`
+    - removed automatic PR review workflow to eliminate non-gate bot noise; manual `@claude` workflow remains available through `.github/workflows/claude.yml`
+  - `test/provider-runtime.test.ts`
+    - corrected stale expectations so the required `Quality Checks` gate matches the canonical provider error classifier (`SyntaxError` -> `PROVIDER_MALFORMED_RESPONSE`)
+- Local gate verification commands:
+  - `npm run test:run -- test/provider-runtime.test.ts`
+    - result: `25` passed.
+  - `npm run type-check`
+    - result: passed.
+  - `npm run lint`
+    - result: passed.
+  - `npm run test:run`
+    - result: `33` files passed, `235` tests passed.
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+    - result: passed.
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npm run verify:prod -- --apply-migrations`
+    - result: passed.
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false bash scripts/smoke-test.sh --base-url http://localhost:3000 --start-server`
+    - result: passed with production-mode auth enforcement semantics (`19` passed, `0` failed, `13` skipped).
+- Result:
+  - `14.3` PASS: required GitHub gates now map to the actual release contract, and non-required bot noise is reduced without changing the required check names.

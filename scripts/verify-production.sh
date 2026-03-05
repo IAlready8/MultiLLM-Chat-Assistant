@@ -93,6 +93,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "${CHECK_WEBHOOK}" == "true" && -z "${BASE_URL}" ]]; then
+  echo "ERROR: --check-webhook requires --base-url."
+  exit 1
+fi
+
 echo "==> Verifying required runtime environment variables"
 require_env NEXTAUTH_URL
 require_auth_secret

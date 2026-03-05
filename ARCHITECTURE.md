@@ -113,7 +113,7 @@ Primary auth files:
 ### Production verification + protection scripts
 - `scripts/verify-production.sh` (`npm run verify:prod`)
   - validates required env, DB reachability/migration status
-  - validates optional Stripe/webhook checks when enabled
+  - validates optional Stripe/webhook checks when enabled (`--check-webhook` requires `--base-url`)
   - validates optional sidecar health when `--require-sidecar` is used
 - `scripts/enforce-branch-protection.sh` (`npm run protect:main`)
   - enforces required checks on `main` (`Quality Checks`, `Smoke Tests`)

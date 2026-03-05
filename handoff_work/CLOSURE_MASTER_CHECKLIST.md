@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-04 06:48:53 EST` (`2026-03-04T11:48:53Z`)
+- Last updated: `2026-03-05 18:20:12 EST` (`2026-03-05T18:20:12Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -62,6 +62,9 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `13.2` Add missing route/service tests (PASS)
 - [x] `13.3` Add/finish browser e2e (PASS)
 - [x] `13.4` Add chaos and degraded-mode tests (PASS)
+- [x] `14.1` Upgrade smoke test coverage (PASS)
+- [x] `14.2` Upgrade production verification (PASS)
+- [x] `14.3` Align CI to release gates (PASS)
 
 ---
 
@@ -183,9 +186,9 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 14.1 | Upgrade smoke test coverage | 09.4, 11.*, 12.* | Extend `scripts/smoke-test.sh` beyond page/status checks to cover real feature roundtrips used in supported scope | PASS when smoke catches broken core behavior | `scripts/smoke-test.sh` | LLM | script output |
-| 14.2 | Upgrade production verification | 04.3, 12.4 | Ensure `scripts/verify-production.sh` checks env, DB, health, migrations, optional Stripe, optional webhook, optional sidecar according to scope | PASS when verify script represents actual handoff gate | `scripts/verify-production.sh` | LLM | script output |
-| 14.3 | Align CI to release gates | 14.1, 14.2 | Confirm CI jobs reflect required checks; add any missing gates; decide blocking vs informational security policy | PASS when CI reflects release contract | `.github/workflows/ci.yml` | Repo operator + LLM | CI config diff |
+| 14.1 ✅ | Upgrade smoke test coverage | 09.4, 11.*, 12.* | Extend `scripts/smoke-test.sh` beyond page/status checks to cover real feature roundtrips used in supported scope | PASS when smoke catches broken core behavior | `scripts/smoke-test.sh` | LLM | Closed 2026-03-05 with guest-mode smoke execution against `http://localhost:3001`: `37` passed, `0` failed, `0` skipped, including config/goals/personas/conversations/analytics lifecycle checks |
+| 14.2 ✅ | Upgrade production verification | 04.3, 12.4 | Ensure `scripts/verify-production.sh` checks env, DB, health, migrations, optional Stripe, optional webhook, optional sidecar according to scope | PASS when verify script represents actual handoff gate | `scripts/verify-production.sh` | LLM | Closed 2026-03-05 after adding fail-fast for `--check-webhook` without `--base-url` and re-running help/fail-fast/DB-backed happy-path verification successfully |
+| 14.3 ✅ | Align CI to release gates | 14.1, 14.2 | Confirm CI jobs reflect required checks; add any missing gates; decide blocking vs informational security policy | PASS when CI reflects release contract | `.github/workflows/ci.yml` | Repo operator + LLM | Closed 2026-03-05: branch protection confirmed required contexts = `Quality Checks` + `Smoke Tests`; CI now cancels superseded runs, `Smoke Tests` executes `verify-production.sh --apply-migrations` before prod smoke, readiness uses `/api/health`, and noisy auto `claude-review` workflow was removed |
 
 ## 15. Security closure
 

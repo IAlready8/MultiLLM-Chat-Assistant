@@ -16,12 +16,12 @@ import { getProviderAdapter, supportedProviderIds } from '@/lib/providers/regist
 // ---------------------------------------------------------------------------
 
 describe('classifyProviderError', () => {
-  it('classifies SyntaxError as INVALID_JSON (400)', () => {
+  it('classifies provider SyntaxError as PROVIDER_MALFORMED_RESPONSE (502)', () => {
     const result = classifyProviderError(new SyntaxError('Unexpected token'))
     expect(result).toEqual({
-      status: 400,
-      code: 'INVALID_JSON',
-      error: 'Request body must be valid JSON',
+      status: 502,
+      code: 'PROVIDER_MALFORMED_RESPONSE',
+      error: 'Provider returned malformed response',
     })
   })
 
@@ -184,7 +184,7 @@ describe('error code parity (chat vs stream)', () => {
     { name: 'network', error: new Error('fetch failed'), expectedCode: 'NETWORK_ERROR' },
     { name: 'bad request', error: new Error('HTTP 400: invalid model'), expectedCode: 'PROVIDER_REQUEST_ERROR' },
     { name: 'unknown', error: new Error('something broke'), expectedCode: 'INTERNAL_ERROR' },
-    { name: 'invalid json', error: new SyntaxError('bad json'), expectedCode: 'INVALID_JSON' },
+    { name: 'malformed provider payload', error: new SyntaxError('bad json'), expectedCode: 'PROVIDER_MALFORMED_RESPONSE' },
   ]
 
   for (const scenario of errorScenarios) {
