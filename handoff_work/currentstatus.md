@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-04 06:48:53 EST
-timestamp_utc: 2026-03-04T11:48:53Z
+timestamp_local: 2026-03-05 18:42:01 EST
+timestamp_utc: 2026-03-05T23:42:01Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -53,15 +53,24 @@ source: direct repo inspection + command evidence in this session
 - `13.2` PASS: supported API route/service surfaces now have explicit happy-path + failure-path test evidence with no unresolved matrix gaps.
 - `13.3` PASS: supported browser contract coverage now passes for guest mode and strict-auth subset with stabilized analytics/provider e2e behavior.
 - `13.4` PASS: degraded-mode failure classes are now covered by executable chaos-focused tests across DB/env/provider/sidecar/webhook/rate-limit paths.
+- `14.1` PASS: smoke coverage now exercises real supported lifecycle probes instead of shallow status checks.
+- `14.2` PASS: production verification script now matches the locked runtime contract, including fail-fast flag validation and DB-backed happy-path proof.
+- `14.3` PASS: CI required checks now match the release contract exactly (`Quality Checks`, `Smoke Tests`) and superseded runs cancel cleanly.
+- `15.1` PASS: current dependency advisories are captured against the present lockfile with full-tree and prod-only separation.
+- `15.2` PASS: admin routes now require `OWNER` or `ADMIN`, closing the remaining route-level auth gap.
+- `15.3` PASS: export/import flows no longer include provider API keys, and tested redaction behavior remains intact elsewhere.
+- `15.4` PASS: residual security and operational risks are explicitly registered with owners and containment notes.
+- `16.1` PASS: `/api/health` now reflects actual dependency state rather than placeholder subsystem values.
+- `16.2` PASS: server logs and route error surfaces now use centralized redaction, and Stripe billing routes return stable safe public errors while preserving operator-visible cause details in logs.
 
 ## failed
-- none for `01.*` through `13.4`.
+- none for `01.*` through `16.2`.
 
 ## unverified
-- `npm ci`, `npm run lint`, full-repo `npm run test:run`, `npm run build`.
+- clean-checkout baseline proof (`npm ci` then `npm run lint`, full-repo `npm run test:run`, `npm run build` in one fresh pass).
 - preview/production deploy + rollback verification.
 - Stripe checkout/portal/webhook live loop.
-- full successful `scripts/verify-production.sh` execution against reachable production-like DB.
+- fresh end-to-end preview/production `scripts/verify-production.sh` execution against deployed URLs.
 
 ## blockers
 1. Python stream parity in sidecar is still explicitly TODO (`src/core/main.py:198`).
@@ -164,7 +173,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `16.2`: standardize logs/error surfaces so route logs remain useful for operators without leaking sensitive runtime details.
+Start `16.3`: create operator runbooks only from verified startup/deploy/rollback/incident procedures.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1164,3 +1173,37 @@ TOTAL (22)
   - production-mode smoke observed `/api/health` status `healthy` with real server start
 - Result:
   - `16.1` PASS: `/api/health` now reflects actual dependency state rather than placeholder subsystem values.
+
+## 16.2 evidence (Logs and error surfaces standardized)
+- Gaps found:
+  - structured server logs accepted raw nested error payloads and free-form strings, so exception text could carry secrets or DSNs into emitted JSON lines
+  - `lib/error-system.ts` fallback paths still printed raw error objects directly to `console`
+  - billing routes returned raw `StripeConfigurationError.message` values to the client, exposing internal environment details such as missing variable names
+- Fix applied:
+  - added centralized redaction helpers in `lib/log-sanitizer.ts`
+    - redacts sensitive keys (`authorization`, `apiKey`, `token`, `secret`, `cookie`, `signature`, `databaseUrl`, etc.)
+    - redacts common credential/DSN patterns inside free-form strings
+    - truncates oversized strings and nested payload depth for log safety
+  - wired sanitization into:
+    - `lib/logger.ts`
+    - `lib/api-logger.ts`
+    - `lib/error-system.ts` fallback/error-report paths
+  - added safe public billing messages via `lib/stripe.ts`
+    - `/api/subscriptions` now returns `Checkout is currently unavailable.`
+    - `/api/subscriptions/manage` now returns `Billing portal is currently unavailable.`
+    - detailed server-side cause remains logged with route + user context through the sanitized logger
+- Verification commands:
+  - `npm run test:run -- test/logging-safety.test.ts test/api-subscriptions-routes.test.ts`
+    - result: `2` files passed, `9` tests passed.
+  - `npm run test:run -- test/api-stripe-webhook-route.test.ts`
+    - result: `1` file passed, `6` tests passed.
+  - `npm run type-check`
+    - result: passed.
+  - `npm run lint`
+    - result: passed.
+- Coverage now proven by tests:
+  - structured API logs redact bearer tokens, API keys, DSNs, and secret-shaped nested fields before emission
+  - generic server logger sanitizes nested `Error` payloads and secret-bearing metadata before emission
+  - Stripe checkout/manage routes no longer echo configuration internals in client responses and still emit operator-usable log events
+- Result:
+  - `16.2` PASS: logs remain useful for operators while client-visible error surfaces and emitted log payloads no longer expose raw secret-bearing runtime details in the covered paths.

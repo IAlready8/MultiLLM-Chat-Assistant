@@ -5,7 +5,9 @@ import {
   getOrCreateStripeCustomer,
   StripeConfigurationError,
   ensureStripeConfigured,
+  getStripeConfigurationUserMessage,
 } from '@/lib/stripe'
+import { logger } from '@/lib/logger'
 
 // Get the absolute URL for Stripe callbacks
 const getBaseUrl = () => {
@@ -49,10 +51,22 @@ export async function POST(req: Request) {
     // Return the session URL for client-side redirect
     return NextResponse.json({ url: portalSession.url })
   } catch (error) {
-    console.error('Error creating customer portal session:', error)
     if (error instanceof StripeConfigurationError) {
-      return NextResponse.json({ error: error.message }, { status: 503 })
+      logger.warn('stripe_portal_unavailable', {
+        route: '/api/subscriptions/manage',
+        userId: user.id,
+        reason: error.message,
+      })
+      return NextResponse.json(
+        { error: getStripeConfigurationUserMessage('api') },
+        { status: 503 }
+      )
     }
+    logger.error('stripe_portal_failed', {
+      route: '/api/subscriptions/manage',
+      userId: user.id,
+      error,
+    })
     return NextResponse.json(
       { error: 'Failed to create portal session' },
       { status: 500 }

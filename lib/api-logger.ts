@@ -1,3 +1,5 @@
+import { sanitizeLogValue } from '@/lib/log-sanitizer'
+
 /**
  * Structured API logger for server-side route handlers.
  *
@@ -23,7 +25,7 @@ type LogEntry = {
 }
 
 const emit = (entry: LogEntry) => {
-  const line = JSON.stringify(entry)
+  const line = JSON.stringify(sanitizeLogValue(entry))
   if (entry.level === 'error') {
     console.error(line)
   } else if (entry.level === 'warn') {

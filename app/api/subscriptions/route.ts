@@ -6,7 +6,9 @@ import {
   STRIPE_PRO_PRICE_ID,
   StripeConfigurationError,
   ensureStripeConfigured,
+  getStripeConfigurationUserMessage,
 } from '@/lib/stripe'
+import { logger } from '@/lib/logger'
 
 // Get the absolute URL for Stripe callbacks
 const getBaseUrl = () => {
@@ -62,10 +64,22 @@ export async function POST(req: Request) {
     // Return the session URL for client-side redirect
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    console.error('Error creating Stripe session:', error)
     if (error instanceof StripeConfigurationError) {
-      return NextResponse.json({ error: error.message }, { status: 503 })
+      logger.warn('stripe_checkout_unavailable', {
+        route: '/api/subscriptions',
+        userId: user.id,
+        reason: error.message,
+      })
+      return NextResponse.json(
+        { error: getStripeConfigurationUserMessage('checkout') },
+        { status: 503 }
+      )
     }
+    logger.error('stripe_checkout_failed', {
+      route: '/api/subscriptions',
+      userId: user.id,
+      error,
+    })
     return NextResponse.json(
       { error: 'Failed to create subscription session' },
       { status: 500 }

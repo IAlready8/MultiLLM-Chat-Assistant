@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-04 06:48 EST)
+## Progress snapshot (2026-03-05 18:39 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -55,10 +55,19 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `13.2` Confirm supported API route/service happy+failure coverage and close route/service matrix gaps
   - `13.3` Validate supported browser contract in guest + strict-auth modes and stabilize flaky e2e specs
   - `13.4` Validate degraded-mode failure classes with executable chaos-focused route/service tests
+  - `14.1` Upgrade smoke coverage to real supported roundtrips
+  - `14.2` Upgrade production verification to the locked runtime contract
+  - `14.3` Align required CI gates to the real release contract
+  - `15.1` Re-run and record dependency audit truth on the current lockfile
+  - `15.2` Close remaining route-level auth gaps
+  - `15.3` Remove export/import API key leakage and verify redaction
+  - `15.4` Register residual security/operational risks explicitly
+  - `16.1` Verify `/api/health` truthfulness against configured dependencies
+  - `16.2` Standardize log/error surfaces with centralized redaction and safe public billing errors
 - failed:
   - none
 - unverified:
-  - runtime/build/test/deploy proof steps not executed yet
+  - clean-checkout baseline proof + live deploy/rollback proof not executed yet
 - blockers:
   - Python sidecar stream parity still pending (`src/core/main.py` TODO endpoint)
 
@@ -642,6 +651,27 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 36. [ ] Re-run doc/code mismatch check
 37. [ ] Build final handoff bundle
 38. [ ] Mark handoff-ready only when all checklist pass gates are green
+
+## 16.2 implementation evidence
+- Code changes:
+  - `lib/log-sanitizer.ts`
+  - `lib/logger.ts`
+  - `lib/api-logger.ts`
+  - `lib/error-system.ts`
+  - `lib/stripe.ts`
+  - `app/api/subscriptions/route.ts`
+  - `app/api/subscriptions/manage/route.ts`
+  - `test/logging-safety.test.ts`
+  - `test/api-subscriptions-routes.test.ts`
+- Verification commands:
+  - `npm run test:run -- test/logging-safety.test.ts test/api-subscriptions-routes.test.ts`
+  - `npm run test:run -- test/api-stripe-webhook-route.test.ts`
+  - `npm run type-check`
+  - `npm run lint`
+- Outcome:
+  - structured logger output now redacts secret-bearing strings/fields centrally
+  - error-system fallback logs no longer dump raw error objects
+  - Stripe config failures now return safe stable client messages while retaining operator context in server logs
 
 ## Mandatory reporting format for every next update
 - done

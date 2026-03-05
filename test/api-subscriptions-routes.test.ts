@@ -7,6 +7,8 @@ const {
   mockGetOrCreateStripeCustomer,
   mockCreateCheckoutSession,
   mockCreatePortalSession,
+  mockLoggerWarn,
+  mockLoggerError,
   MockStripeConfigurationError,
 } = vi.hoisted(() => {
   class MockStripeConfigurationError extends Error {
@@ -22,6 +24,8 @@ const {
     mockGetOrCreateStripeCustomer: vi.fn(),
     mockCreateCheckoutSession: vi.fn(),
     mockCreatePortalSession: vi.fn(),
+    mockLoggerWarn: vi.fn(),
+    mockLoggerError: vi.fn(),
     MockStripeConfigurationError,
   }
 })
@@ -47,8 +51,27 @@ vi.mock('@/lib/stripe', () => ({
     mockGetOrCreateStripeCustomer(userId, email),
   STRIPE_PRO_PRICE_ID: 'price_test',
   StripeConfigurationError: MockStripeConfigurationError,
+  getStripeConfigurationUserMessage: (mode: 'api' | 'checkout' | 'webhook') => {
+    switch (mode) {
+      case 'api':
+        return 'Billing portal is currently unavailable.'
+      case 'checkout':
+        return 'Checkout is currently unavailable.'
+      case 'webhook':
+        return 'Webhook not configured'
+      default:
+        return 'Billing is currently unavailable.'
+    }
+  },
   ensureStripeConfigured: (mode: 'api' | 'checkout' | 'webhook') =>
     mockEnsureStripeConfigured(mode),
+}))
+
+vi.mock('@/lib/logger', () => ({
+  logger: {
+    warn: (event: string, payload: unknown) => mockLoggerWarn(event, payload),
+    error: (event: string, payload: unknown) => mockLoggerError(event, payload),
+  },
 }))
 
 import { POST as createSubscriptionSession } from '@/app/api/subscriptions/route'
@@ -69,6 +92,8 @@ describe('subscription routes', () => {
     mockGetOrCreateStripeCustomer.mockResolvedValue('cus_123')
     mockCreateCheckoutSession.mockResolvedValue({ url: 'https://stripe.test/checkout' })
     mockCreatePortalSession.mockResolvedValue({ url: 'https://stripe.test/portal' })
+    mockLoggerWarn.mockReset()
+    mockLoggerError.mockReset()
   })
 
   it('forwards auth response for /api/subscriptions', async () => {
@@ -100,8 +125,16 @@ describe('subscription routes', () => {
 
     expect(response.status).toBe(503)
     await expect(response.json()).resolves.toEqual({
-      error: 'Checkout is not configured.',
+      error: 'Checkout is currently unavailable.',
     })
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      'stripe_checkout_unavailable',
+      expect.objectContaining({
+        route: '/api/subscriptions',
+        userId: 'user-1',
+        reason: 'Checkout is not configured.',
+      })
+    )
   })
 
   it('falls back to localhost base URL when NEXTAUTH_URL is invalid', async () => {
@@ -143,13 +176,20 @@ describe('subscription routes', () => {
 
     expect(response.status).toBe(503)
     await expect(response.json()).resolves.toEqual({
-      error: 'Billing is not configured. Missing STRIPE_SECRET_KEY.',
+      error: 'Billing portal is currently unavailable.',
     })
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      'stripe_portal_unavailable',
+      expect.objectContaining({
+        route: '/api/subscriptions/manage',
+        userId: 'user-1',
+        reason: 'Billing is not configured. Missing STRIPE_SECRET_KEY.',
+      })
+    )
   })
 
   it('returns 500 for unexpected Stripe manage-session failures', async () => {
     mockCreatePortalSession.mockRejectedValue(new Error('stripe unavailable'))
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const response = await createManageSession(new Request('http://localhost'))
 
@@ -157,8 +197,14 @@ describe('subscription routes', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Failed to create portal session',
     })
-
-    consoleSpy.mockRestore()
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      'stripe_portal_failed',
+      expect.objectContaining({
+        route: '/api/subscriptions/manage',
+        userId: 'user-1',
+        error: expect.any(Error),
+      })
+    )
   })
 })
 
