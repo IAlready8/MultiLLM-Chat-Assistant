@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-05 18:38:26 EST` (`2026-03-05T18:38:26Z`)
+- Last updated: `2026-03-05 18:41:52 EST` (`2026-03-05T18:41:52Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -69,6 +69,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `15.2` Close route-level auth gaps (PASS)
 - [x] `15.3` Verify secret handling and redaction (PASS)
 - [x] `15.4` Create residual risk register (PASS)
+- [x] `16.1` Verify `/api/health` truthfulness (PASS)
 
 ---
 
@@ -207,7 +208,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 16.1 | Verify `/api/health` truthfulness | 07.4, 10.1 | Confirm health reflects DB, optional sidecar, metrics payload, degraded status correctly | PASS when health endpoint matches actual dependency state | `app/api/health/route.ts`, tests | LLM | route test output |
+| 16.1 ✅ | Verify `/api/health` truthfulness | 07.4, 10.1 | Confirm health reflects DB, optional sidecar, metrics payload, degraded status correctly | PASS when health endpoint matches actual dependency state | `app/api/health/route.ts`, tests | LLM | Closed 2026-03-05 after replacing placeholder cache checks with real rate-limit diagnostics, adding optional sidecar health reporting, and re-running route tests plus live smoke evidence for healthy/degraded states |
 | 16.2 | Standardize logs and error surfaces | 09.*, 12.* | Ensure route errors and server logs carry enough context without leaking secrets | PASS when logs are useful and safe | route files, `lib/error-system.ts` if used | LLM | log samples |
 | 16.3 | Create operator runbooks | 14.2, 16.1 | Add startup, deploy, rollback, incident, and recovery docs only after verified | PASS when another operator can deploy and recover without guessing | docs set | Repo operator + LLM | completed runbooks |
 

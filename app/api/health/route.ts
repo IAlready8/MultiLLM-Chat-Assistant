@@ -4,6 +4,12 @@ import { NextRequest } from 'next/server'
 import { metrics } from '@/lib/api-logger'
 import prisma from '@/lib/prisma'
 import { getErrorMessage, isDatabaseUnavailableError } from '@/lib/db-fallback'
+import { getRateLimitDiagnostics } from '@/lib/rate-limit'
+
+const sidecarHealthUrl = () => {
+  const baseUrl = process.env.PYTHON_CORE_URL?.trim()
+  return baseUrl ? `${baseUrl.replace(/\/$/, '')}/api/v1/health` : null
+}
 
 // Health check API route — includes request metrics snapshot
 export async function GET(request: NextRequest) {
@@ -23,7 +29,62 @@ export async function GET(request: NextRequest) {
       : getErrorMessage(error) || 'Database health check failed'
   }
 
-  const status = databaseStatus === 'connected' ? 'healthy' : 'degraded'
+  const rateLimitStart = Date.now()
+  const rateLimitDiagnostics = getRateLimitDiagnostics()
+  const cacheStatus =
+    rateLimitDiagnostics.mode === 'redis'
+      ? 'connected'
+      : rateLimitDiagnostics.redisConfigured
+        ? 'degraded'
+        : 'memory'
+  const cacheMessage =
+    rateLimitDiagnostics.mode === 'redis'
+      ? 'Redis-backed rate limiting is connected'
+      : rateLimitDiagnostics.redisConfigured
+        ? 'Redis configured but unavailable; using in-memory rate limiting'
+        : 'Redis not configured; using in-memory rate limiting'
+
+  const sidecarUrl = sidecarHealthUrl()
+  const sidecarStart = Date.now()
+  let sidecarStatus: 'connected' | 'degraded' | 'disabled' = 'disabled'
+  let sidecarMessage = 'Python sidecar not configured'
+
+  if (sidecarUrl) {
+    try {
+      const response = await fetch(sidecarUrl, {
+        signal: AbortSignal.timeout(2000),
+        cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => ({}))
+      const payloadStatus = String(payload?.status || '').toLowerCase()
+
+      if (
+        response.ok &&
+        (payloadStatus === 'ok' ||
+          payloadStatus === 'healthy' ||
+          payloadStatus === 'degraded')
+      ) {
+        sidecarStatus = payloadStatus === 'degraded' ? 'degraded' : 'connected'
+        sidecarMessage =
+          sidecarStatus === 'connected'
+            ? `Python sidecar responding (${payload.status})`
+            : `Python sidecar reported degraded status (${payload.status})`
+      } else {
+        sidecarStatus = 'degraded'
+        sidecarMessage = `Python sidecar health check failed (${response.status})`
+      }
+    } catch (error) {
+      sidecarStatus = 'degraded'
+      sidecarMessage = getErrorMessage(error) || 'Python sidecar health check failed'
+    }
+  }
+
+  const status =
+    databaseStatus === 'connected' &&
+    cacheStatus !== 'degraded' &&
+    sidecarStatus !== 'degraded'
+      ? 'healthy'
+      : 'degraded'
 
   const healthChecks = {
     status,
@@ -38,8 +99,19 @@ export async function GET(request: NextRequest) {
         responseTime: Date.now() - dbStart,
         ...(databaseMessage ? { message: databaseMessage } : {}),
       },
-      cache: { status: 'connected', responseTime: 2 },
-      api: { status: 'responsive', responseTime: 10 },
+      cache: {
+        status: cacheStatus,
+        responseTime: Date.now() - rateLimitStart,
+        message: cacheMessage,
+        mode: rateLimitDiagnostics.mode,
+      },
+      sidecar: {
+        status: sidecarStatus,
+        responseTime: Date.now() - sidecarStart,
+        ...(sidecarUrl ? { url: sidecarUrl } : {}),
+        message: sidecarMessage,
+      },
+      api: { status: 'responsive', responseTime: Date.now() - startTime },
     },
     ...(includeMetrics ? { metrics: metrics.snapshot() } : {}),
   }

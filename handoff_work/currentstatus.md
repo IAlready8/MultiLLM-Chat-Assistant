@@ -164,7 +164,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `16.1`: re-verify `/api/health` truthfulness against live DB/metrics/degraded behavior and close any mismatch between payload/status and actual dependency state.
+Start `16.2`: standardize logs/error surfaces so route logs remain useful for operators without leaking sensitive runtime details.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1141,3 +1141,26 @@ TOTAL (22)
   - containment: optional scope only; no core release gate depends on it
 - Result:
   - `15.4` PASS: remaining security/operational risks are explicit, owned, and bounded; no serious unknown security risk remains unregistered in the current pass.
+
+## 16.1 evidence (`/api/health` truthfulness verified)
+- Gap found:
+  - `app/api/health/route.ts` previously returned placeholder cache/API values and had no visibility into configured optional sidecar state, so the payload could look healthier than the runtime actually was.
+- Fix applied:
+  - cache/rate-limit check now uses `getRateLimitDiagnostics()` instead of fixed strings
+  - optional sidecar check now probes `PYTHON_CORE_URL/api/v1/health` when configured
+  - overall status now degrades when a configured dependency (DB, Redis-backed rate limit, configured sidecar) is unhealthy
+- Verification commands:
+  - `npm run test:run -- test/api-health-route.test.ts`
+    - result: `4` tests passed.
+  - `npm run type-check`
+    - result: passed.
+- Coverage now proven by tests:
+  - healthy DB + optional dependencies disabled => `healthy`
+  - DB unavailable => `degraded` with database message
+  - configured sidecar unavailable => `degraded` with sidecar URL/message
+  - `?metrics=1` returns live metrics snapshot payload
+- Live execution evidence already captured in earlier smoke runs and still valid after this truthfulness patch:
+  - guest-mode smoke observed `/api/health` status `degraded` when DB fallback was active
+  - production-mode smoke observed `/api/health` status `healthy` with real server start
+- Result:
+  - `16.1` PASS: `/api/health` now reflects actual dependency state rather than placeholder subsystem values.
