@@ -5,6 +5,7 @@
 #
 # --base-url URL   Override the default http://localhost:3000
 # --start-server   Start a Next.js production server, run tests, then stop it
+# --session-cookie Auth cookie for protected endpoint roundtrips in strict mode
 
 set -euo pipefail
 
@@ -15,16 +16,19 @@ NC='\033[0m'
 
 BASE_URL="${BASE_URL:-http://localhost:3000}"
 START_SERVER=false
+SESSION_COOKIE="${SMOKE_SESSION_COOKIE:-}"
 SERVER_PID=""
 SERVER_PORT=""
 PASS=0
 FAIL=0
 SKIP=0
+AUTH_BLOCKED_MODE=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --base-url) BASE_URL="$2"; shift 2 ;;
     --start-server) START_SERVER=true; shift ;;
+    --session-cookie) SESSION_COOKIE="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -46,6 +50,48 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+
+request_json() {
+  local method="$1"
+  local path="$2"
+  local payload="${3:-}"
+
+  local body_file
+  body_file="$(mktemp)"
+
+  local curl_args
+  curl_args=(-s -o "$body_file" -w '%{http_code}' -X "$method")
+  if [ -n "$SESSION_COOKIE" ]; then
+    curl_args+=(-H "Cookie: ${SESSION_COOKIE}")
+  fi
+  if [ -n "$payload" ]; then
+    curl_args+=(-H 'Content-Type: application/json' -d "$payload")
+  fi
+
+  HTTP_STATUS=$(curl "${curl_args[@]}" "${BASE_URL}${path}" 2>/dev/null || echo "000")
+  HTTP_BODY=$(cat "$body_file" 2>/dev/null || echo '{}')
+  rm -f "$body_file"
+}
+
+assert_status_any() {
+  local label="$1"
+  local actual="$2"
+  shift 2
+  local expected_values=("$@")
+
+  for expected in "${expected_values[@]}"; do
+    if [ "$actual" = "$expected" ]; then
+      echo -e "  ${GREEN}PASS${NC} $label (HTTP $actual)"
+      PASS=$((PASS + 1))
+      return
+    fi
+  done
+
+  local expected_joined
+  expected_joined=$(IFS='/'; echo "${expected_values[*]}")
+  echo -e "  ${RED}FAIL${NC} $label (expected ${expected_joined}, got $actual)"
+  FAIL=$((FAIL + 1))
+}
 
 assert_status() {
   local label="$1"
@@ -81,14 +127,17 @@ assert_json_field() {
 
 # Optionally start the server
 if [ "$START_SERVER" = true ]; then
-  echo -e "${YELLOW}Starting Next.js production server on port ${SERVER_PORT}...${NC}"
+  echo -e "${YELLOW}Building application before smoke run...${NC}"
   cd "$(dirname "$0")/.."
+  npm run build
+
+  echo -e "${YELLOW}Starting Next.js production server on port ${SERVER_PORT}...${NC}"
   PORT="$SERVER_PORT" npm run start &
   SERVER_PID=$!
 
   # Wait for server readiness (up to 30s)
   for i in $(seq 1 30); do
-    if curl -sf "${BASE_URL}/api/config" >/dev/null 2>&1; then
+    if curl -sf "${BASE_URL}/api/health" >/dev/null 2>&1; then
       echo -e "${GREEN}Server ready after ${i}s${NC}"
       break
     fi
@@ -147,12 +196,12 @@ fi
 # ── 1. Page Render Checks ──────────────────────────────────────────
 
 echo ""
-echo "1) Page render checks (expect 200 on all pages)"
+echo "1) Page reachability checks"
 
 PAGES=("/" "/multi-chat" "/settings" "/goal-hub" "/analytics" "/personas" "/pipeline" "/comparison")
 for page in "${PAGES[@]}"; do
   status=$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}${page}" 2>/dev/null || echo "000")
-  assert_status "GET ${page}" "200" "$status"
+  assert_status_any "GET ${page}" "$status" "200" "307" "308"
 done
 
 # ── 2. Config API Lifecycle ─────────────────────────────────────────
@@ -160,128 +209,221 @@ done
 echo ""
 echo "2) Config API lifecycle (save / list / clear)"
 
-# Save a dummy key (will be rejected by provider but stored)
-save_status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${BASE_URL}/api/config" \
-  -H 'Content-Type: application/json' \
-  -d '{"provider":"openai","apiKey":"sk-smoke-test-0000000000000000000000000000000000000000000000"}' 2>/dev/null || echo "000")
-assert_status "POST /api/config (save key)" "200" "$save_status"
+request_json "GET" "/api/config"
+assert_status_any "GET /api/config (list)" "$HTTP_STATUS" "200" "401"
 
-# List configured providers
-list_body=$(curl -s "${BASE_URL}/api/config" 2>/dev/null || echo '{}')
-list_status=$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/config" 2>/dev/null || echo "000")
-assert_status "GET /api/config (list)" "200" "$list_status"
+if [ "$HTTP_STATUS" = "401" ]; then
+  AUTH_BLOCKED_MODE=true
+  echo -e "  ${YELLOW}SKIP${NC} strict auth mode detected without session cookie; protected lifecycle roundtrips will be skipped."
+  SKIP=$((SKIP + 1))
+else
+  request_json "POST" "/api/config" '{"provider":"openai","apiKey":"sk-smoke-test-0000000000000000000000000000000000000000000000"}'
+  assert_status "POST /api/config (save key)" "200" "$HTTP_STATUS"
 
-# Verify openai appears in configuredProviders
-has_openai=$(echo "$list_body" | python3 -c "
+  request_json "GET" "/api/config"
+  assert_status "GET /api/config (list after save)" "200" "$HTTP_STATUS"
+  has_openai=$(echo "$HTTP_BODY" | python3 -c "
 import sys,json
 data=json.load(sys.stdin)
 providers=data.get('configuredProviders',[])
 print('yes' if 'openai' in providers else 'no')
 " 2>/dev/null || echo "error")
-if [ "$has_openai" = "yes" ]; then
-  echo -e "  ${GREEN}PASS${NC} openai in configuredProviders"
-  PASS=$((PASS + 1))
-else
-  echo -e "  ${RED}FAIL${NC} openai not in configuredProviders (got: $has_openai)"
-  FAIL=$((FAIL + 1))
-fi
+  if [ "$has_openai" = "yes" ]; then
+    echo -e "  ${GREEN}PASS${NC} openai in configuredProviders"
+    PASS=$((PASS + 1))
+  else
+    echo -e "  ${RED}FAIL${NC} openai not in configuredProviders (got: $has_openai)"
+    FAIL=$((FAIL + 1))
+  fi
 
-# Clear the key
-clear_status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${BASE_URL}/api/config" \
-  -H 'Content-Type: application/json' \
-  -d '{"provider":"openai","apiKey":""}' 2>/dev/null || echo "000")
-assert_status "POST /api/config (clear key)" "200" "$clear_status"
+  request_json "POST" "/api/config" '{"provider":"openai","apiKey":""}'
+  assert_status "POST /api/config (clear key)" "200" "$HTTP_STATUS"
+fi
 
 # ── 3. Test API Key Endpoint ────────────────────────────────────────
 
 echo ""
 echo "3) Test API key endpoint"
 
-# Test with inline key (format check — bad key should return valid:false)
-test_body=$(curl -s -X POST "${BASE_URL}/api/test-api-key" \
-  -H 'Content-Type: application/json' \
-  -d '{"provider":"openai","apiKey":"bad-key"}' 2>/dev/null || echo '{}')
-test_status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${BASE_URL}/api/test-api-key" \
-  -H 'Content-Type: application/json' \
-  -d '{"provider":"openai","apiKey":"bad-key"}' 2>/dev/null || echo "000")
-assert_status "POST /api/test-api-key (inline)" "200" "$test_status"
-
-test_valid=$(echo "$test_body" | python3 -c "import sys,json; print(json.load(sys.stdin).get('valid',''))" 2>/dev/null || echo "error")
-if [ "$test_valid" = "False" ]; then
-  echo -e "  ${GREEN}PASS${NC} bad key returned valid=False"
-  PASS=$((PASS + 1))
-else
-  echo -e "  ${YELLOW}SKIP${NC} unexpected valid value: $test_valid"
+if [ "$AUTH_BLOCKED_MODE" = true ]; then
+  request_json "POST" "/api/test-api-key" '{"provider":"openai","apiKey":"bad-key"}'
+  assert_status "POST /api/test-api-key (auth enforcement)" "401" "$HTTP_STATUS"
+  echo -e "  ${YELLOW}SKIP${NC} inline/testSaved API key checks skipped due missing authenticated session."
   SKIP=$((SKIP + 1))
-fi
+else
+  request_json "POST" "/api/test-api-key" '{"provider":"openai","apiKey":"bad-key"}'
+  assert_status "POST /api/test-api-key (inline)" "200" "$HTTP_STATUS"
 
-# Test with testSaved (no key stored — should return valid:false or error)
-saved_status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${BASE_URL}/api/test-api-key" \
-  -H 'Content-Type: application/json' \
-  -d '{"provider":"openai","testSaved":true}' 2>/dev/null || echo "000")
-assert_status "POST /api/test-api-key (testSaved)" "200" "$saved_status"
+  test_valid=$(echo "$HTTP_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('valid',''))" 2>/dev/null || echo "error")
+  if [ "$test_valid" = "False" ]; then
+    echo -e "  ${GREEN}PASS${NC} bad key returned valid=False"
+    PASS=$((PASS + 1))
+  else
+    echo -e "  ${YELLOW}SKIP${NC} unexpected valid value: $test_valid"
+    SKIP=$((SKIP + 1))
+  fi
+
+  request_json "POST" "/api/test-api-key" '{"provider":"openai","testSaved":true}'
+  assert_status "POST /api/test-api-key (testSaved)" "200" "$HTTP_STATUS"
+fi
 
 # ── 4. Provider Configs API ─────────────────────────────────────────
 
 echo ""
 echo "4) Provider configs API"
 
-configs_status=$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/provider-configs" 2>/dev/null || echo "000")
-assert_status "GET /api/provider-configs" "200" "$configs_status"
+request_json "GET" "/api/provider-configs"
+assert_status_any "GET /api/provider-configs" "$HTTP_STATUS" "200" "401"
 
-# POST with missing provider should be 400
-bad_post_status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${BASE_URL}/api/provider-configs" \
-  -H 'Content-Type: application/json' \
-  -d '{}' 2>/dev/null || echo "000")
-assert_status "POST /api/provider-configs (missing provider)" "400" "$bad_post_status"
+if [ "$HTTP_STATUS" = "200" ]; then
+  request_json "POST" "/api/provider-configs" '{}'
+  assert_status "POST /api/provider-configs (missing provider)" "400" "$HTTP_STATUS"
+else
+  echo -e "  ${YELLOW}SKIP${NC} provider-config validation check skipped due missing authenticated session."
+  SKIP=$((SKIP + 1))
+fi
 
 # ── 5. Goal CRUD Lifecycle ──────────────────────────────────────────
 
 echo ""
 echo "5) Goal CRUD lifecycle"
 
-# Create (POST /api/goals returns 201)
-create_body=$(curl -s -X POST "${BASE_URL}/api/goals" \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"Smoke Test Goal","description":"Auto-created by smoke-test.sh"}' 2>/dev/null || echo '{}')
-create_status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${BASE_URL}/api/goals" \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"Smoke Test Goal 2","description":"duplicate for status check"}' 2>/dev/null || echo "000")
-assert_status "POST /api/goals (create)" "201" "$create_status"
-
-goal_id=$(echo "$create_body" | python3 -c "
+if [ "$AUTH_BLOCKED_MODE" = true ]; then
+  request_json "GET" "/api/goals"
+  assert_status "GET /api/goals (auth enforcement)" "401" "$HTTP_STATUS"
+  echo -e "  ${YELLOW}SKIP${NC} goal CRUD lifecycle skipped due missing authenticated session."
+  SKIP=$((SKIP + 3))
+else
+  request_json "POST" "/api/goals" '{"title":"Smoke Test Goal","description":"Auto-created by smoke-test.sh"}'
+  assert_status "POST /api/goals (create)" "201" "$HTTP_STATUS"
+  goal_id=$(echo "$HTTP_BODY" | python3 -c "
 import sys,json
 data=json.load(sys.stdin)
 goal=data.get('goal',data)
 print(goal.get('id',''))
 " 2>/dev/null || echo "")
 
-# List
-list_goals_status=$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/goals" 2>/dev/null || echo "000")
-assert_status "GET /api/goals (list)" "200" "$list_goals_status"
+  request_json "GET" "/api/goals"
+  assert_status "GET /api/goals (list)" "200" "$HTTP_STATUS"
 
-# Update and Delete use /api/goals/[id] route
-if [ -n "$goal_id" ]; then
-  update_status=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${BASE_URL}/api/goals/${goal_id}" \
-    -H 'Content-Type: application/json' \
-    -d '{"title":"Updated Smoke Goal","status":"in-progress"}' 2>/dev/null || echo "000")
-  assert_status "PUT /api/goals/:id (update)" "200" "$update_status"
+  if [ -n "$goal_id" ]; then
+    request_json "PUT" "/api/goals/${goal_id}" '{"title":"Updated Smoke Goal","status":"in-progress"}'
+    assert_status "PUT /api/goals/:id (update)" "200" "$HTTP_STATUS"
 
-  delete_status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "${BASE_URL}/api/goals/${goal_id}" 2>/dev/null || echo "000")
-  assert_status "DELETE /api/goals/:id (delete)" "200" "$delete_status"
-else
-  echo -e "  ${YELLOW}SKIP${NC} goal update/delete — no ID from create"
-  SKIP=$((SKIP + 2))
+    request_json "DELETE" "/api/goals/${goal_id}"
+    assert_status "DELETE /api/goals/:id (delete)" "200" "$HTTP_STATUS"
+  else
+    echo -e "  ${YELLOW}SKIP${NC} goal update/delete — no ID from create"
+    SKIP=$((SKIP + 2))
+  fi
 fi
 
-# ── 6. LLM Stream Endpoint ─────────────────────────────────────────
+# ── 6. Persona CRUD Lifecycle ──────────────────────────────────────
 
 echo ""
-echo "6) LLM stream endpoint (rejects invalid requests)"
+echo "6) Persona CRUD lifecycle"
 
-stream_status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${BASE_URL}/api/llm/stream" \
-  -H 'Content-Type: application/json' \
-  -d '{}' 2>/dev/null || echo "000")
+if [ "$AUTH_BLOCKED_MODE" = true ]; then
+  request_json "GET" "/api/personas"
+  assert_status "GET /api/personas (auth enforcement)" "401" "$HTTP_STATUS"
+  echo -e "  ${YELLOW}SKIP${NC} persona CRUD lifecycle skipped due missing authenticated session."
+  SKIP=$((SKIP + 3))
+else
+  request_json "POST" "/api/personas" '{"name":"Smoke Persona","systemPrompt":"You are a smoke test persona."}'
+  assert_status "POST /api/personas (create)" "201" "$HTTP_STATUS"
+  persona_id=$(echo "$HTTP_BODY" | python3 -c "
+import sys,json
+data=json.load(sys.stdin)
+persona=data.get('persona',data)
+print(persona.get('id',''))
+" 2>/dev/null || echo "")
+
+  request_json "GET" "/api/personas"
+  assert_status "GET /api/personas (list)" "200" "$HTTP_STATUS"
+
+  if [ -n "$persona_id" ]; then
+    request_json "PUT" "/api/personas/${persona_id}" '{"name":"Updated Smoke Persona","systemPrompt":"Updated smoke test prompt."}'
+    assert_status "PUT /api/personas/:id (update)" "200" "$HTTP_STATUS"
+
+    request_json "DELETE" "/api/personas/${persona_id}"
+    assert_status "DELETE /api/personas/:id (delete)" "200" "$HTTP_STATUS"
+  else
+    echo -e "  ${YELLOW}SKIP${NC} persona update/delete — no ID from create"
+    SKIP=$((SKIP + 2))
+  fi
+fi
+
+# ── 7. Conversation Lifecycle ──────────────────────────────────────
+
+echo ""
+echo "7) Conversation lifecycle"
+
+if [ "$AUTH_BLOCKED_MODE" = true ]; then
+  request_json "GET" "/api/conversations"
+  assert_status "GET /api/conversations (auth enforcement)" "401" "$HTTP_STATUS"
+  echo -e "  ${YELLOW}SKIP${NC} conversation lifecycle skipped due missing authenticated session."
+  SKIP=$((SKIP + 4))
+else
+  request_json "POST" "/api/conversations" '{"title":"Smoke Conversation","messages":[{"role":"user","content":"smoke hello"}]}'
+  assert_status "POST /api/conversations (create)" "201" "$HTTP_STATUS"
+  conversation_id=$(echo "$HTTP_BODY" | python3 -c "
+import sys,json
+data=json.load(sys.stdin)
+conversation=data.get('conversation',data)
+print(conversation.get('id',''))
+" 2>/dev/null || echo "")
+
+  request_json "GET" "/api/conversations"
+  assert_status "GET /api/conversations (list)" "200" "$HTTP_STATUS"
+
+  if [ -n "$conversation_id" ]; then
+    request_json "PUT" "/api/conversations/${conversation_id}" '{"title":"Updated Smoke Conversation"}'
+    assert_status "PUT /api/conversations/:id (rename)" "200" "$HTTP_STATUS"
+
+    request_json "POST" "/api/conversations/${conversation_id}" '[{"role":"assistant","content":"smoke response"}]'
+    assert_status "POST /api/conversations/:id (append message)" "200" "$HTTP_STATUS"
+
+    request_json "DELETE" "/api/conversations/${conversation_id}"
+    assert_status "DELETE /api/conversations/:id (delete)" "200" "$HTTP_STATUS"
+  else
+    echo -e "  ${YELLOW}SKIP${NC} conversation update/delete — no ID from create"
+    SKIP=$((SKIP + 3))
+  fi
+fi
+
+# ── 8. Analytics Endpoint ───────────────────────────────────────────
+
+echo ""
+echo "8) Analytics endpoint shape"
+
+if [ "$AUTH_BLOCKED_MODE" = true ]; then
+  request_json "GET" "/api/analytics?timeframe=7d"
+  assert_status "GET /api/analytics (auth enforcement)" "401" "$HTTP_STATUS"
+else
+  request_json "GET" "/api/analytics?timeframe=7d"
+  assert_status "GET /api/analytics?timeframe=7d" "200" "$HTTP_STATUS"
+  has_analytics_shape=$(echo "$HTTP_BODY" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+required = ['timeframe','providerData','usageTrends','totalStats']
+print('yes' if all(key in data for key in required) else 'no')
+" 2>/dev/null || echo "error")
+  if [ "$has_analytics_shape" = "yes" ]; then
+    echo -e "  ${GREEN}PASS${NC} analytics payload includes required keys"
+    PASS=$((PASS + 1))
+  else
+    echo -e "  ${RED}FAIL${NC} analytics payload missing required keys"
+    FAIL=$((FAIL + 1))
+  fi
+fi
+
+# ── 9. LLM Stream Endpoint ─────────────────────────────────────────
+
+echo ""
+echo "9) LLM stream endpoint (rejects invalid requests)"
+
+request_json "POST" "/api/llm/stream" '{}'
+stream_status="$HTTP_STATUS"
 # Should be 400 (missing required fields) or 401 (no auth)
 if [ "$stream_status" = "400" ] || [ "$stream_status" = "401" ]; then
   echo -e "  ${GREEN}PASS${NC} POST /api/llm/stream rejects invalid (HTTP $stream_status)"
