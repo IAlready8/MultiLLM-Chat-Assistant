@@ -108,7 +108,6 @@ export async function GET(request: NextRequest) {
       sidecar: {
         status: sidecarStatus,
         responseTime: Date.now() - sidecarStart,
-        ...(sidecarUrl ? { url: sidecarUrl } : {}),
         message: sidecarMessage,
       },
       api: { status: 'responsive', responseTime: Date.now() - startTime },
