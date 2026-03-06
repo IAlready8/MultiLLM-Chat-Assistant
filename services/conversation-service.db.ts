@@ -53,14 +53,17 @@ export const ConversationService = {
    * Get all conversations (metadata only) for a user.
    */
   async getConversationsByUserId(userId: string): Promise<Conversation[]> {
-    if (db.isKnownUnavailable()) {
-      return Array.from(getFallbackUserStore(userId).values())
+    const listFallbackConversations = () =>
+      Array.from(getFallbackUserStore(userId).values())
         .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
         .map(toConversation)
+
+    if (db.isKnownUnavailable()) {
+      return listFallbackConversations()
     }
 
     try {
-      return await prisma.conversation.findMany({
+      const conversations = await prisma.conversation.findMany({
         where: {
           userId: userId,
         },
@@ -68,13 +71,34 @@ export const ConversationService = {
           updatedAt: 'desc',
         },
       })
+      if (!db.isFallbackAllowed()) {
+        return conversations
+      }
+
+      const fallback = listFallbackConversations()
+      if (fallback.length === 0) {
+        return conversations
+      }
+
+      const merged = new Map<string, Conversation>()
+      for (const conversation of fallback) {
+        merged.set(conversation.id, conversation)
+      }
+      for (const conversation of conversations) {
+        merged.set(conversation.id, conversation)
+      }
+
+      return Array.from(merged.values()).sort(
+        (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
+      )
     } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('getConversationsByUserId', 'conversation', error)
       }
-      return Array.from(getFallbackUserStore(userId).values())
-        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-        .map(toConversation)
+      return listFallbackConversations()
     }
   },
 
@@ -104,8 +128,20 @@ export const ConversationService = {
           },
         },
       })
-      return conversation as unknown as ConversationWithMessages | null
+      if (conversation) {
+        return conversation as unknown as ConversationWithMessages
+      }
+
+      if (!db.isFallbackAllowed()) {
+        return null
+      }
+
+      const fallbackConversation = getFallbackUserStore(userId).get(id)
+      return fallbackConversation ? cloneConversation(fallbackConversation) : null
     } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('getFullConversation', 'conversation', error)
       }
@@ -292,7 +328,7 @@ export const ConversationService = {
       })
 
       if (!existingConversation) {
-        return null
+        return db.isFallbackAllowed() ? saveToFallback() : null
       }
 
       return await prisma.conversation.update({

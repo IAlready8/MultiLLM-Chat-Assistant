@@ -385,6 +385,54 @@ describe('ConversationService DB fallback', () => {
     expect(listAfterDelete).toHaveLength(0)
   })
 
+  it('renames fallback conversations when DB reads recover but the row is absent', async () => {
+    const unavailableService = await loadService()
+
+    const created = await unavailableService.ConversationService.createConversation(
+      'user-1',
+      'Fallback title',
+      [
+        {
+          role: 'user',
+          content: 'hello',
+          provider: null,
+          model: null,
+        },
+      ]
+    )
+
+    vi.resetModules()
+
+    const prismaMock: PrismaMock = {
+      conversation: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn(),
+      },
+      message: {
+        deleteMany: vi.fn(),
+      },
+      $transaction: vi.fn(),
+    }
+
+    const recoveredService = await loadServiceWithPrismaMock(prismaMock)
+
+    const renamed = await recoveredService.ConversationService.updateConversationTitle(
+      created.id,
+      'user-1',
+      'Recovered fallback title'
+    )
+
+    expect(renamed?.title).toBe('Recovered fallback title')
+
+    const list = await recoveredService.ConversationService.getConversationsByUserId(
+      'user-1'
+    )
+    expect(list[0]?.title).toBe('Recovered fallback title')
+  })
+
   it('throws unexpected write errors instead of silently falling back', async () => {
     const unexpectedError = new Error('Unexpected conversation write failure')
 
