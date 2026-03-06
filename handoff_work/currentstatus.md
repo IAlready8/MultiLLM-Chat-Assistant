@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-05 21:49:24 EST
-timestamp_utc: 2026-03-06T02:49:24Z
+timestamp_local: 2026-03-05 22:37:51 EST
+timestamp_utc: 2026-03-06T03:37:51Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -63,12 +63,12 @@ source: direct repo inspection + command evidence in this session
 - `16.1` PASS: `/api/health` now reflects actual dependency state rather than placeholder subsystem values.
 - `16.2` PASS: server logs and route error surfaces now use centralized redaction, and Stripe billing routes return stable safe public errors while preserving operator-visible cause details in logs.
 - `16.3` PASS: operator runbooks are now consolidated into one authoritative procedure set with verified-vs-pending-live-proof boundaries for startup, deploy, rollback, incident response, and recovery.
+- `17.1` PASS: a clean detached worktree from merged `main` completed install, type-check, lint, full tests, and production build successfully.
 
 ## failed
 - none for `01.*` through `16.2`.
 
 ## unverified
-- clean-checkout baseline proof (`npm ci` then `npm run lint`, full-repo `npm run test:run`, `npm run build` in one fresh pass).
 - preview/production deploy + rollback verification.
 - Stripe checkout/portal/webhook live loop.
 - fresh end-to-end preview/production `scripts/verify-production.sh` execution against deployed URLs.
@@ -174,7 +174,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `17.1`: capture clean local install proof from a fresh baseline run (`npm ci`, lint, tests, build).
+Start `17.2`: deploy preview from merged `main`, then run `verify:prod` and smoke against the preview URL.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1237,3 +1237,22 @@ TOTAL (22)
     - result: runbook references and verification-state markers present in the intended doc set.
 - Result:
   - `16.3` PASS: another operator now has one clear runbook set for startup, verification, deployment preparation, rollback preparation, and incident handling without needing to reconstruct the procedure from scattered docs.
+
+## 17.1 evidence (Clean local install proof)
+- Execution model:
+  - created a separate clean detached worktree from merged `main` commit `823b1ec` at `/tmp/multillm-cleanproof-I36JJZ`
+  - ran baseline install/build/test gates there instead of reusing the existing working tree
+- Verification commands:
+  - `git worktree add --detach /tmp/multillm-cleanproof-I36JJZ HEAD`
+  - `npm ci`
+    - result: passed in the clean worktree; `postinstall` ran `prisma generate` successfully.
+  - `npm run type-check`
+    - result: passed.
+  - `npm run lint`
+    - result: passed.
+  - `npm run test:run`
+    - result: `35` files passed, `245` tests passed.
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=clean-proof-secret-32chars API_KEY_ENCRYPTION_SEED=clean-proof-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+    - result: passed; production build completed and emitted the expected route manifest.
+- Result:
+  - `17.1` PASS: the merged `main` state can be installed and gated cleanly from a fresh detached worktree without relying on prior workspace artifacts.

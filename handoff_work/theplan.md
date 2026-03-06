@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-05 21:49 EST)
+## Progress snapshot (2026-03-05 22:37 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -65,10 +65,11 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `16.1` Verify `/api/health` truthfulness against configured dependencies
   - `16.2` Standardize log/error surfaces with centralized redaction and safe public billing errors
   - `16.3` Consolidate operator runbooks with verified-vs-pending-proof boundaries
+  - `17.1` Prove clean local install/build/test flow from a fresh detached worktree
 - failed:
   - none
 - unverified:
-  - clean-checkout baseline proof + live deploy/rollback proof not executed yet
+  - live deploy/rollback proof not executed yet
 - blockers:
   - Python sidecar stream parity still pending (`src/core/main.py` TODO endpoint)
 
@@ -643,7 +644,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 29. [x] Upgrade smoke script to cover actual supported flows
 30. [x] Upgrade production verification script
 31. [x] Align CI with real release gates
-32. [ ] Run clean local install -> type-check -> lint -> tests -> build
+32. [x] Run clean local install -> type-check -> lint -> tests -> build
 33. [ ] Run preview deploy verification
 34. [ ] Run production deploy verification
 35. [ ] Run rollback proof
@@ -668,6 +669,19 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - Outcome:
   - operator procedure docs are now consolidated
   - verified local procedures are separated clearly from still-open live deploy/rollback proof steps
+
+## 17.1 implementation evidence
+- Fresh-baseline proof model:
+  - created detached worktree `/tmp/multillm-cleanproof-I36JJZ` at merged `main` commit `823b1ec`
+  - ran install/build/test there instead of in the long-lived working tree
+- Verification commands:
+  - `npm ci`
+  - `npm run type-check`
+  - `npm run lint`
+  - `npm run test:run`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=clean-proof-secret-32chars API_KEY_ENCRYPTION_SEED=clean-proof-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+- Outcome:
+  - clean install/build/test proof is now captured on merged `main`
 
 ## 16.2 implementation evidence
 - Code changes:
