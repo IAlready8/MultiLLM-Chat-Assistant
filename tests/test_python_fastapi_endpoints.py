@@ -27,7 +27,7 @@ class TestHealthEndpoint:
     def test_health_endpoint_success(self, client):
         """Test successful health check response"""
         # Mock the Redis connection test
-        with patch('src.core.caching.test_redis_connection', new_callable=AsyncMock) as mock_redis:
+        with patch('src.core.main.test_redis_connection', new_callable=AsyncMock) as mock_redis:
             mock_redis.return_value = True
             
             # Mock the provider health check
@@ -49,7 +49,7 @@ class TestHealthEndpoint:
     def test_health_endpoint_with_errors(self, client):
         """Test health check response with service errors"""
         # Mock the Redis connection test to return False
-        with patch('src.core.caching.test_redis_connection', new_callable=AsyncMock) as mock_redis:
+        with patch('src.core.main.test_redis_connection', new_callable=AsyncMock) as mock_redis:
             mock_redis.return_value = False
             
             # Mock the provider health check
@@ -71,7 +71,7 @@ class TestHealthEndpoint:
     def test_health_endpoint_exception(self, client):
         """Test health check response when an exception occurs"""
         # Mock the Redis connection test to raise an exception
-        with patch('src.core.caching.test_redis_connection', new_callable=AsyncMock) as mock_redis:
+        with patch('src.core.main.test_redis_connection', new_callable=AsyncMock) as mock_redis:
             mock_redis.side_effect = Exception("Redis connection failed")
             
             response = client.get("/api/v1/health")
@@ -79,7 +79,8 @@ class TestHealthEndpoint:
             assert response.status_code == 200  # Health endpoint handles exceptions
             data = response.json()
             assert data["status"] == "error"
-            assert "Redis connection failed" in data["services"]["error"]
+            assert data["services"]["redis"] == "error"
+            assert "Redis connection failed" in data["error"]
 
 
 class TestChatEndpoint:
@@ -88,18 +89,19 @@ class TestChatEndpoint:
     @pytest.mark.asyncio
     async def test_chat_endpoint_success(self, client):
         """Test successful chat request"""
-        # This test requires mocking the execute_llm_request function
-        with patch('src.core.providers.execute_llm_request') as mock_execute:
-            mock_response = {
-                "provider": "openai",
-                "model": "gpt-3.5-turbo",
-                "content": "Test response",
-                "prompt_tokens": 10,
-                "completion_tokens": 20,
-                "cost_usd": 0.001,
-                "latency_ms": 100
-            }
-            mock_execute.return_value = mock_response
+        with patch('src.core.main.get_redis_client', new_callable=AsyncMock) as mock_redis_client, patch(
+            'src.core.main.execute_llm_request', new_callable=AsyncMock
+        ) as mock_execute:
+            mock_redis_client.side_effect = Exception("Redis unavailable")
+            mock_execute.return_value = ProviderResponse(
+                provider="openai",
+                model="gpt-3.5-turbo",
+                content="Test response",
+                prompt_tokens=10,
+                completion_tokens=20,
+                cost_usd=0.001,
+                latency_ms=100,
+            )
             
             request_data = {
                 "provider": "openai",
@@ -121,7 +123,10 @@ class TestChatEndpoint:
         """Test chat request with invalid API key"""
         from src.core.llm_manager import InvalidAPIKeyError
         
-        with patch('src.core.providers.execute_llm_request') as mock_execute:
+        with patch('src.core.main.get_redis_client', new_callable=AsyncMock) as mock_redis_client, patch(
+            'src.core.main.execute_llm_request', new_callable=AsyncMock
+        ) as mock_execute:
+            mock_redis_client.side_effect = Exception("Redis unavailable")
             mock_execute.side_effect = InvalidAPIKeyError("Invalid API key")
             
             request_data = {
@@ -143,7 +148,10 @@ class TestChatEndpoint:
         """Test chat request with rate limit error"""
         from src.core.llm_manager import RateLimitError
         
-        with patch('src.core.providers.execute_llm_request') as mock_execute:
+        with patch('src.core.main.get_redis_client', new_callable=AsyncMock) as mock_redis_client, patch(
+            'src.core.main.execute_llm_request', new_callable=AsyncMock
+        ) as mock_execute:
+            mock_redis_client.side_effect = Exception("Redis unavailable")
             mock_execute.side_effect = RateLimitError("Rate limit exceeded")
             
             request_data = {
@@ -165,7 +173,10 @@ class TestChatEndpoint:
         """Test chat request with connection error"""
         from src.core.llm_manager import APIConnectionError
         
-        with patch('src.core.providers.execute_llm_request') as mock_execute:
+        with patch('src.core.main.get_redis_client', new_callable=AsyncMock) as mock_redis_client, patch(
+            'src.core.main.execute_llm_request', new_callable=AsyncMock
+        ) as mock_execute:
+            mock_redis_client.side_effect = Exception("Redis unavailable")
             mock_execute.side_effect = APIConnectionError("Connection failed")
             
             request_data = {
@@ -185,7 +196,10 @@ class TestChatEndpoint:
     @pytest.mark.asyncio
     async def test_chat_endpoint_general_error(self, client):
         """Test chat request with general error"""
-        with patch('src.core.providers.execute_llm_request') as mock_execute:
+        with patch('src.core.main.get_redis_client', new_callable=AsyncMock) as mock_redis_client, patch(
+            'src.core.main.execute_llm_request', new_callable=AsyncMock
+        ) as mock_execute:
+            mock_redis_client.side_effect = Exception("Redis unavailable")
             mock_execute.side_effect = Exception("General error")
             
             request_data = {
@@ -202,6 +216,82 @@ class TestChatEndpoint:
             data = response.json()
             assert "Internal server error" in data["detail"]
 
+    @pytest.mark.asyncio
+    async def test_chat_endpoint_returns_cached_response(self, client):
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = json.dumps(
+            {
+                "provider": "openai",
+                "model": "gpt-3.5-turbo",
+                "content": "Cached response",
+                "prompt_tokens": 10,
+                "completion_tokens": 20,
+                "cost_usd": 0.001,
+                "latency_ms": 100,
+            }
+        )
+
+        with patch('src.core.main.get_redis_client', new_callable=AsyncMock) as mock_redis_client, patch(
+            'src.core.main.execute_llm_request', new_callable=AsyncMock
+        ) as mock_execute:
+            mock_redis_client.return_value = mock_redis
+
+            response = client.post(
+                "/api/v1/llm/chat",
+                json={
+                    "provider": "openai",
+                    "model": "gpt-3.5-turbo",
+                    "prompt": "Test prompt",
+                    "max_tokens": 100,
+                    "temperature": 0.7,
+                },
+            )
+
+            assert response.status_code == 200
+            assert response.json()["content"] == "Cached response"
+            mock_execute.assert_not_called()
+            mock_redis.get.assert_awaited_once()
+            mock_redis.setex.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_chat_endpoint_caches_response_after_cache_miss(self, client):
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = None
+
+        with patch('src.core.main.get_redis_client', new_callable=AsyncMock) as mock_redis_client, patch(
+            'src.core.main.execute_llm_request', new_callable=AsyncMock
+        ) as mock_execute:
+            mock_redis_client.return_value = mock_redis
+            mock_execute.return_value = ProviderResponse(
+                provider="openai",
+                model="gpt-3.5-turbo",
+                content="Fresh response",
+                prompt_tokens=10,
+                completion_tokens=20,
+                cost_usd=0.001,
+                latency_ms=100,
+            )
+
+            response = client.post(
+                "/api/v1/llm/chat",
+                json={
+                    "provider": "openai",
+                    "model": "gpt-3.5-turbo",
+                    "prompt": "Test prompt",
+                    "max_tokens": 100,
+                    "temperature": 0.7,
+                },
+            )
+
+            assert response.status_code == 200
+            assert response.json()["content"] == "Fresh response"
+            mock_execute.assert_awaited_once()
+            mock_redis.get.assert_awaited_once()
+            mock_redis.setex.assert_awaited_once()
+            _, ttl_seconds, cached_payload = mock_redis.setex.await_args.args
+            assert ttl_seconds == 300
+            assert json.loads(cached_payload)["content"] == "Fresh response"
+
 
 class TestOrchestrateEndpoint:
     """Test the orchestrate endpoint"""
@@ -209,18 +299,18 @@ class TestOrchestrateEndpoint:
     @pytest.mark.asyncio
     async def test_orchestrate_endpoint_success(self, client):
         """Test successful orchestrate request"""
-        with patch('src.core.providers.execute_llm_request') as mock_execute:
+        with patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
             # Mock successful responses for multiple providers
-            def side_effect(request):
-                return {
-                    "provider": request.get("provider", "unknown"),
-                    "model": request.get("model", "default-model"),
-                    "content": f"Response from {request.get('provider', 'unknown')}",
-                    "prompt_tokens": 10,
-                    "completion_tokens": 20,
-                    "cost_usd": 0.001,
-                    "latency_ms": 100
-                }
+            async def side_effect(request):
+                return ProviderResponse(
+                    provider=request.provider,
+                    model=request.model,
+                    content=f"Response from {request.provider}",
+                    prompt_tokens=10,
+                    completion_tokens=20,
+                    cost_usd=0.001,
+                    latency_ms=100,
+                )
             
             mock_execute.side_effect = side_effect
             
@@ -259,31 +349,30 @@ class TestOrchestrateEndpoint:
         """Test orchestrate request with some successful and some failed requests"""
         from src.core.llm_manager import RateLimitError
         
-        with patch('src.core.providers.execute_llm_request') as mock_execute:
+        with patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
             # Mock response: first succeeds, second fails with rate limit
-            def side_effect(request):
-                if request["provider"] == "openai":
-                    return {
-                        "provider": "openai",
-                        "model": "gpt-3.5-turbo",
-                        "content": "Response from OpenAI",
-                        "prompt_tokens": 10,
-                        "completion_tokens": 20,
-                        "cost_usd": 0.001,
-                        "latency_ms": 100
-                    }
-                elif request["provider"] == "anthropic":
+            async def side_effect(request):
+                if request.provider == "openai":
+                    return ProviderResponse(
+                        provider="openai",
+                        model="gpt-3.5-turbo",
+                        content="Response from OpenAI",
+                        prompt_tokens=10,
+                        completion_tokens=20,
+                        cost_usd=0.001,
+                        latency_ms=100,
+                    )
+                if request.provider == "anthropic":
                     raise RateLimitError("Rate limit exceeded for Anthropic")
-                else:
-                    return {
-                        "provider": request["provider"],
-                        "model": request["model"],
-                        "content": f"Response from {request['provider']}",
-                        "prompt_tokens": 5,
-                        "completion_tokens": 10,
-                        "cost_usd": 0.0005,
-                        "latency_ms": 50
-                    }
+                return ProviderResponse(
+                    provider=request.provider,
+                    model=request.model,
+                    content=f"Response from {request.provider}",
+                    prompt_tokens=5,
+                    completion_tokens=10,
+                    cost_usd=0.0005,
+                    latency_ms=50,
+                )
             
             mock_execute.side_effect = side_effect
             
@@ -335,10 +424,10 @@ class TestOrchestrateEndpoint:
 
     @pytest.mark.asyncio
     async def test_orchestrate_endpoint_invalid_api_key(self, client):
-        """Test orchestrate request with invalid API key error"""
+        """Test orchestrate request with invalid API key captured per provider"""
         from src.core.llm_manager import InvalidAPIKeyError
         
-        with patch('src.core.providers.execute_llm_request') as mock_execute:
+        with patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
             mock_execute.side_effect = InvalidAPIKeyError("Invalid API key")
             
             request_data = {
@@ -356,16 +445,18 @@ class TestOrchestrateEndpoint:
             
             response = client.post("/api/v1/llm/orchestrate", json=request_data)
             
-            assert response.status_code == 401  # Unauthorized
+            assert response.status_code == 200
             data = response.json()
-            assert "Invalid API key" in data["detail"]
+            assert data[0]["provider"] == "openai"
+            assert "Error processing request" in data[0]["content"]
+            assert "Invalid API key" in data[0]["content"]
 
     @pytest.mark.asyncio
     async def test_orchestrate_endpoint_rate_limit(self, client):
-        """Test orchestrate request with rate limit error"""
+        """Test orchestrate request with rate limit captured per provider"""
         from src.core.llm_manager import RateLimitError
         
-        with patch('src.core.providers.execute_llm_request') as mock_execute:
+        with patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
             mock_execute.side_effect = RateLimitError("Rate limit exceeded")
             
             request_data = {
@@ -383,14 +474,16 @@ class TestOrchestrateEndpoint:
             
             response = client.post("/api/v1/llm/orchestrate", json=request_data)
             
-            assert response.status_code == 429  # Too Many Requests
+            assert response.status_code == 200
             data = response.json()
-            assert "Rate limit exceeded" in data["detail"]
+            assert data[0]["provider"] == "openai"
+            assert "Error processing request" in data[0]["content"]
+            assert "Rate limit exceeded" in data[0]["content"]
 
     @pytest.mark.asyncio
     async def test_orchestrate_endpoint_general_error(self, client):
-        """Test orchestrate request with general error"""
-        with patch('src.core.providers.execute_llm_request') as mock_execute:
+        """Test orchestrate request with general error captured per provider"""
+        with patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
             mock_execute.side_effect = Exception("General error")
             
             request_data = {
@@ -408,9 +501,11 @@ class TestOrchestrateEndpoint:
             
             response = client.post("/api/v1/llm/orchestrate", json=request_data)
             
-            assert response.status_code == 500  # Internal Server Error
+            assert response.status_code == 200
             data = response.json()
-            assert "Internal server error" in data["detail"]
+            assert data[0]["provider"] == "openai"
+            assert "Error processing request" in data[0]["content"]
+            assert "General error" in data[0]["content"]
 
 
 class TestStreamEndpoint:
@@ -526,4 +621,5 @@ class TestEdgeCases:
             assert response.status_code == 200  # Health endpoint should still respond
             data = response.json()
             assert data["status"] == "error"
-            assert "AttributeError" in data["services"]["error"]
+            assert data["services"]["providers"] == "error"
+            assert "health_check" in data["error"]

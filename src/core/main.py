@@ -8,6 +8,8 @@ from typing import List, Literal
 import traceback
 import re
 import json
+import hashlib
+from contextlib import asynccontextmanager
 
 from .config import settings
 from .caching import get_redis_client, test_redis_connection
@@ -22,17 +24,44 @@ from .providers import execute_llm_request, initialize_providers
 from .llm_manager import InvalidAPIKeyError, RateLimitError, APIConnectionError
 from .security_utils import scrub_sensitive_info
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize providers and dependency checks for the sidecar lifecycle."""
+
+    log.info("Python Core service starting up...", env=settings.NODE_ENV)
+
+    try:
+        await initialize_providers()
+        log.info("LLM providers initialized successfully")
+    except Exception as exc:
+        log.error(f"Failed to initialize LLM providers: {str(exc)}")
+        traceback.print_exc()
+
+    try:
+        asyncio.create_task(test_redis_connection())
+        log.info("Redis connection test initiated")
+    except Exception as exc:
+        log.error(f"Failed to initiate Redis connection test: {str(exc)}")
+
+    try:
+        yield
+    finally:
+        log.info("Python Core service shutting down.")
+
 # --- Application Setup ---
 app = FastAPI(
     title="RealMultiLLM Python Core",
     description="High-performance LLM orchestration sidecar.",
     version="0.1.0",
+    lifespan=lifespan,
     # Add security headers
     docs_url=None,  # Disable docs in production
     redoc_url=None,  # Disable redoc in production
 )
 
 log = structlog.get_logger(__name__)
+REDIS_CHAT_CACHE_TTL_SECONDS = 300
 
 
 def _stream_event(payload: dict) -> str:
@@ -88,6 +117,45 @@ def _classify_stream_error(error: Exception) -> dict:
     }
 
 
+def _cache_key_for_request(request: ProviderRequest) -> str:
+    payload = json.dumps(
+        request.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"llm:chat:v1:{digest}"
+
+
+async def _get_cached_chat_response(request: ProviderRequest) -> ProviderResponse | None:
+    try:
+        client = await get_redis_client()
+        cached_payload = await client.get(_cache_key_for_request(request))
+        if not cached_payload:
+            return None
+
+        cached_data = json.loads(cached_payload)
+        return ProviderResponse.model_validate(cached_data)
+    except Exception as exc:
+        log.warning("Chat cache read failed", error=str(exc))
+        return None
+
+
+async def _store_cached_chat_response(
+    request: ProviderRequest,
+    response: ProviderResponse,
+) -> None:
+    try:
+        client = await get_redis_client()
+        await client.setex(
+            _cache_key_for_request(request),
+            REDIS_CHAT_CACHE_TTL_SECONDS,
+            response.model_dump_json(),
+        )
+    except Exception as exc:
+        log.warning("Chat cache write failed", error=str(exc))
+
+
 # --- Security Middleware and Exception Handlers ---
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
@@ -118,35 +186,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Application State ---
-@app.on_event("startup")
-async def startup_event():
-    """On startup, initialize providers and test external service connections."""
-    log.info("Python Core service starting up...", env=settings.NODE_ENV)
-
-    try:
-        # Initialize LLM providers
-        await initialize_providers()
-        log.info("LLM providers initialized successfully")
-    except Exception as e:
-        log.error(f"Failed to initialize LLM providers: {str(e)}")
-        traceback.print_exc()
-
-    # Test external connections
-    try:
-        asyncio.create_task(test_redis_connection())
-        log.info("Redis connection test initiated")
-    except Exception as e:
-        log.error(f"Failed to initiate Redis connection test: {str(e)}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """On shutdown, clean up resources."""
-    log.info("Python Core service shutting down.")
-    # Clients will close automatically
-
-
 # --- API Endpoints ---
 
 @app.get("/api/v1/health", response_model=HealthResponse)
@@ -154,27 +193,33 @@ async def get_health():
     """
     Health check endpoint for PM2 and the Next.js app.
     """
+    services: dict[str, Literal["ok", "error"]] = {}
+    health_error: str | None = None
+
     try:
-        redis_status: Literal["ok", "error"] = "ok" if await test_redis_connection() else "error"
+        services["redis"] = "ok" if await test_redis_connection() else "error"
+    except Exception as exc:
+        health_error = scrub_sensitive_info(str(exc))
+        services["redis"] = "error"
+        log.error("Redis health check failed", error=health_error)
 
-        # Perform actual provider health checks
+    try:
         from .providers import llm_manager
+
         provider_health = llm_manager.health_check()
-
-        services = {
-            "redis": redis_status,
-        }
-
-        # Add provider health status
         for provider_type, is_healthy in provider_health.items():
             services[f"{provider_type}_api"] = "ok" if is_healthy else "error"
+    except Exception as exc:
+        health_error = scrub_sensitive_info(str(exc))
+        services["providers"] = "error"
+        log.error("Provider health check failed", error=health_error)
 
-        overall_status: Literal["ok", "error"] = "ok" if "error" not in services.values() else "error"
+    if not services:
+        services["health"] = "error"
 
-        return HealthResponse(status=overall_status, services=services)
-    except Exception as e:
-        log.error(f"Health check failed: {str(e)}")
-        return HealthResponse(status="error", services={"error": str(e)})
+    overall_status: Literal["ok", "error"] = "ok" if "error" not in services.values() else "error"
+
+    return HealthResponse(status=overall_status, services=services, error=health_error)
 
 
 @app.post("/api/v1/llm/chat", response_model=ProviderResponse)
@@ -186,8 +231,13 @@ async def post_chat(request: ProviderRequest):
     log.info("Received chat request", provider=request.provider, model=request.model)
 
     try:
-        # TODO: Add Redis caching layer here
+        cached_response = await _get_cached_chat_response(request)
+        if cached_response is not None:
+            log.info("Returning cached chat response", provider=request.provider, model=request.model)
+            return cached_response
+
         response = await execute_llm_request(request)
+        await _store_cached_chat_response(request, response)
         return response
     except InvalidAPIKeyError as e:
         log.error(f"Invalid API key error: {str(e)}")

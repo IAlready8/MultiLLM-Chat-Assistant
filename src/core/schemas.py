@@ -56,3 +56,4 @@ class HealthResponse(BaseModel):
     """
     status: Literal["ok", "error"]
     services: dict[str, Literal["ok", "error"]]
+    error: Optional[str] = None
