@@ -700,6 +700,9 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - user-supplied preview deployment `multi-llm-chat-assistant-p40yf9enq-itsokialready8.vercel.app` was already in failed state
   - freshly created preview deployment `multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app` also failed
   - deploy-time env injection path was attempted next, but Vercel blocked further preview deploys due daily free deployment quota exhaustion
+  - local reproduction using the pulled Vercel env contract passed:
+    - `npx prisma migrate status`
+    - `npm run build`
 - Outcome:
   - do not close `17.2` until Vercel quota resets (or plan capacity is increased), one fresh preview deploy succeeds, and `verify:prod` + smoke are run through the new protected-preview-aware tooling
 

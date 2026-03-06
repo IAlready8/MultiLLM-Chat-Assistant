@@ -79,6 +79,7 @@ source: direct repo inspection + command evidence in this session
    - current PR `#32` has no passing deploy target; Vercel, Netlify, and Cloudflare deploy checks all fail on the latest head commit `2f04591`
    - older and newly-created Vercel preview URLs are protected by Vercel Authentication, but authenticated `vercel curl` support is now wired into the repo verification scripts for future protected-preview proof runs
    - preview env remediation was partially completed, but a fresh CLI preview deploy is now blocked by Vercel plan quota exhaustion (`api-deployments-free-per-day`)
+   - local reproduction with pulled Vercel envs passed (`npx prisma migrate status`, `npm run build`), so the remaining blocker is provider-side, not an unresolved repository build failure
 
 ## 01.1 evidence (raw)
 ```text
@@ -1302,6 +1303,12 @@ TOTAL (22)
   - a fresh preview deploy was created at `https://multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app`, but it also failed before application build completion
   - a follow-up deploy using explicit build-time and runtime env injection was blocked by Vercel quota exhaustion:
     - `Error: Resource is limited - try again in 17 hours (more than 100, code: "api-deployments-free-per-day")`
+- Local reproduction using Vercel env state:
+  - pulled preview and production env snapshots via authenticated Vercel CLI
+  - set local `DATABASE_URL` to preview `POSTGRES_PRISMA_URL`
+  - reused pulled `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, and `API_KEY_ENCRYPTION_SEED`
+  - `npx prisma migrate status` passed against the preview database target
+  - `npm run build` passed with the same env combination
 - Local operator constraints observed:
   - `netlify` CLI not installed/authenticated
   - `wrangler` CLI not installed/authenticated
@@ -1325,6 +1332,10 @@ TOTAL (22)
   - `npx --yes vercel deploy --target preview --force --yes`
   - `npx --yes vercel inspect https://multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app`
   - `npx --yes vercel deploy --target preview --force --yes -b ... -e ...`
+  - `npx prisma migrate status` (with pulled Vercel envs)
+  - `npm run build` (with pulled Vercel envs)
 - Result:
   - `17.2` remains open.
-  - protected-preview access is now supported by repo tooling, but a successful fresh preview deployment is currently blocked by Vercel plan quota and prior failed preview state.
+  - protected-preview access is now supported by repo tooling.
+  - repository-local reproduction using the pulled Vercel env contract passes.
+  - a successful fresh preview deployment is currently blocked by Vercel plan quota and prior failed preview state.
