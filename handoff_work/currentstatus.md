@@ -74,8 +74,7 @@ source: direct repo inspection + command evidence in this session
 - fresh end-to-end preview/production `scripts/verify-production.sh` execution against deployed URLs.
 
 ## blockers
-1. Python stream parity in sidecar is still explicitly TODO (`src/core/main.py:198`).
-2. `17.2` preview deploy proof is infra-blocked:
+1. `17.2` preview deploy proof is infra-blocked:
    - current PR `#32` has no passing deploy target; Vercel, Netlify, and Cloudflare deploy checks all fail on the latest head commit `2f04591`
    - older and newly-created Vercel preview URLs are protected by Vercel Authentication, but authenticated `vercel curl` support is now wired into the repo verification scripts for future protected-preview proof runs
    - preview env remediation was partially completed, but a fresh CLI preview deploy is now blocked by Vercel plan quota exhaustion (`api-deployments-free-per-day`)
@@ -155,7 +154,7 @@ DOCS_TOP_COUNT	      22
 | `README.md` | `README.md:115` says runtime uses Prisma stubs in `lib/prisma.ts`. | `lib/prisma.ts:22` checks `DATABASE_URL`; `:63-74` creates real runtime client when set; fallback stub only when absent. | ambiguous/incomplete |
 | `CLAUDE.md` | `CLAUDE.md:106` says Python core exists but not integrated with Next.js runtime. | `app/api/llm/orchestrate/route.ts:198` calls `${PYTHON_CORE_URL}/api/v1/llm/orchestrate`; fallback headers at `:246`, `:270`, `:277`; sidecar is integrated but optional/degraded capable. | stale |
 | `ARCHITECTURE.md` | No contradiction found in this pass (`ARCHITECTURE.md` lines around runtime/auth/llm align with current code). | N/A | no mismatch observed |
-| `PYTHON_INTEGRATION.md` | No contradiction found in this pass (optional sidecar + fallback behavior matches code). | `app/api/llm/orchestrate/route.ts` fallback and `src/core/main.py:198` TODO stream endpoint are consistent with doc scope. | no mismatch observed |
+| `PYTHON_INTEGRATION.md` | No contradiction found in this pass (optional sidecar + fallback behavior matches code). | `app/api/llm/orchestrate/route.ts` fallback behavior and `src/core/main.py:303` `/api/v1/llm/stream` implementation are consistent with current optional-sidecar scope. | no mismatch observed |
 
 ## additional code truth anchors used in `01.3`
 ```text

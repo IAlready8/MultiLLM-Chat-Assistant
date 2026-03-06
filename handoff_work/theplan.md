@@ -71,7 +71,6 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - unverified:
   - live deploy/rollback proof not executed yet
 - blockers:
-  - Python sidecar stream parity still pending (`src/core/main.py` TODO endpoint)
   - `17.2` preview deploy proof is blocked by Vercel daily deployment quota after authenticated preview-access/tooling remediation (`api-deployments-free-per-day`)
 
 ## Phase A - truth locking
