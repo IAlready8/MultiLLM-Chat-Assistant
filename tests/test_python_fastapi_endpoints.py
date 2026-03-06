@@ -4,12 +4,15 @@ Tests for the Python FastAPI endpoints
 
 import pytest
 import asyncio
+import json
 from unittest.mock import patch, AsyncMock
 import httpx
 from fastapi.testclient import TestClient
 
 from src.core.main import app
 from src.core.providers import llm_manager
+from src.core.schemas import ProviderResponse
+from src.core.llm_manager import InvalidAPIKeyError, RateLimitError
 
 
 @pytest.fixture
@@ -408,6 +411,104 @@ class TestOrchestrateEndpoint:
             assert response.status_code == 500  # Internal Server Error
             data = response.json()
             assert "Internal server error" in data["detail"]
+
+
+class TestStreamEndpoint:
+    """Test the NDJSON stream endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_stream_endpoint_success(self, client):
+        with patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
+            mock_execute.return_value = ProviderResponse(
+                provider="openai",
+                model="gpt-3.5-turbo",
+                content="Streamed response",
+                prompt_tokens=10,
+                completion_tokens=20,
+                cost_usd=0.001,
+                latency_ms=100,
+            )
+
+            response = client.post(
+                "/api/v1/llm/stream",
+                json={
+                    "provider": "openai",
+                    "model": "gpt-3.5-turbo",
+                    "messages": [{"role": "user", "content": "Test prompt"}],
+                },
+            )
+
+            assert response.status_code == 200
+            assert response.headers["content-type"].startswith("application/x-ndjson")
+            lines = [json.loads(line) for line in response.text.strip().splitlines()]
+            assert lines == [
+                {"type": "chunk", "content": "Streamed response"},
+                {"type": "done"},
+            ]
+
+    @pytest.mark.asyncio
+    async def test_stream_endpoint_invalid_api_key_error(self, client):
+        with patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
+            mock_execute.side_effect = InvalidAPIKeyError("Invalid API key")
+
+            response = client.post(
+                "/api/v1/llm/stream",
+                json={
+                    "provider": "openai",
+                    "model": "gpt-3.5-turbo",
+                    "messages": [{"role": "user", "content": "Test prompt"}],
+                },
+            )
+
+            assert response.status_code == 200
+            lines = [json.loads(line) for line in response.text.strip().splitlines()]
+            assert lines == [
+                {
+                    "type": "error",
+                    "error": "Provider rejected the configured API key",
+                    "code": "PROVIDER_AUTH_ERROR",
+                }
+            ]
+
+    @pytest.mark.asyncio
+    async def test_stream_endpoint_rate_limit_error(self, client):
+        with patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
+            mock_execute.side_effect = RateLimitError("Rate limit exceeded")
+
+            response = client.post(
+                "/api/v1/llm/stream",
+                json={
+                    "provider": "openai",
+                    "model": "gpt-3.5-turbo",
+                    "messages": [{"role": "user", "content": "Test prompt"}],
+                },
+            )
+
+            assert response.status_code == 200
+            lines = [json.loads(line) for line in response.text.strip().splitlines()]
+            assert lines == [
+                {
+                    "type": "error",
+                    "error": "Provider rate limit reached, please retry shortly",
+                    "code": "RATE_LIMITED",
+                }
+            ]
+
+    def test_stream_endpoint_validation_error(self, client):
+        response = client.post(
+            "/api/v1/llm/stream",
+            json={
+                "provider": "openai",
+                "model": "gpt-3.5-turbo",
+                "messages": [],
+            },
+        )
+
+        assert response.status_code == 422
+        assert response.json() == {
+            "detail": "Invalid request parameters",
+            "error": "validation_error",
+        }
 
 
 # Additional tests for edge cases

@@ -1,12 +1,13 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 import asyncio
 import structlog
 from typing import List, Literal
 import traceback
 import re
+import json
 
 from .config import settings
 from .caching import get_redis_client, test_redis_connection
@@ -15,6 +16,7 @@ from .schemas import (
     MultiProviderRequest,
     ProviderRequest,
     ProviderResponse,
+    ProviderStreamRequest,
 )
 from .providers import execute_llm_request, initialize_providers
 from .llm_manager import InvalidAPIKeyError, RateLimitError, APIConnectionError
@@ -31,6 +33,59 @@ app = FastAPI(
 )
 
 log = structlog.get_logger(__name__)
+
+
+def _stream_event(payload: dict) -> str:
+    return json.dumps(payload) + "\n"
+
+
+def _messages_to_prompt(messages) -> str:
+    return "\n".join(f"{message.role}: {message.content}" for message in messages)
+
+
+def _looks_like_error_content(content: str) -> bool:
+    lowered = content.lower()
+    return lowered.startswith("error") or lowered.startswith("request validation error")
+
+
+def _classify_stream_error(error: Exception) -> dict:
+    message = scrub_sensitive_info(str(error))
+    lower = message.lower()
+
+    if isinstance(error, InvalidAPIKeyError) or "invalid api key" in lower or "http 401" in lower or "http 403" in lower:
+        return {
+            "code": "PROVIDER_AUTH_ERROR",
+            "error": "Provider rejected the configured API key",
+        }
+
+    if isinstance(error, RateLimitError) or "rate limit" in lower or "http 429" in lower:
+        return {
+            "code": "RATE_LIMITED",
+            "error": "Provider rate limit reached, please retry shortly",
+        }
+
+    if isinstance(error, APIConnectionError) or "timeout" in lower or "timed out" in lower or "abort" in lower:
+        return {
+            "code": "PROVIDER_TIMEOUT",
+            "error": "Provider request timed out",
+        }
+
+    if "invalid json" in lower or "malformed" in lower or "unexpected response format" in lower:
+        return {
+            "code": "PROVIDER_MALFORMED_RESPONSE",
+            "error": "Provider returned malformed response",
+        }
+
+    if "connection" in lower or "network" in lower or "fetch failed" in lower:
+        return {
+            "code": "NETWORK_ERROR",
+            "error": "Failed to reach upstream provider",
+        }
+
+    return {
+        "code": "INTERNAL_ERROR",
+        "error": message or "Internal server error",
+    }
 
 
 # --- Security Middleware and Exception Handlers ---
@@ -195,4 +250,52 @@ async def post_orchestrate(request: MultiProviderRequest):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
-# TODO: Add /api/v1/llm/stream endpoint
+@app.post("/api/v1/llm/stream")
+async def post_stream(request: ProviderStreamRequest):
+    """
+    Stream a single provider response using the same NDJSON event shape as the
+    Next.js route (`chunk`, `done`, `error`).
+    """
+
+    log.info("Received stream request", provider=request.provider, model=request.model)
+
+    async def event_generator():
+        try:
+            provider_request = ProviderRequest(
+                provider=request.provider,
+                model=request.model,
+                prompt=_messages_to_prompt(request.messages),
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+            )
+            response = await execute_llm_request(provider_request)
+
+            if _looks_like_error_content(response.content):
+                error_payload = _classify_stream_error(Exception(response.content))
+                yield _stream_event(
+                    {
+                        "type": "error",
+                        "error": error_payload["error"],
+                        "code": error_payload["code"],
+                    }
+                )
+                return
+
+            if response.content:
+                yield _stream_event({"type": "chunk", "content": response.content})
+            yield _stream_event({"type": "done"})
+        except Exception as exc:
+            error_payload = _classify_stream_error(exc)
+            yield _stream_event(
+                {
+                    "type": "error",
+                    "error": error_payload["error"],
+                    "code": error_payload["code"],
+                }
+            )
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache"},
+    )
