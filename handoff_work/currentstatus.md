@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-05 22:37:51 EST
-timestamp_utc: 2026-03-06T03:37:51Z
+timestamp_local: 2026-03-05 23:15:57 EST
+timestamp_utc: 2026-03-06T04:15:57Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -75,6 +75,10 @@ source: direct repo inspection + command evidence in this session
 
 ## blockers
 1. Python stream parity in sidecar is still explicitly TODO (`src/core/main.py:198`).
+2. `17.2` preview deploy proof is infra-blocked:
+   - current PR `#32` has no passing deploy target; Vercel, Netlify, and Cloudflare deploy checks all fail on the latest head commit `6c6cc67`
+   - older Vercel preview URLs exist but all return `401 Authentication Required`, so `verify:prod` and smoke cannot run from this environment without preview-access bypass credentials or disabled protection
+   - this machine does not have authenticated `vercel`, `netlify`, or `wrangler` CLI access, so it cannot create or inspect provider-side preview deployments directly
 
 ## 01.1 evidence (raw)
 ```text
@@ -174,7 +178,10 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `17.2`: deploy preview from merged `main`, then run `verify:prod` and smoke against the preview URL.
+Unblock `17.2` by choosing one canonical preview target and making it reachable from this environment:
+- either provide an unprotected preview URL
+- or provide Vercel preview-access bypass credentials / disable preview auth for the target project
+- or authenticate platform CLI access on this machine so preview deploys and logs can be operated directly
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1256,3 +1263,45 @@ TOTAL (22)
     - result: passed; production build completed and emitted the expected route manifest.
 - Result:
   - `17.1` PASS: the merged `main` state can be installed and gated cleanly from a fresh detached worktree without relying on prior workspace artifacts.
+
+## 17.2 evidence (Preview deploy proof discovery, blocked)
+- Target under test:
+  - PR `#32` (`codex/clean-install-proof-20260306`) at head commit `6c6cc67`
+- GitHub-side signal:
+  - required GitHub Actions checks pass on the PR head:
+    - `Quality Checks`
+    - `Security Audit`
+    - `Smoke Tests`
+  - external deploy checks fail on the same head:
+    - `Vercel – goodmulti-llm-chat-assistant`
+    - `Vercel – goodmulti-llm-chat-assistant2`
+    - `Vercel – multi-llm-chat-assistant`
+    - `Vercel – multi-llm-chat-assistant-pdpj`
+    - `Vercel – multi-llm-chat-assistantt`
+    - `Vercel – multi-llm-chat-assistanttt`
+    - `netlify/multi-assistantt/deploy-preview`
+    - `Workers Builds: chatassistant`
+    - `Workers Builds: multillm-chat-assistant`
+    - `Workers Builds: multillmchatassistant`
+- Preview URL discovery:
+  - older Vercel preview domains referenced from prior Vercel comments were probed directly
+  - all tested domains returned `401 Authentication Required` from Vercel preview protection
+  - current Vercel PR comment for commit `6c6cc67` exposes inspector links but no usable `previewUrl`
+- Local operator constraints observed:
+  - `vercel` CLI not installed/authenticated
+  - `netlify` CLI not installed/authenticated
+  - `wrangler` CLI not installed/authenticated
+- Verification commands:
+  - `gh pr checks 32`
+  - `gh pr view 32 --comments`
+  - `gh pr view 32 --json statusCheckRollup --jq '.statusCheckRollup[] | {name: .name, status: .status, conclusion: .conclusion, detailsUrl: .detailsUrl}'`
+  - `curl -I -L https://goodmulti-llm-chat-assistant-git-codex-cl-55be64-itsokialready8.vercel.app`
+  - `curl -I -L https://goodmulti-llm-chat-assistant2-git-codex-c-e0fc39-itsokialready8.vercel.app`
+  - `curl -I -L https://multi-llm-chat-assistant-pdpj-git-codex-c-d756c9-itsokialready8.vercel.app`
+  - `curl -I -L https://multi-llm-chat-assistantt-git-codex-clean-b267ab-itsokialready8.vercel.app`
+  - `curl -I -L https://multi-llm-chat-assistanttt-git-codex-clea-846be1-itsokialready8.vercel.app`
+  - `command -v vercel && vercel whoami`
+  - `command -v netlify && netlify status`
+  - `command -v wrangler && wrangler whoami`
+- Result:
+  - `17.2` remains open and blocked by provider-side preview failure/protection, not by an unverified repository-local release gate.

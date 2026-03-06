@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-05 22:37 EST)
+## Progress snapshot (2026-03-05 23:15 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -72,6 +72,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - live deploy/rollback proof not executed yet
 - blockers:
   - Python sidecar stream parity still pending (`src/core/main.py` TODO endpoint)
+  - `17.2` preview deploy proof is blocked pending one reachable canonical preview target or preview-access credentials; current provider integrations for PR `#32` fail or return `401 Authentication Required`
 
 ## Phase A - truth locking
 1. [x] Reconfirm repo baseline
@@ -682,6 +683,25 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=clean-proof-secret-32chars API_KEY_ENCRYPTION_SEED=clean-proof-seed-32chars DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
 - Outcome:
   - clean install/build/test proof is now captured on merged `main`
+
+## 17.2 implementation evidence (blocked discovery)
+- PR under test:
+  - `#32` on head commit `6c6cc67`
+- Confirmed on GitHub:
+  - `Quality Checks`, `Security Audit`, and `Smoke Tests` pass
+  - all visible external deploy providers still fail on the same head commit:
+    - multiple Vercel projects
+    - Netlify preview
+    - Cloudflare Workers builds
+- Confirmed by direct probe:
+  - historical Vercel preview URLs for this branch exist but respond with `401 Authentication Required`
+  - the latest Vercel PR comment exposes inspector URLs but no public `previewUrl`
+- Operator limitations on this machine:
+  - no `vercel` CLI access
+  - no `netlify` CLI access
+  - no `wrangler` CLI access
+- Outcome:
+  - do not close `17.2` until one preview target is both healthy and reachable for `verify:prod` + smoke execution
 
 ## 16.2 implementation evidence
 - Code changes:
