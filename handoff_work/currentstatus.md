@@ -1252,7 +1252,7 @@ TOTAL (22)
     - result: passed.
   - `npm run test:run`
     - result: `35` files passed, `245` tests passed.
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=clean-proof-secret-32chars API_KEY_ENCRYPTION_SEED=clean-proof-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=clean-proof-secret-32chars API_KEY_ENCRYPTION_SEED=clean-proof-seed-32chars DATABASE_URL=postgresql://USERNAME@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
     - result: passed; production build completed and emitted the expected route manifest.
 - Result:
   - `17.1` PASS: the merged `main` state can be installed and gated cleanly from a fresh detached worktree without relying on prior workspace artifacts.
