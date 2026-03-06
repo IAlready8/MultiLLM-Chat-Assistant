@@ -17,6 +17,8 @@ NC='\033[0m'
 BASE_URL="${BASE_URL:-http://localhost:3000}"
 START_SERVER=false
 SESSION_COOKIE="${SMOKE_SESSION_COOKIE:-}"
+USE_VERCEL_CURL="${USE_VERCEL_CURL:-false}"
+VERCEL_CURL_DEPLOYMENT="${VERCEL_CURL_DEPLOYMENT:-}"
 SERVER_PID=""
 SERVER_PORT=""
 PASS=0
@@ -51,6 +53,27 @@ cleanup() {
 }
 trap cleanup EXIT
 
+http_request() {
+  local url="$1"
+  shift
+
+  if [ "$USE_VERCEL_CURL" = true ]; then
+    local deployment="${VERCEL_CURL_DEPLOYMENT:-${BASE_URL}}"
+    local path="${url#${BASE_URL}}"
+
+    if [ "$path" = "$url" ]; then
+      echo "ERROR: URL '${url}' does not match BASE_URL '${BASE_URL}' for vercel curl routing." >&2
+      return 1
+    fi
+    [ -z "$path" ] && path="/"
+
+    npx --yes vercel curl "$path" --deployment "$deployment" -- "$@"
+    return
+  fi
+
+  curl "$@" "$url"
+}
+
 request_json() {
   local method="$1"
   local path="$2"
@@ -68,7 +91,7 @@ request_json() {
     curl_args+=(-H 'Content-Type: application/json' -d "$payload")
   fi
 
-  HTTP_STATUS=$(curl "${curl_args[@]}" "${BASE_URL}${path}" 2>/dev/null || echo "000")
+  HTTP_STATUS=$(http_request "${BASE_URL}${path}" "${curl_args[@]}" 2>/dev/null || echo "000")
   HTTP_BODY=$(cat "$body_file" 2>/dev/null || echo '{}')
   rm -f "$body_file"
 }
@@ -137,7 +160,7 @@ if [ "$START_SERVER" = true ]; then
 
   # Wait for server readiness (up to 30s)
   for i in $(seq 1 30); do
-    if curl -sf "${BASE_URL}/api/health" >/dev/null 2>&1; then
+    if http_request "${BASE_URL}/api/health" -sf >/dev/null 2>&1; then
       echo -e "${GREEN}Server ready after ${i}s${NC}"
       break
     fi
@@ -159,10 +182,10 @@ echo "========================================"
 echo ""
 echo "0) Health endpoint checks"
 
-health_status_code=$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/health" 2>/dev/null || echo "000")
+health_status_code=$(http_request "${BASE_URL}/api/health" -s -o /dev/null -w '%{http_code}' 2>/dev/null || echo "000")
 assert_status "GET /api/health" "200" "$health_status_code"
 
-health_body=$(curl -s "${BASE_URL}/api/health" 2>/dev/null || echo '{}')
+health_body=$(http_request "${BASE_URL}/api/health" -s 2>/dev/null || echo '{}')
 health_state=$(echo "$health_body" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -177,7 +200,7 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-health_metrics_body=$(curl -s "${BASE_URL}/api/health?metrics=1" 2>/dev/null || echo '{}')
+health_metrics_body=$(http_request "${BASE_URL}/api/health?metrics=1" -s 2>/dev/null || echo '{}')
 has_metrics_routes=$(echo "$health_metrics_body" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -200,7 +223,7 @@ echo "1) Page reachability checks"
 
 PAGES=("/" "/multi-chat" "/settings" "/goal-hub" "/analytics" "/personas" "/pipeline" "/comparison")
 for page in "${PAGES[@]}"; do
-  status=$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}${page}" 2>/dev/null || echo "000")
+  status=$(http_request "${BASE_URL}${page}" -s -o /dev/null -w '%{http_code}' 2>/dev/null || echo "000")
   assert_status_any "GET ${page}" "$status" "200" "307" "308"
 done
 

@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-05 23:15:57 EST
-timestamp_utc: 2026-03-06T04:15:57Z
+timestamp_local: 2026-03-06 00:16:44 EST
+timestamp_utc: 2026-03-06T05:16:44Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -76,9 +76,9 @@ source: direct repo inspection + command evidence in this session
 ## blockers
 1. Python stream parity in sidecar is still explicitly TODO (`src/core/main.py:198`).
 2. `17.2` preview deploy proof is infra-blocked:
-   - current PR `#32` has no passing deploy target; Vercel, Netlify, and Cloudflare deploy checks all fail on the latest head commit `6c6cc67`
-   - older Vercel preview URLs exist but all return `401 Authentication Required`, so `verify:prod` and smoke cannot run from this environment without preview-access bypass credentials or disabled protection
-   - this machine does not have authenticated `vercel`, `netlify`, or `wrangler` CLI access, so it cannot create or inspect provider-side preview deployments directly
+   - current PR `#32` has no passing deploy target; Vercel, Netlify, and Cloudflare deploy checks all fail on the latest head commit `2f04591`
+   - older and newly-created Vercel preview URLs are protected by Vercel Authentication, but authenticated `vercel curl` support is now wired into the repo verification scripts for future protected-preview proof runs
+   - preview env remediation was partially completed, but a fresh CLI preview deploy is now blocked by Vercel plan quota exhaustion (`api-deployments-free-per-day`)
 
 ## 01.1 evidence (raw)
 ```text
@@ -178,10 +178,11 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Unblock `17.2` by choosing one canonical preview target and making it reachable from this environment:
-- either provide an unprotected preview URL
-- or provide Vercel preview-access bypass credentials / disable preview auth for the target project
-- or authenticate platform CLI access on this machine so preview deploys and logs can be operated directly
+Wait for Vercel preview deployment quota to reset (or upgrade plan capacity), then re-run `17.2` from this branch:
+- use the Vercel-linked CLI already authenticated on this machine
+- deploy with required preview env injection
+- run `npm run verify:prod -- --base-url https://<preview-url>` with `USE_VERCEL_CURL=true`
+- run `bash scripts/smoke-test.sh --base-url https://<preview-url>` with `USE_VERCEL_CURL=true`
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1266,7 +1267,7 @@ TOTAL (22)
 
 ## 17.2 evidence (Preview deploy proof discovery, blocked)
 - Target under test:
-  - PR `#32` (`codex/clean-install-proof-20260306`) at head commit `6c6cc67`
+  - PR `#32` (`codex/clean-install-proof-20260306`) now at head commit `2f04591`
 - GitHub-side signal:
   - required GitHub Actions checks pass on the PR head:
     - `Quality Checks`
@@ -1284,24 +1285,46 @@ TOTAL (22)
     - `Workers Builds: multillm-chat-assistant`
     - `Workers Builds: multillmchatassistant`
 - Preview URL discovery:
+  - Vercel CLI is now authenticated and project-linked for `itsokialready8/multi-llm-chat-assistant`
   - older Vercel preview domains referenced from prior Vercel comments were probed directly
   - all tested domains returned `401 Authentication Required` from Vercel preview protection
-  - current Vercel PR comment for commit `6c6cc67` exposes inspector links but no usable `previewUrl`
+  - repo verification scripts were upgraded to support protected-preview requests through authenticated `vercel curl` when `USE_VERCEL_CURL=true`
+- Preview env audit:
+  - preview environment initially lacked all required app vars:
+    - `DATABASE_URL`
+    - `NEXTAUTH_URL`
+    - `NEXTAUTH_SECRET`
+    - `API_KEY_ENCRYPTION_SEED`
+  - production environment already had all four
+  - branch-scoped preview env entries were added in Vercel, but manual CLI preview deploys still did not consume them
+- Deployment attempts:
+  - authenticated preview probe of user-supplied URL `https://multi-llm-chat-assistant-p40yf9enq-itsokialready8.vercel.app` returned Vercel's `Deployment has failed`
+  - a fresh preview deploy was created at `https://multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app`, but it also failed before application build completion
+  - a follow-up deploy using explicit build-time and runtime env injection was blocked by Vercel quota exhaustion:
+    - `Error: Resource is limited - try again in 17 hours (more than 100, code: "api-deployments-free-per-day")`
 - Local operator constraints observed:
-  - `vercel` CLI not installed/authenticated
   - `netlify` CLI not installed/authenticated
   - `wrangler` CLI not installed/authenticated
 - Verification commands:
   - `gh pr checks 32`
   - `gh pr view 32 --comments`
   - `gh pr view 32 --json statusCheckRollup --jq '.statusCheckRollup[] | {name: .name, status: .status, conclusion: .conclusion, detailsUrl: .detailsUrl}'`
+  - `npx --yes vercel whoami`
+  - `cat .vercel/project.json`
+  - `npx --yes vercel env ls`
   - `curl -I -L https://goodmulti-llm-chat-assistant-git-codex-cl-55be64-itsokialready8.vercel.app`
   - `curl -I -L https://goodmulti-llm-chat-assistant2-git-codex-c-e0fc39-itsokialready8.vercel.app`
   - `curl -I -L https://multi-llm-chat-assistant-pdpj-git-codex-c-d756c9-itsokialready8.vercel.app`
   - `curl -I -L https://multi-llm-chat-assistantt-git-codex-clean-b267ab-itsokialready8.vercel.app`
   - `curl -I -L https://multi-llm-chat-assistanttt-git-codex-clea-846be1-itsokialready8.vercel.app`
-  - `command -v vercel && vercel whoami`
-  - `command -v netlify && netlify status`
-  - `command -v wrangler && wrangler whoami`
+  - `npx --yes vercel curl /api/health --deployment https://multi-llm-chat-assistant-p40yf9enq-itsokialready8.vercel.app -- -sS`
+  - `npx --yes vercel env add DATABASE_URL preview codex/clean-install-proof-20260306 --value ... --yes --force`
+  - `npx --yes vercel env add NEXTAUTH_URL preview codex/clean-install-proof-20260306 --value ... --yes --force`
+  - `npx --yes vercel env add NEXTAUTH_SECRET preview codex/clean-install-proof-20260306 --value ... --yes --force`
+  - `npx --yes vercel env add API_KEY_ENCRYPTION_SEED preview codex/clean-install-proof-20260306 --value ... --yes --force`
+  - `npx --yes vercel deploy --target preview --force --yes`
+  - `npx --yes vercel inspect https://multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app`
+  - `npx --yes vercel deploy --target preview --force --yes -b ... -e ...`
 - Result:
-  - `17.2` remains open and blocked by provider-side preview failure/protection, not by an unverified repository-local release gate.
+  - `17.2` remains open.
+  - protected-preview access is now supported by repo tooling, but a successful fresh preview deployment is currently blocked by Vercel plan quota and prior failed preview state.

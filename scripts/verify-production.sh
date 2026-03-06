@@ -6,6 +6,8 @@ APPLY_MIGRATIONS=false
 REQUIRE_STRIPE=false
 REQUIRE_SIDECAR=false
 CHECK_WEBHOOK=false
+USE_VERCEL_CURL="${USE_VERCEL_CURL:-false}"
+VERCEL_CURL_DEPLOYMENT="${VERCEL_CURL_DEPLOYMENT:-}"
 
 print_help() {
   cat <<'EOF'
@@ -22,6 +24,10 @@ Options:
 Examples:
   bash scripts/verify-production.sh --base-url https://example.vercel.app
   bash scripts/verify-production.sh --apply-migrations --require-stripe --require-sidecar
+
+Protected Vercel preview support:
+  USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://example.vercel.app \
+    bash scripts/verify-production.sh --base-url https://example.vercel.app
 EOF
 }
 
@@ -57,6 +63,31 @@ ensure_pair_or_empty() {
     echo "ERROR: ${second_name} is set but ${first_name} is missing."
     exit 1
   fi
+}
+
+remote_request() {
+  local url="$1"
+  shift
+
+  if [[ "${USE_VERCEL_CURL}" == "true" ]]; then
+    local deployment="${VERCEL_CURL_DEPLOYMENT:-${BASE_URL}}"
+    if [[ -z "${deployment}" ]]; then
+      echo "ERROR: VERCEL_CURL_DEPLOYMENT or --base-url is required when USE_VERCEL_CURL=true"
+      exit 1
+    fi
+
+    local path="${url#${BASE_URL}}"
+    if [[ "${path}" == "${url}" ]]; then
+      echo "ERROR: URL '${url}' does not match BASE_URL '${BASE_URL}' for vercel curl routing."
+      exit 1
+    fi
+    [[ -z "${path}" ]] && path="/"
+
+    npx --yes vercel curl "${path}" --deployment "${deployment}" -- "$@"
+    return
+  fi
+
+  curl "$@" "${url}"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -239,7 +270,7 @@ if [[ -n "${BASE_URL}" ]]; then
   BASE_URL="${BASE_URL%/}"
   echo "==> Checking deployment health: ${BASE_URL}"
 
-  HEALTH_JSON="$(curl -fsS "${BASE_URL}/api/health")"
+  HEALTH_JSON="$(remote_request "${BASE_URL}/api/health" -fsS)"
   HEALTH_JSON="${HEALTH_JSON}" node <<'NODE'
 const payload = JSON.parse(process.env.HEALTH_JSON || '{}')
 if (!payload.status) {
@@ -307,8 +338,8 @@ fs.writeFileSync(process.env.SIGNED_HEADER_FILE, signature)
 NODE
 
       STRIPE_SIGNATURE="$(cat "${SIGNED_HEADER_FILE}")"
-      WEBHOOK_CODE="$(curl -sS -o "${WEBHOOK_RESPONSE_FILE}" -w "%{http_code}" \
-        -X POST "${BASE_URL}/api/webhooks/stripe" \
+      WEBHOOK_CODE="$(remote_request "${BASE_URL}/api/webhooks/stripe" -sS -o "${WEBHOOK_RESPONSE_FILE}" -w "%{http_code}" \
+        -X POST \
         -H "Content-Type: application/json" \
         -H "Stripe-Signature: ${STRIPE_SIGNATURE}" \
         --data-binary "@${SIGNED_PAYLOAD_FILE}")"
@@ -324,8 +355,8 @@ NODE
 
       echo "Signed webhook verification passed (HTTP ${WEBHOOK_CODE})."
     else
-      WEBHOOK_CODE="$(curl -sS -o "${WEBHOOK_RESPONSE_FILE}" -w "%{http_code}" \
-        -X POST "${BASE_URL}/api/webhooks/stripe")"
+      WEBHOOK_CODE="$(remote_request "${BASE_URL}/api/webhooks/stripe" -sS -o "${WEBHOOK_RESPONSE_FILE}" -w "%{http_code}" \
+        -X POST)"
 
       if [[ "${WEBHOOK_CODE}" != "400" && "${WEBHOOK_CODE}" != "503" ]]; then
         echo "ERROR: Unexpected webhook status code: ${WEBHOOK_CODE}"
