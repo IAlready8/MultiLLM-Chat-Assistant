@@ -121,6 +121,7 @@ Primary auth files:
 ## Deployment
 - Primary target: Vercel (`vercel.json`)
 - Deployment docs:
+  - `docs/OPERATOR_RUNBOOK.md`
   - `VERCEL_DEPLOYMENT.md`
   - `docs/DEPLOYMENT_GUIDE.md`
 

@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-05 18:39 EST)
+## Progress snapshot (2026-03-05 21:49 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -64,6 +64,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `15.4` Register residual security/operational risks explicitly
   - `16.1` Verify `/api/health` truthfulness against configured dependencies
   - `16.2` Standardize log/error surfaces with centralized redaction and safe public billing errors
+  - `16.3` Consolidate operator runbooks with verified-vs-pending-proof boundaries
 - failed:
   - none
 - unverified:
@@ -651,6 +652,22 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 36. [ ] Re-run doc/code mismatch check
 37. [ ] Build final handoff bundle
 38. [ ] Mark handoff-ready only when all checklist pass gates are green
+
+## 16.3 implementation evidence
+- Docs added/updated:
+  - `docs/OPERATOR_RUNBOOK.md`
+  - `README.md`
+  - `ARCHITECTURE.md`
+  - `DOCUMENTATION.md`
+  - `DOCS_SOURCE_OF_TRUTH.md`
+  - `VERCEL_DEPLOYMENT.md`
+  - `docs/DEPLOYMENT_GUIDE.md`
+- Verification commands:
+  - `git diff --check`
+  - `rg -n "OPERATOR_RUNBOOK|Operator Runbook|Prepared, Pending Live Proof|Verified locally|verified locally" README.md ARCHITECTURE.md DOCUMENTATION.md DOCS_SOURCE_OF_TRUTH.md VERCEL_DEPLOYMENT.md docs/DEPLOYMENT_GUIDE.md docs/OPERATOR_RUNBOOK.md handoff_work/currentstatus.md handoff_work/theplan.md handoff_work/CLOSURE_MASTER_CHECKLIST.md -S`
+- Outcome:
+  - operator procedure docs are now consolidated
+  - verified local procedures are separated clearly from still-open live deploy/rollback proof steps
 
 ## 16.2 implementation evidence
 - Code changes:

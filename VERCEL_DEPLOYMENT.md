@@ -112,6 +112,7 @@ vercel --prod
   - `npm run verify:prod -- --base-url https://<your-domain> --require-stripe --check-webhook`
 
 ## Related
+- `docs/OPERATOR_RUNBOOK.md`
 - `README.md`
 - `docs/DEPLOYMENT_GUIDE.md`
 - `ARCHITECTURE.md`

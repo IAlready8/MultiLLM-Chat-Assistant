@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-05 18:42:01 EST
-timestamp_utc: 2026-03-05T23:42:01Z
+timestamp_local: 2026-03-05 21:49:24 EST
+timestamp_utc: 2026-03-06T02:49:24Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -62,6 +62,7 @@ source: direct repo inspection + command evidence in this session
 - `15.4` PASS: residual security and operational risks are explicitly registered with owners and containment notes.
 - `16.1` PASS: `/api/health` now reflects actual dependency state rather than placeholder subsystem values.
 - `16.2` PASS: server logs and route error surfaces now use centralized redaction, and Stripe billing routes return stable safe public errors while preserving operator-visible cause details in logs.
+- `16.3` PASS: operator runbooks are now consolidated into one authoritative procedure set with verified-vs-pending-live-proof boundaries for startup, deploy, rollback, incident response, and recovery.
 
 ## failed
 - none for `01.*` through `16.2`.
@@ -173,7 +174,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `16.3`: create operator runbooks only from verified startup/deploy/rollback/incident procedures.
+Start `17.1`: capture clean local install proof from a fresh baseline run (`npm ci`, lint, tests, build).
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1207,3 +1208,32 @@ TOTAL (22)
   - Stripe checkout/manage routes no longer echo configuration internals in client responses and still emit operator-usable log events
 - Result:
   - `16.2` PASS: logs remain useful for operators while client-visible error surfaces and emitted log payloads no longer expose raw secret-bearing runtime details in the covered paths.
+
+## 16.3 evidence (Operator runbooks created)
+- Gap found:
+  - startup, verification, deployment, rollback, and incident guidance existed in multiple places (`README.md`, `ARCHITECTURE.md`, `VERCEL_DEPLOYMENT.md`, `docs/DEPLOYMENT_GUIDE.md`) but not as one operator-facing procedure set
+  - live-proof status for preview, production, and rollback was easy to overstate because `17.2` through `17.4` remain open
+- Fix applied:
+  - added `docs/OPERATOR_RUNBOOK.md` as the consolidated operator procedure set
+  - documented:
+    - ownership and escalation rules
+    - minimum production runtime contract
+    - verified local bootstrap runbook
+    - verified production-like local gate runbook
+    - verified local release gate runbook
+    - prepared preview deploy, production deploy, and rollback runbooks with explicit pending-live-proof labels
+    - incident triage and recovery decision flow
+  - updated references in:
+    - `README.md`
+    - `ARCHITECTURE.md`
+    - `DOCUMENTATION.md`
+    - `DOCS_SOURCE_OF_TRUTH.md`
+    - `VERCEL_DEPLOYMENT.md`
+    - `docs/DEPLOYMENT_GUIDE.md`
+- Verification commands:
+  - `git diff --check`
+    - result: passed.
+  - `rg -n "OPERATOR_RUNBOOK|Operator Runbook|Prepared, Pending Live Proof|Verified locally|verified locally" README.md ARCHITECTURE.md DOCUMENTATION.md DOCS_SOURCE_OF_TRUTH.md VERCEL_DEPLOYMENT.md docs/DEPLOYMENT_GUIDE.md docs/OPERATOR_RUNBOOK.md handoff_work/currentstatus.md handoff_work/theplan.md handoff_work/CLOSURE_MASTER_CHECKLIST.md -S`
+    - result: runbook references and verification-state markers present in the intended doc set.
+- Result:
+  - `16.3` PASS: another operator now has one clear runbook set for startup, verification, deployment preparation, rollback preparation, and incident handling without needing to reconstruct the procedure from scattered docs.

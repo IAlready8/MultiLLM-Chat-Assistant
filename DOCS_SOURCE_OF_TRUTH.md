@@ -3,6 +3,7 @@
 ## Authoritative Docs (Current)
 - `README.md`: operator entry point, setup, scripts, deployment notes.
 - `ARCHITECTURE.md`: runtime architecture and contracts.
+- `docs/OPERATOR_RUNBOOK.md`: operator startup, verification, deploy, rollback, and incident procedures.
 - `CLAUDE.md`: code-verified working guidance for coding agents.
 - `STATUS_UPDATE.md`: current repository status snapshot.
 - `PYTHON_INTEGRATION.md`: optional sidecar behavior and known limitations.

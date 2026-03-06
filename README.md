@@ -136,6 +136,7 @@ Key groups:
 - Optional sidecar routing: `PYTHON_CORE_URL`
 
 ## Deployment
+- Operator runbook: `docs/OPERATOR_RUNBOOK.md`
 - Vercel setup: `VERCEL_DEPLOYMENT.md`
 - General deployment notes: `docs/DEPLOYMENT_GUIDE.md`
 
@@ -177,6 +178,7 @@ Configure once in Vercel Project Settings:
 After this setup, every `git push origin main` should trigger a production deployment automatically via Vercel Git integration.
 
 ## Additional Docs
+- `docs/OPERATOR_RUNBOOK.md`: startup, verification, deploy, rollback, incident runbooks
 - `DOCS_SOURCE_OF_TRUTH.md`: authoritative-vs-historical doc map
 - `DOCUMENTATION.md`: API/services/components reference
 - `DESIGN_SYSTEM.md`: design tokens and UI conventions
