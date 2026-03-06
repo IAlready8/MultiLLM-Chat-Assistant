@@ -77,8 +77,10 @@ source: fresh `origin/main` audit + command evidence in this session
 1. `17.2` preview deploy proof remains open:
    - merged `main` passes local release gates (`npm run type-check`, `npm run lint`, `npm run test:run`, production `npm run build`)
    - protected-preview verification tooling is prepared in `scripts/verify-production.sh`, `scripts/smoke-test.sh`, and `scripts/vercel-preview-run.sh`
+   - required preview app vars are now present for branch `codex/post-merge-audit-20260306` in the linked Vercel project
    - remaining work is live-environment proof against one healthy canonical preview deployment URL
    - external Vercel / Netlify / Cloudflare preview checks remain informational noise and are not authoritative release gates
+   - a fresh Vercel preview deploy attempt from this branch is still rate-limited on the hobby plan (`api-deployments-free-per-day`)
 
 ## 01.1 evidence (raw)
 ```text
@@ -1281,7 +1283,9 @@ TOTAL (22)
 - Preview-specific readiness:
   - the required preview env contract is known and documented
   - preview verification can use authenticated `vercel curl` when Vercel Authentication is enabled
+  - required preview app vars were added for branch `codex/post-merge-audit-20260306` and verified via `vercel env pull --git-branch`
   - external deploy-provider statuses remain noisy and non-blocking relative to the GitHub release gates
 - Result:
   - `17.2` remains open because live preview proof has not yet been executed against a healthy current preview deployment URL
   - there is no repo-local build, lint, or test failure currently blocking `17.2`
+  - the latest deploy attempt failed before build with Vercel hobby-plan rate limiting: `Resource is limited - try again in 10 hours (more than 100, code: "api-deployments-free-per-day")`

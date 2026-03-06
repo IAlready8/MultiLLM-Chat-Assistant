@@ -71,7 +71,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - unverified:
   - live deploy/rollback proof not executed yet
 - blockers:
-  - `17.2` preview deploy proof still needs one healthy canonical preview URL and live execution of `verify:prod` + smoke
+  - `17.2` preview deploy proof still needs one healthy canonical preview URL and live execution of `verify:prod` + smoke; branch-scoped preview env is ready, but fresh preview deploys are still rate-limited by Vercel hobby-plan quota
 
 ## Phase A - truth locking
 1. [x] Reconfirm repo baseline
@@ -695,8 +695,10 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - authenticated Vercel CLI is linked to the canonical project
   - repo scripts support protected-preview requests through `vercel curl`
   - local branch-scoped preview env parity can be replayed with `scripts/vercel-preview-run.sh`
+  - branch `codex/post-merge-audit-20260306` now has the required preview app vars in Vercel
 - Outcome:
   - do not close `17.2` until one healthy preview deployment URL passes `npm run verify:prod -- --base-url <preview-url>` and `bash scripts/smoke-test.sh --base-url <preview-url>`
+  - latest fresh deploy attempt from this branch was blocked by Vercel rate limiting: `api-deployments-free-per-day`
 
 ## 16.2 implementation evidence
 - Code changes:
