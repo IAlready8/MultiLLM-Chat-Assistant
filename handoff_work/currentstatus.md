@@ -325,7 +325,7 @@ TOTAL (22)
 - Command evidence:
   - `bash scripts/verify-production.sh --help` -> passes and shows new options.
   - `bash scripts/verify-production.sh` -> fails fast on missing `NEXTAUTH_URL` (expected).
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --apply-migrations` -> passed end-to-end.
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --apply-migrations` -> passed end-to-end.
 
 ## 05.1 evidence (stale docs rewritten)
 - Files rewritten/updated:
@@ -389,7 +389,7 @@ TOTAL (22)
   - `rg -n "^model\\s+" prisma/schema.prisma`
   - `ls -la prisma/migrations`
   - `rg -n "prisma\\.(user|conversation|message|persona|goal|analytics|providerConfig|subscription|team|account|session|verificationToken)" app lib services`
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
 - Result:
   - Schema contains all runtime entities referenced by supported feature surfaces.
   - Migration status is up to date on verification DB.
@@ -464,13 +464,13 @@ TOTAL (22)
 
 ## 07.4 evidence (migration path verified)
 - Database target:
-  - `postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302`
+  - `postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302`
 - Commands run:
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
     - output: `Database schema is up to date!`
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate deploy`
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate deploy`
     - output: `No pending migrations to apply.`
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status` (post-deploy recheck)
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status` (post-deploy recheck)
     - output: `Database schema is up to date!`
 - Result:
   - Migration deploy path is clean in production-like mode with no drift or pending mismatch.
@@ -1017,11 +1017,11 @@ TOTAL (22)
     - result: passed; options output still matches intended contract.
   - `bash scripts/verify-production.sh`
     - result: failed fast on missing `NEXTAUTH_URL` (expected).
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --check-webhook`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --check-webhook`
     - result: failed fast with `ERROR: --check-webhook requires --base-url.` (expected).
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --require-sidecar`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --require-sidecar`
     - result: failed fast on missing `PYTHON_CORE_URL` (expected).
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --apply-migrations`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --apply-migrations`
     - result: passed end-to-end; DB reachable and Prisma migration status clean.
   - `bash -n scripts/verify-production.sh`
     - result: passed.
@@ -1056,11 +1056,11 @@ TOTAL (22)
     - result: passed.
   - `npm run test:run`
     - result: `33` files passed, `235` tests passed.
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
     - result: passed.
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npm run verify:prod -- --apply-migrations`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npm run verify:prod -- --apply-migrations`
     - result: passed.
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false bash scripts/smoke-test.sh --base-url http://localhost:3000 --start-server`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false bash scripts/smoke-test.sh --base-url http://localhost:3000 --start-server`
     - result: passed with production-mode auth enforcement semantics (`19` passed, `0` failed, `13` skipped).
 - Result:
   - `14.3` PASS: required GitHub gates now map to the actual release contract, and non-required bot noise is reduced without changing the required check names.
@@ -1260,7 +1260,7 @@ TOTAL (22)
     - result: passed.
   - `npm run test:run`
     - result: `35` files passed, `245` tests passed.
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=clean-proof-secret-32chars API_KEY_ENCRYPTION_SEED=clean-proof-seed-32chars DATABASE_URL=postgresql://USERNAME@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
     - result: passed; production build completed and emitted the expected route manifest.
 - Result:
   - `17.1` PASS: the merged `main` state can be installed and gated cleanly from a fresh detached worktree without relying on prior workspace artifacts.
