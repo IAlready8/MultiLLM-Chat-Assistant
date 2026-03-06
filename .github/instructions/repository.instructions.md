@@ -1,29 +1,26 @@
-`.github/instructions.md` file for the repository:
-
-```markdown
 # Repository Instructions
 
 ## Project Overview
 
-MultiLLM Chat Assistant is a Next.js 16 App Router application that provides multi-provider LLM chat with real-time streaming, encrypted API key storage, conversation persistence, and graceful database fallback. It deploys to Vercel with PostgreSQL via Prisma ORM.
+MultiLLM Chat Assistant is a Next.js 16 App Router application that provides multi-provider LLM chat with real-time streaming, encrypted API key storage, conversation persistence, and graceful database fallback in development and tests. In production, the app requires a real database and a valid `DATABASE_URL`. It deploys to Vercel with PostgreSQL via Prisma ORM.
 
 ## Tech Stack
 
 - **Framework**: Next.js 14 (App Router), React 18, TypeScript 5 (`strict: true`)
 - **Styling**: Tailwind CSS 3 + Radix UI headless primitives + CVA (class-variance-authority) + Framer Motion
-- **Database**: Prisma 5 ORM with PostgreSQL; stub client + in-memory fallback when `DATABASE_URL` is absent
+- **Database**: Prisma 5 ORM with PostgreSQL; stub client + in-memory fallback when `DATABASE_URL` is absent in development/tests only — production deployments must set `DATABASE_URL`
 - **Auth**: NextAuth.js v4 with Prisma adapter; supports strict auth, guest, and demo modes
 - **Validation**: Zod 3 schemas in `lib/config-schemas.ts`; manual validators in `schemas/`
 - **Payments**: Stripe (e.g., API version `2024-04-10`)
 - **Testing**: Vitest 1 + Testing Library + jsdom; Playwright for E2E
-- **CI/CD**: GitHub Actions (`.github/workflows/ci.yml`) deploying to Vercel
+- **CI**: GitHub Actions (`.github/workflows/ci.yml`) running lint/tests/build/smoke tests; deployment to Vercel is handled via Vercel integration/CLI outside this workflow
 
 ## Directory Structure
 
 ```
 app/                → Next.js App Router pages, layouts, API route handlers
   api/              → REST endpoints (auth, config, conversations, goals, personas, llm, health, admin, webhooks, teams, subscriptions)
-components/         → React components (PascalCase); reusable UI primitives in components/ui/
+components/         → React components (kebab-case filenames, e.g. api-key-form.tsx); reusable UI primitives in components/ui/
 lib/                → Core utilities: auth, crypto, Prisma client, rate limiting, logging, caching
   providers/        → LLM provider adapters implementing ProviderAdapter interface + registry
   api/              → Internal API helpers
@@ -33,9 +30,9 @@ types/              → TypeScript declarations (Prisma model types in types/pri
 prisma/             → schema.prisma and migrations
 hooks/              → Custom React hooks (use-conversation.ts, use-goals.ts, use-personas.ts)
 test/               → Vitest unit/integration tests (mirrors source paths)
-tests/              → Python pytest tests (optional backend/CLI utilities)
+tests/              → Mixed-language integration tests (Python pytest + TypeScript; optional backend/CLI utilities)
 scripts/            → Shell scripts (smoke tests, production verification, branch protection, Next upgrade readiness)
-src/core/           → Optional Python FastAPI sidecar (not integrated with Next.js runtime)
+src/core/           → Optional Python FastAPI sidecar, integrated via Next.js API proxy routes (e.g., app/api/llm/orchestrate)
 docs/               → Extended documentation
 ```
 
@@ -86,7 +83,7 @@ try {
 ```
 
 - The tracker retries the database after 60 seconds (`DB_RETRY_INTERVAL_MS`)
-- Fallback stores are `Map<userId, Map<entityId, Entity>>` with LRU eviction at 100 users
+- Fallback stores are `Map<userId, Map<entityId, Entity>>` with a maximum of 100 users; when full, the oldest inserted user is evicted (FIFO based on `Map` insertion order)
 - Always use `getOrCreateUserStore()` from `lib/db-fallback.ts` for per-user isolation
 - The Prisma client in `lib/prisma.ts` returns a stub client when `DATABASE_URL` is empty — stub methods throw descriptive errors that trigger the fallback path
 
@@ -120,7 +117,7 @@ Adapters are registered in `lib/providers/registry.ts` and exported via `lib/pro
 4. Add metadata to `lib/provider-registry.ts` (display name, key placeholder)
 5. Add default models and rate limits in `lib/config-schemas.ts`
 
-Error classification is unified in `lib/providers/errors.ts` via `classifyProviderError()`. Both `/api/llm/chat` and `/api/llm/stream` use this function so error responses are identical for the same failure modes.
+Error classification is unified in `lib/providers/errors.ts` via `classifyProviderError()`. The non-streaming JSON responses from `/api/llm/chat` and `/api/llm/stream` use this function so structured error payloads are consistent for the same failure modes; the streaming path of `/api/llm/chat` may surface provider errors directly via the stream transport.
 
 ### 3. Authentication Model
 
@@ -197,11 +194,11 @@ After schema changes:
 
 | Category | Convention |
 |---|---|
-| Components | PascalCase filenames in `components/` |
+| Components | kebab-case filenames in `components/` and `components/ui/` |
 | Hooks | `use-*.ts` in `hooks/` |
 | Utilities / services | kebab-case in `lib/` and `services/` |
 | Tests | `*.test.ts(x)` in `test/`, mirror source paths |
-| Formatting | Prettier: 2 spaces, single quotes, trailing commas, ~80 char line width |
+| Formatting | 2 spaces, single quotes, trailing commas, ~80 char line width (via ESLint/editor configuration; no Prettier requirement) |
 | TypeScript | `strict: true`; explicit types at module boundaries; avoid `any` at public interfaces |
 | Imports | Use `@/*` path alias (mapped to repo root via `tsconfig.json`) |
 | CSS classes | Use `cn()` from `lib/utils.ts` for merging Tailwind classes |
@@ -239,14 +236,14 @@ Node 20 is used. Build requires placeholder env vars: `DATABASE_URL`, `NEXTAUTH_
 
 ## Environment Variables
 
-**Required:**
+**Required in production (validated by `validateStartupEnvironment()`):**
+- `DATABASE_URL` — PostgreSQL connection string (**required in production**; in local/dev the app can fall back to an in-memory stub when this is absent)
 - `NEXTAUTH_URL` — application base URL (e.g., `http://localhost:3000`)
 - `API_KEY_ENCRYPTION_SEED` — seed for AES-256-GCM key derivation (generate with `openssl rand -base64 32`)
+- `NEXTAUTH_SECRET` **or** `AUTH_SECRET` — NextAuth secret for signing/encryption (**required in production**; in local/dev NextAuth can generate one automatically, but setting it is recommended for consistency)
 
-**Conditional:**
-- `DATABASE_URL` — PostgreSQL connection string (app works without it via fallback)
-- `NEXTAUTH_SECRET` — required when `AUTH_REQUIRE_LOGIN=true`
-- `REDIS_URL` — for session storage at scale
+**Additional / optional (feature- or scale-dependent):**
+- `REDIS_URL` — for caching and rate limiting (not used for NextAuth session storage)
 - `AUTH_REQUIRE_LOGIN` / `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN` — `true` for strict authentication
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` — for payment features
 - `PYTHON_CORE_URL` — URL for optional Python sidecar (default `http://127.0.0.1:8008`)
@@ -309,5 +306,3 @@ Primary target is Vercel. See `.github/DEPLOYMENT.md` and `VERCEL_DEPLOYMENT.md`
 2. Run `npx prisma migrate deploy` against production database
 3. Deploy with `vercel --prod`
 4. Verify with `npm run verify:prod`
-```
-
