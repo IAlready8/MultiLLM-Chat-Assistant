@@ -1,6 +1,9 @@
 import prisma from '@/lib/prisma'
 import type { Analytics as AnalyticsRecord } from '@/types/prisma'
-import { createDbAvailabilityTracker } from '@/lib/db-fallback'
+import {
+  assertInMemoryFallbackAllowed,
+  createDbAvailabilityTracker,
+} from '@/lib/db-fallback'
 
 export interface AnalyticsEvent {
   event: string
@@ -66,6 +69,8 @@ const parsePayload = (value: string | null): Record<string, unknown> => {
 }
 
 const saveFallbackEvent = (event: AnalyticsEvent) => {
+  assertInMemoryFallbackAllowed('analytics events')
+
   const stored: StoredAnalyticsEvent = {
     id: createFallbackId(),
     event: event.event,
@@ -219,13 +224,18 @@ const loadStoredEvents = async (
         userId: event.userId,
       }))
     } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce('loadStoredEvents', 'analytics', error)
       }
     }
   }
 
-  const memoryEvents = loadFallbackEvents(userId, startDate)
+  const memoryEvents = db.isFallbackAllowed()
+    ? loadFallbackEvents(userId, startDate)
+    : []
   const merged = [...dbEvents, ...memoryEvents]
   merged.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
   return merged
@@ -256,6 +266,9 @@ export async function recordAnalyticsEvent(event: AnalyticsEvent): Promise<void>
       },
     })
   } catch (error) {
+    if (!db.isFallbackAllowed()) {
+      throw error
+    }
     if (!db.markUnavailableIfNeeded(error)) {
       db.logWarningOnce('recordAnalyticsEvent', 'analytics', error)
     }

@@ -90,6 +90,7 @@ npm run verify:prod -- --apply-migrations --require-stripe
 - In-memory fallback data is process-local and non-persistent.
 
 ## 10. Related Docs
+- `docs/OPERATOR_RUNBOOK.md`
 - `README.md`
 - `ARCHITECTURE.md`
 - `PYTHON_INTEGRATION.md`

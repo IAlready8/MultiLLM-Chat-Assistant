@@ -73,7 +73,12 @@ export async function POST(req: NextRequest) {
     const userId = user.id
     analyticsUserId = userId
 
-    const body = await req.json()
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return jsonErrorResponse(400, 'Request body must be valid JSON', 'INVALID_JSON')
+    }
     const {
       provider: providerRaw = 'openai',
       messages,

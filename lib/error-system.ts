@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger'
+import { summarizeErrorForLogs } from '@/lib/log-sanitizer'
 import { v4 as uuidv4 } from 'uuid'
 
 type AnalyticsRow = { payload?: string | null }
@@ -19,7 +20,9 @@ async function getPrismaClient(): Promise<PrismaLike | null> {
     prismaClientPromise = import('@/lib/prisma')
       .then((mod) => (mod.default ?? (mod as unknown as { prisma: PrismaLike }).prisma) as PrismaLike)
       .catch((error) => {
-        console.warn('Prisma client unavailable in error-system:', error)
+        logger.warn('error_system_prisma_unavailable', {
+          error: summarizeErrorForLogs(error),
+        })
         return null
       })
   }
@@ -276,8 +279,15 @@ export class ErrorManager {
           isRetryable: appError.isRetryable,
         })
       } catch (logErr) {
-        console.error('Failed to log error:', logErr)
-        console.error('Original error:', error)
+        console.error(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            level: 'error',
+            event: 'error_system_log_failure',
+            logError: summarizeErrorForLogs(logErr),
+            originalError: summarizeErrorForLogs(error),
+          })
+        )
       }
 
       // Persist critical errors for analytics/inspection
@@ -307,8 +317,15 @@ export class ErrorManager {
 
     } catch (loggingError) {
       // Fallback logging to console if structured logging fails
-      console.error('Failed to log error:', loggingError)
-      console.error('Original error:', error)
+      console.error(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          level: 'error',
+          event: 'error_system_unhandled_log_failure',
+          logError: summarizeErrorForLogs(loggingError),
+          originalError: summarizeErrorForLogs(error),
+        })
+      )
     }
   }
 
@@ -340,7 +357,7 @@ export class ErrorManager {
   private async reportToMonitoring(error: AppError): Promise<void> {
     // Implement integration with your monitoring service (e.g., Sentry, DataDog)
     // This is a placeholder implementation
-    console.log('Reporting to monitoring service:', {
+    logger.info('monitoring_report_queued', {
       error: error.message,
       code: error.code,
       category: error.category,

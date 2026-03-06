@@ -45,6 +45,8 @@ const toProviderConfig = (record: FallbackRecord): ProviderConfig => ({
 const getFallbackRecord = (userId: string, provider: string) =>
   peekFallbackUserStore(userId)?.get(provider)
 
+const fallbackAllowed = () => db.isFallbackAllowed()
+
 // Server-side encryption key from environment
 const getEncryptionKey = async (): Promise<Uint8Array> => {
   const seed = resolveApiKeyEncryptionSeed()
@@ -125,7 +127,11 @@ export async function storeUserApiKey(
       updatedAt: config.updatedAt,
     }
   } catch (error) {
-    if (!db.markUnavailableIfNeeded(error)) {
+    const dbUnavailable = db.markUnavailableIfNeeded(error)
+    if (!fallbackAllowed()) {
+      throw error
+    }
+    if (!dbUnavailable) {
       db.logWarningOnce('storeUserApiKey', 'provider config', error)
     }
     return saveToFallback()
@@ -152,13 +158,17 @@ export async function getUserApiKey(
         },
       })
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      if (!fallbackAllowed()) {
+        throw error
+      }
+      if (!dbUnavailable) {
         db.logWarningOnce('getUserApiKey', 'provider config', error)
       }
     }
   }
 
-  if (!config) {
+  if (!config && fallbackAllowed()) {
     const record = getFallbackRecord(userId, provider)
     config = record
       ? { apiKey: record.apiKey, isActive: record.isActive }
@@ -208,7 +218,11 @@ export async function getUserProviderConfigs(userId: string): Promise<ProviderCo
         },
       }) as typeof configs
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      if (!fallbackAllowed()) {
+        throw error
+      }
+      if (!dbUnavailable) {
         db.logWarningOnce('getUserProviderConfigs', 'provider config', error)
       }
     }
@@ -227,11 +241,13 @@ export async function getUserProviderConfigs(userId: string): Promise<ProviderCo
     })
   }
 
-  for (const fallback of peekFallbackUserStore(userId)?.values() ?? []) {
-    if (!fallback.isActive || merged.has(fallback.provider)) {
-      continue
+  if (fallbackAllowed()) {
+    for (const fallback of peekFallbackUserStore(userId)?.values() ?? []) {
+      if (!fallback.isActive || merged.has(fallback.provider)) {
+        continue
+      }
+      merged.set(fallback.provider, toProviderConfig(fallback))
     }
-    merged.set(fallback.provider, toProviderConfig(fallback))
   }
 
   return Array.from(merged.values())
@@ -258,10 +274,18 @@ export async function deleteUserProviderConfig(
         },
       })
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      if (!fallbackAllowed()) {
+        throw error
+      }
+      if (!dbUnavailable) {
         db.logWarningOnce('deleteUserProviderConfig', 'provider config', error)
       }
     }
+  }
+
+  if (!fallbackAllowed()) {
+    return
   }
 
   const store = peekFallbackUserStore(userId)
@@ -299,13 +323,17 @@ export async function hasValidApiKey(
         },
       })
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      if (!fallbackAllowed()) {
+        throw error
+      }
+      if (!dbUnavailable) {
         db.logWarningOnce('hasValidApiKey', 'provider config', error)
       }
     }
   }
 
-  if (!config) {
+  if (!config && fallbackAllowed()) {
     const record = getFallbackRecord(userId, provider)
     config = record
       ? { apiKey: record.apiKey, isActive: record.isActive }
@@ -359,10 +387,18 @@ export async function updateProviderSettings(
         }
       }
     } catch (error) {
-      if (!db.markUnavailableIfNeeded(error)) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      if (!fallbackAllowed()) {
+        throw error
+      }
+      if (!dbUnavailable) {
         db.logWarningOnce('updateProviderSettings', 'provider config', error)
       }
     }
+  }
+
+  if (!fallbackAllowed()) {
+    return null
   }
 
   const store = peekFallbackUserStore(userId)

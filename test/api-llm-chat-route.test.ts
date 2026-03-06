@@ -86,6 +86,37 @@ describe('/api/llm/chat route', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
   })
 
+  it('allows guest-mode authenticated user flow', async () => {
+    mockGetAuthenticatedUser.mockResolvedValue({
+      user: { id: 'guest-user-1', isGuest: true },
+    })
+
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [{ message: { content: 'guest response' }, finish_reason: 'stop' }],
+        usage: { total_tokens: 12 },
+      }),
+    } as Response)
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          stream: false,
+          messages: [{ role: 'user', content: 'hello from guest' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockGetUserProviderConfigs).toHaveBeenCalledWith('guest-user-1')
+  })
+
   it('returns validation error when messages are missing', async () => {
     const response = await POST(
       new NextRequest('http://localhost/api/llm/chat', {
@@ -151,6 +182,30 @@ describe('/api/llm/chat route', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Provider openai not configured',
       code: 'PROVIDER_NOT_CONFIGURED',
+    })
+  })
+
+  it('returns INTERNAL_ERROR when provider config lookup throws', async () => {
+    mockGetUserProviderConfigs.mockRejectedValue(
+      new Error('database unavailable during provider lookup')
+    )
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          stream: false,
+          messages: [{ role: 'user', content: 'hello' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({
+      error: 'database unavailable during provider lookup',
+      code: 'INTERNAL_ERROR',
     })
   })
 
@@ -314,6 +369,58 @@ describe('/api/llm/chat route', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Provider rejected the configured API key',
       code: 'PROVIDER_AUTH_ERROR',
+    })
+  })
+
+  it('maps provider timeout failures to PROVIDER_TIMEOUT', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockRejectedValue(new Error('request timed out while contacting provider'))
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          stream: false,
+          messages: [{ role: 'user', content: 'hello' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(504)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Provider request timed out',
+      code: 'PROVIDER_TIMEOUT',
+    })
+  })
+
+  it('maps malformed provider payloads to PROVIDER_MALFORMED_RESPONSE', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected token < in JSON')
+      },
+    } as unknown as Response)
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          stream: false,
+          messages: [{ role: 'user', content: 'hello' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(502)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Provider returned malformed response',
+      code: 'PROVIDER_MALFORMED_RESPONSE',
     })
   })
 

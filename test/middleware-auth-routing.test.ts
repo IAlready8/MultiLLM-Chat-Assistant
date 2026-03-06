@@ -13,6 +13,7 @@ const originalAuthRequireLogin = process.env.AUTH_REQUIRE_LOGIN
 const originalPublicAuthRequireLogin = process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN
 const originalNextAuthSecret = process.env.NEXTAUTH_SECRET
 const originalAuthSecret = process.env.AUTH_SECRET
+const originalNodeEnv = process.env.NODE_ENV
 
 const setEnvVar = (key: string, value: string | undefined) => {
   const env = process.env as Record<string, string | undefined>
@@ -34,6 +35,7 @@ describe('middleware strict-auth routing', () => {
     setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', originalPublicAuthRequireLogin)
     setEnvVar('NEXTAUTH_SECRET', originalNextAuthSecret)
     setEnvVar('AUTH_SECRET', originalAuthSecret)
+    setEnvVar('NODE_ENV', originalNodeEnv)
   })
 
   it('allows requests through in non-strict mode', async () => {
@@ -103,6 +105,20 @@ describe('middleware strict-auth routing', () => {
   it('returns 401 for protected API routes in strict mode when token is missing and secret is present', async () => {
     setEnvVar('AUTH_REQUIRE_LOGIN', 'true')
     setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
+    setEnvVar('NEXTAUTH_SECRET', 'test-secret')
+
+    const request = new NextRequest('http://localhost:3000/api/conversations')
+    const response = await middleware(request)
+
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
+    expect(mockGetToken).toHaveBeenCalledTimes(1)
+  })
+
+  it('enforces strict auth in production even when strict flags are false', async () => {
+    setEnvVar('NODE_ENV', 'production')
+    setEnvVar('AUTH_REQUIRE_LOGIN', 'false')
+    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'false')
     setEnvVar('NEXTAUTH_SECRET', 'test-secret')
 
     const request = new NextRequest('http://localhost:3000/api/conversations')

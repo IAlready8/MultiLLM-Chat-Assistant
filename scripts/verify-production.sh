@@ -4,6 +4,7 @@ set -euo pipefail
 BASE_URL=""
 APPLY_MIGRATIONS=false
 REQUIRE_STRIPE=false
+REQUIRE_SIDECAR=false
 CHECK_WEBHOOK=false
 
 print_help() {
@@ -14,12 +15,13 @@ Options:
   --base-url URL         Deployment base URL (e.g. https://your-app.vercel.app)
   --apply-migrations     Run `prisma migrate deploy` after status check
   --require-stripe       Require Stripe env vars and verify Stripe price ID
+  --require-sidecar      Require PYTHON_CORE_URL and verify sidecar health
   --check-webhook        Validate webhook endpoint behavior on --base-url
   --help                 Show this help
 
 Examples:
   bash scripts/verify-production.sh --base-url https://example.vercel.app
-  bash scripts/verify-production.sh --apply-migrations --require-stripe
+  bash scripts/verify-production.sh --apply-migrations --require-stripe --require-sidecar
 EOF
 }
 
@@ -28,6 +30,31 @@ require_env() {
   local value="${!name:-}"
   if [[ -z "${value}" ]]; then
     echo "ERROR: Missing required environment variable: ${name}"
+    exit 1
+  fi
+}
+
+require_auth_secret() {
+  local secret="${NEXTAUTH_SECRET:-${AUTH_SECRET:-}}"
+  if [[ -z "${secret}" ]]; then
+    echo "ERROR: Missing required environment variable: NEXTAUTH_SECRET (or AUTH_SECRET)"
+    exit 1
+  fi
+}
+
+ensure_pair_or_empty() {
+  local first_name="$1"
+  local second_name="$2"
+  local first_value="${!first_name:-}"
+  local second_value="${!second_name:-}"
+
+  if [[ -n "${first_value}" && -z "${second_value}" ]]; then
+    echo "ERROR: ${first_name} is set but ${second_name} is missing."
+    exit 1
+  fi
+
+  if [[ -z "${first_value}" && -n "${second_value}" ]]; then
+    echo "ERROR: ${second_name} is set but ${first_name} is missing."
     exit 1
   fi
 }
@@ -46,6 +73,10 @@ while [[ $# -gt 0 ]]; do
       REQUIRE_STRIPE=true
       shift
       ;;
+    --require-sidecar)
+      REQUIRE_SIDECAR=true
+      shift
+      ;;
     --check-webhook)
       CHECK_WEBHOOK=true
       shift
@@ -62,11 +93,31 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "${CHECK_WEBHOOK}" == "true" && -z "${BASE_URL}" ]]; then
+  echo "ERROR: --check-webhook requires --base-url."
+  exit 1
+fi
+
 echo "==> Verifying required runtime environment variables"
 require_env NEXTAUTH_URL
-require_env NEXTAUTH_SECRET
+require_auth_secret
 require_env API_KEY_ENCRYPTION_SEED
 require_env DATABASE_URL
+ensure_pair_or_empty GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
+ensure_pair_or_empty GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET
+
+STRIPE_SECRET="${STRIPE_SECRET_KEY:-}"
+STRIPE_PRICE="${STRIPE_PRO_PRICE_ID:-}"
+STRIPE_WEBHOOK="${STRIPE_WEBHOOK_SECRET:-}"
+if [[ -n "${STRIPE_SECRET}" || -n "${STRIPE_PRICE}" || -n "${STRIPE_WEBHOOK}" ]]; then
+  if [[ -z "${STRIPE_SECRET}" || -z "${STRIPE_PRICE}" || -z "${STRIPE_WEBHOOK}" ]]; then
+    echo "ERROR: Stripe is partially configured. Set STRIPE_SECRET_KEY, STRIPE_PRO_PRICE_ID, and STRIPE_WEBHOOK_SECRET together."
+    exit 1
+  fi
+  if [[ "${REQUIRE_STRIPE}" != "true" ]]; then
+    echo "Stripe env detected; skipping live Stripe API verification (pass --require-stripe to enforce it)."
+  fi
+fi
 
 echo "==> Checking database network reachability"
 node <<'NODE'
@@ -147,16 +198,41 @@ run().catch((error) => {
 NODE
 fi
 
-echo "==> Checking database migration status"
-if ! npx prisma migrate status; then
-  echo "ERROR: Prisma migration status check failed."
-  echo "Hint: verify DATABASE_URL credentials/network and that Prisma engines match current platform."
-  exit 1
+if [[ "${REQUIRE_SIDECAR}" == "true" ]]; then
+  require_env PYTHON_CORE_URL
+  PYTHON_CORE_URL="${PYTHON_CORE_URL%/}"
+  echo "==> Verifying Python sidecar health: ${PYTHON_CORE_URL}/api/v1/health"
+  SIDECAR_HEALTH_JSON="$(curl -fsS "${PYTHON_CORE_URL}/api/v1/health")"
+  SIDECAR_HEALTH_JSON="${SIDECAR_HEALTH_JSON}" node <<'NODE'
+const payload = JSON.parse(process.env.SIDECAR_HEALTH_JSON || '{}')
+const status = String(payload.status || '').toLowerCase()
+if (!status) {
+  throw new Error('Invalid sidecar health payload.')
+}
+if (status !== 'ok' && status !== 'healthy' && status !== 'degraded') {
+  throw new Error(`Unexpected sidecar health status: ${payload.status}`)
+}
+console.log(`Sidecar health check ok: status=${payload.status}`)
+NODE
 fi
 
-if [[ "${APPLY_MIGRATIONS}" == "true" ]]; then
-  echo "==> Applying database migrations"
-  npx prisma migrate deploy
+echo "==> Checking database migration status"
+if ! npx prisma migrate status; then
+  if [[ "${APPLY_MIGRATIONS}" == "true" ]]; then
+    echo "Migration status check reported pending/invalid state; attempting deploy because --apply-migrations is enabled."
+    echo "==> Applying database migrations"
+    npx prisma migrate deploy
+    echo "==> Re-checking database migration status"
+    if ! npx prisma migrate status; then
+      echo "ERROR: Prisma migration status still failing after migrate deploy."
+      echo "Hint: verify DATABASE_URL credentials/network and that Prisma engines match current platform."
+      exit 1
+    fi
+  else
+    echo "ERROR: Prisma migration status check failed."
+    echo "Hint: run with --apply-migrations to auto-apply pending migrations, or verify DATABASE_URL credentials/network and Prisma engine compatibility."
+    exit 1
+  fi
 fi
 
 if [[ -n "${BASE_URL}" ]]; then

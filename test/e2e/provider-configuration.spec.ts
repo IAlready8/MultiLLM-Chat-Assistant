@@ -1,341 +1,220 @@
-import { test, expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
-test.describe('Provider Configuration', () => {
-  // Mock authentication for these tests
-  test.beforeEach(async ({ page }) => {
-    // In a real implementation, you would set up authenticated session
-    // For now, we'll assume authentication is handled
-    await page.goto('/settings')
-  })
+test.describe('Settings provider configuration', () => {
+  const openProvidersTab = async (
+    page: import('@playwright/test').Page
+  ) => {
+    const providersTab = page.getByRole('tab', { name: 'API Providers' })
+    const providersHeading = page.getByRole('heading', {
+      name: 'API Provider Configuration',
+    })
 
-  test('should display provider configuration interface', async ({ page }) => {
-    // Should show configuration manager
-    await expect(page.getByText('Provider Configuration Manager')).toBeVisible()
-    
-    // Should show all provider tabs
-    await expect(page.getByRole('tab', { name: 'OpenAI' })).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Anthropic' })).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'Google AI' })).toBeVisible()
-    await expect(page.getByRole('tab', { name: 'OpenRouter' })).toBeVisible()
-  })
+    await expect(providersTab).toBeVisible({ timeout: 15_000 })
 
-  test('should switch between provider tabs', async ({ page }) => {
-    // Initially should show OpenAI configuration
-    await expect(page.getByText('OpenAI Configuration')).toBeVisible()
-    
-    // Click Anthropic tab
-    await page.getByRole('tab', { name: 'Anthropic' }).click()
-    
-    // Should show Anthropic configuration
-    await expect(page.getByText('Anthropic Configuration')).toBeVisible()
-    
-    // Should show Anthropic-specific elements
-    await expect(page.getByText('claude-3-opus')).toBeVisible()
-    await expect(page.getByText('claude-3-sonnet')).toBeVisible()
-  })
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await providersTab.click()
+      if (await providersHeading.isVisible().catch(() => false)) {
+        return
+      }
+      await page.waitForTimeout(150)
+    }
 
-  test('should validate API key input', async ({ page }) => {
-    // Should show API key field
-    const apiKeyInput = page.getByLabel(/API Key/)
-    await expect(apiKeyInput).toBeVisible()
-    
-    // Should be password type
-    await expect(apiKeyInput).toHaveAttribute('type', 'password')
-    
-    // Should be required
-    await expect(apiKeyInput).toHaveAttribute('required')
-  })
+    await expect(providersHeading).toBeVisible()
+  }
 
-  test('should handle API key configuration flow', async ({ page }) => {
-    // Fill in API key
-    await page.getByLabel(/API Key/).fill('sk-test-api-key-12345')
-    
-    // Should show rate limits configuration
-    await expect(page.getByLabel(/Requests per minute/)).toBeVisible()
-    await expect(page.getByLabel(/Window \(ms\)/)).toBeVisible()
-    
-    // Should show test & validate button
-    const testButton = page.getByRole('button', { name: /Test & Validate/i })
-    await expect(testButton).toBeVisible()
-  })
+  test('saves, verifies, and clears an OpenAI key from /settings', async ({
+    page,
+  }) => {
+    const state = {
+      configuredProviders: ['openai'] as string[],
+      saveCalls: [] as Array<{ provider: string; apiKey: string }>,
+    }
 
-  test('should test API connection', async ({ page }) => {
-    // Fill in API key
-    await page.getByLabel(/API Key/).fill('sk-test-api-key-12345')
-    
-    // Click test button
-    await page.getByRole('button', { name: /Test & Validate/i }).click()
-    
-    // Should show testing state
-    await expect(page.getByText(/Testing.../i)).toBeVisible()
-    
-    // Wait for result (success or failure)
-    await expect(
-      page.getByText(/Configuration is valid/i).or(
-        page.getByText(/Configuration errors/i)
-      )
-    ).toBeVisible({ timeout: 10000 })
-  })
-
-  test('should handle successful validation', async ({ page }) => {
-    // Mock successful API response
-    await page.route('/api/config/validate', async route => {
+    await page.route('**/api/auth/session', async route => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: {
-            apiKey: 'sk-test-api-key-12345',
-            models: ['gpt-4', 'gpt-3.5-turbo'],
-            rateLimits: { requests: 60, window: 60000 },
-            isActive: true,
-          },
-          connectionTest: {
-            success: true,
-            latency: 150,
-          },
-        }),
+        body: JSON.stringify({}),
       })
     })
-    
-    // Fill and test configuration
-    await page.getByLabel(/API Key/).fill('sk-test-api-key-12345')
-    await page.getByRole('button', { name: /Test & Validate/i }).click()
-    
-    // Should show success message
-    await expect(page.getByText('Configuration is valid!')).toBeVisible()
-    await expect(page.getByText('Connection test: ✓ Passed (150ms)')).toBeVisible()
-    
-    // Should show save button
-    await expect(page.getByRole('button', { name: /Save Configuration/i })).toBeVisible()
-  })
 
-  test('should handle validation errors', async ({ page }) => {
-    // Mock error response
-    await page.route('/api/config/validate', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: false,
-          errors: [
-            { path: 'apiKey', message: 'API key is invalid' },
-          ],
-        }),
-      })
-    })
-    
-    // Fill invalid API key
-    await page.getByLabel(/API Key/).fill('invalid-key')
-    await page.getByRole('button', { name: /Test & Validate/i }).click()
-    
-    // Should show error message
-    await expect(page.getByText('Configuration errors:')).toBeVisible()
-    await expect(page.getByText('• apiKey: API key is invalid')).toBeVisible()
-  })
-
-  test('should save valid configuration', async ({ page }) => {
-    // Mock validation success
-    await page.route('/api/config/validate', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: {
-            apiKey: 'sk-valid-key',
-            models: ['gpt-4'],
-            rateLimits: { requests: 60, window: 60000 },
-            isActive: true,
-          },
-          connectionTest: { success: true, latency: 150 },
-        }),
-      })
-    })
-    
-    // Mock save success
-    await page.route('/api/provider-configs/openai', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true }),
-      })
-    })
-    
-    // Configure and save
-    await page.getByLabel(/API Key/).fill('sk-valid-key')
-    await page.getByRole('button', { name: /Test & Validate/i }).click()
-    
-    await expect(page.getByRole('button', { name: /Save Configuration/i })).toBeVisible()
-    await page.getByRole('button', { name: /Save Configuration/i }).click()
-    
-    // Should show success toast or message
-    await expect(
-      page.getByText(/configuration saved/i).or(
-        page.getByText(/OpenAI configuration saved/i)
-      )
-    ).toBeVisible()
-    
-    // Should show configured badge
-    await expect(page.getByText('Configured')).toBeVisible()
-  })
-
-  test('should configure rate limits', async ({ page }) => {
-    // Find rate limit inputs
-    const requestsInput = page.getByLabel(/Requests per minute/)
-    const windowInput = page.getByLabel(/Window \(ms\)/)
-    
-    // Should have default values
-    await expect(requestsInput).toHaveValue('60')
-    await expect(windowInput).toHaveValue('60000')
-    
-    // Change values
-    await requestsInput.fill('100')
-    await windowInput.fill('30000')
-    
-    // Values should be updated
-    await expect(requestsInput).toHaveValue('100')
-    await expect(windowInput).toHaveValue('30000')
-  })
-
-  test('should show available models for each provider', async ({ page }) => {
-    // OpenAI models
-    await expect(page.getByText('gpt-4')).toBeVisible()
-    await expect(page.getByText('gpt-4-turbo')).toBeVisible()
-    await expect(page.getByText('gpt-3.5-turbo')).toBeVisible()
-    
-    // Switch to Anthropic
-    await page.getByRole('tab', { name: 'Anthropic' }).click()
-    
-    // Anthropic models
-    await expect(page.getByText('claude-3-opus')).toBeVisible()
-    await expect(page.getByText('claude-3-sonnet')).toBeVisible()
-    await expect(page.getByText('claude-3-haiku')).toBeVisible()
-    
-    // Switch to Google AI
-    await page.getByRole('tab', { name: 'Google AI' }).click()
-    
-    // Google AI models
-    await expect(page.getByText('gemini-pro')).toBeVisible()
-    await expect(page.getByText('gemini-pro-vision')).toBeVisible()
-  })
-
-  test('should handle provider enable/disable', async ({ page }) => {
-    // Mock existing configuration
-    await page.route('/api/config/validate', async route => {
+    await page.route('**/api/config', async route => {
       if (route.request().method() === 'GET') {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            configs: {
-              openai: {
-                apiKey: 'sk-existing-key',
-                models: ['gpt-4'],
-                rateLimits: { requests: 60, window: 60000 },
-                isActive: true,
-              },
-            },
+            configuredProviders: state.configuredProviders,
           }),
         })
+        return
       }
-    })
-    
-    // Reload page to get mock config
-    await page.reload()
-    
-    // Should show configured status
-    await expect(page.getByText('Configured')).toBeVisible()
-    
-    // Should show disable button
-    await expect(page.getByRole('button', { name: /Disable/i })).toBeVisible()
-    
-    // Click disable
-    await page.getByRole('button', { name: /Disable/i }).click()
-    
-    // Button should change to enable
-    await expect(page.getByRole('button', { name: /Enable/i })).toBeVisible()
-  })
 
-  test('should handle multiple provider configurations', async ({ page }) => {
-    // Configure OpenAI
-    await page.getByLabel(/API Key/).fill('sk-openai-key')
-    await page.getByRole('button', { name: /Test & Validate/i }).click()
-    
-    // Mock validation for OpenAI
-    await page.route('/api/config/validate', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: { apiKey: 'sk-openai-key', models: ['gpt-4'], rateLimits: { requests: 60, window: 60000 }, isActive: true },
-          connectionTest: { success: true, latency: 150 },
-        }),
-      })
-    })
-    
-    // Switch to Anthropic and configure
-    await page.getByRole('tab', { name: 'Anthropic' }).click()
-    await page.getByLabel(/API Key/).fill('ant-anthropic-key')
-    
-    // Each provider should maintain its own state
-    await page.getByRole('tab', { name: 'OpenAI' }).click()
-    await expect(page.getByLabel(/API Key/)).toHaveValue('sk-openai-key')
-    
-    await page.getByRole('tab', { name: 'Anthropic' }).click()
-    await expect(page.getByLabel(/API Key/)).toHaveValue('ant-anthropic-key')
-  })
+      if (route.request().method() === 'POST') {
+        const body = route.request().postDataJSON() as {
+          provider: string
+          apiKey: string
+        }
+        state.saveCalls.push(body)
 
-  test('should show loading states', async ({ page }) => {
-    // Mock slow API response
-    await page.route('/api/config/validate', async route => {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: {}, connectionTest: { success: true } }),
-      })
-    })
-    
-    await page.getByLabel(/API Key/).fill('sk-test-key')
-    await page.getByRole('button', { name: /Test & Validate/i }).click()
-    
-    // Should show testing state
-    await expect(page.getByText(/Testing.../i)).toBeVisible()
-    
-    // Button should be disabled during testing
-    await expect(page.getByRole('button', { name: /Testing.../i })).toBeDisabled()
-  })
+        const provider = body.provider?.trim().toLowerCase()
+        const apiKey = body.apiKey?.trim() ?? ''
+        if (provider) {
+          if (apiKey) {
+            state.configuredProviders = Array.from(
+              new Set([...state.configuredProviders, provider])
+            )
+          } else {
+            state.configuredProviders = state.configuredProviders.filter(
+              item => item !== provider
+            )
+          }
+        }
 
-  test('should persist configuration across page refreshes', async ({ page }) => {
-    // Mock saved configuration
-    await page.route('/api/config/validate', async route => {
-      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true }),
+        })
+        return
+      }
+
+      await route.fallback()
+    })
+
+    await page.route('**/api/test-api-key', async route => {
+      const body = route.request().postDataJSON() as {
+        provider: string
+        apiKey?: string
+        testSaved?: boolean
+      }
+
+      if (body.testSaved) {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            configs: {
-              openai: {
-                apiKey: 'sk-persisted-key',
-                models: ['gpt-4'],
-                rateLimits: { requests: 100, window: 30000 },
-                isActive: true,
-              },
-            },
+            valid: true,
+            reason: 'ok',
+            message: 'API key verified successfully.',
+            latencyMs: 120,
           }),
         })
+        return
       }
+
+      const isValid = Boolean(body.apiKey?.includes('valid'))
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          valid: isValid,
+          reason: isValid ? 'ok' : 'invalid',
+          message: isValid
+            ? 'API key verified successfully.'
+            : 'Provider rejected this API key.',
+          latencyMs: isValid ? 95 : 88,
+        }),
+      })
     })
-    
-    await page.reload()
-    
-    // Should load saved configuration
-    await expect(page.getByLabel(/API Key/)).toHaveValue('sk-persisted-key')
-    await expect(page.getByLabel(/Requests per minute/)).toHaveValue('100')
-    await expect(page.getByLabel(/Window \(ms\)/)).toHaveValue('30000')
-    await expect(page.getByText('Configured')).toBeVisible()
+
+    await page.goto('/settings', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    })
+
+    await openProvidersTab(page)
+    await expect(page.getByLabel('OpenAI API Key')).toBeVisible()
+    await expect(page.getByText('Saved').first()).toBeVisible()
+
+    await page.getByLabel('OpenAI API Key').fill('sk-openai-valid-123456')
+    await page.getByRole('button', { name: 'Save' }).first().click()
+
+    await expect
+      .poll(
+        () =>
+          state.saveCalls.filter(
+            call =>
+              call.provider === 'openai' &&
+              call.apiKey === 'sk-openai-valid-123456'
+          ).length
+      )
+      .toBe(1)
+    await expect(page.getByText('Connected').first()).toBeVisible()
+
+    await page.getByRole('button', { name: 'Clear' }).first().click()
+    await expect
+      .poll(
+        () =>
+          state.saveCalls.filter(
+            call => call.provider === 'openai' && call.apiKey === ''
+          ).length
+      )
+      .toBe(1)
+    await expect(page.getByText('Connected').first()).toHaveCount(0)
+  })
+
+  test('rejects invalid key without persisting provider config', async ({
+    page,
+  }) => {
+    const state = {
+      configPostCalls: 0,
+    }
+
+    await page.route('**/api/auth/session', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({}),
+      })
+    })
+
+    await page.route('**/api/config', async route => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ configuredProviders: [] }),
+        })
+        return
+      }
+
+      if (route.request().method() === 'POST') {
+        state.configPostCalls += 1
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true }),
+        })
+        return
+      }
+
+      await route.fallback()
+    })
+
+    await page.route('**/api/test-api-key', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          valid: false,
+          reason: 'invalid',
+          message: 'Provider rejected this API key.',
+          latencyMs: 80,
+        }),
+      })
+    })
+
+    await page.goto('/settings', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    })
+
+    await openProvidersTab(page)
+    await page.getByLabel('OpenAI API Key').fill('sk-openai-bad-key')
+    await page.getByRole('button', { name: 'Save' }).first().click()
+
+    await expect(page.getByText('Invalid API Key', { exact: true }).first()).toBeVisible()
+    await expect.poll(() => state.configPostCalls).toBe(0)
   })
 })

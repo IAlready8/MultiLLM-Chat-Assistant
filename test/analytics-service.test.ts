@@ -67,6 +67,10 @@ describe('analytics-service DB fallback', () => {
   })
 
   it('merges database and fallback events when DB reads succeed', async () => {
+    const now = Date.now()
+    const dbEventTime = new Date(now - 2 * 60 * 1000)
+    const fallbackEventTime = new Date(now - 60 * 1000)
+
     const prismaMock: PrismaMock = {
       analytics: {
         create: vi.fn(),
@@ -75,7 +79,7 @@ describe('analytics-service DB fallback', () => {
             id: 'db-1',
             event: 'llm_request',
             payload: JSON.stringify({ provider: 'anthropic', tokens: 42 }),
-            createdAt: new Date('2026-02-01T10:00:00.000Z'),
+            createdAt: dbEventTime,
             userId: 'user-1',
           },
         ]),
@@ -94,7 +98,7 @@ describe('analytics-service DB fallback', () => {
             id: 'mem-1',
             event: 'llm_error',
             payload: JSON.stringify({ provider: 'openai' }),
-            createdAt: new Date('2026-02-01T10:01:00.000Z'),
+            createdAt: fallbackEventTime,
             userId: 'user-1',
           },
         ],
@@ -109,5 +113,31 @@ describe('analytics-service DB fallback', () => {
     expect(events[1].event).toBe('llm_error')
     expect(events[0].payload.provider).toBe('anthropic')
     expect(events[1].payload.provider).toBe('openai')
+  })
+
+  it('fails closed in production when analytics DB access is unavailable', async () => {
+    const env = process.env as Record<string, string | undefined>
+    const previousNodeEnv = env.NODE_ENV
+    env.NODE_ENV = 'production'
+
+    try {
+      const prismaMock = makePrismaMock()
+      const { getParsedAnalyticsEvents, recordAnalyticsEvent } =
+        await loadServiceWithPrismaMock(prismaMock)
+
+      await expect(getParsedAnalyticsEvents('user-1', 7)).rejects.toThrow(
+        DB_UNAVAILABLE_ERROR.message
+      )
+
+      await expect(
+        recordAnalyticsEvent({
+          event: 'llm_request',
+          userId: 'user-1',
+          payload: { provider: 'openai', tokens: 42 },
+        })
+      ).rejects.toThrow(DB_UNAVAILABLE_ERROR.message)
+    } finally {
+      env.NODE_ENV = previousNodeEnv
+    }
   })
 })

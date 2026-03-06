@@ -14,10 +14,15 @@ This project supports an optional Python sidecar service for orchestration-heavy
 
 ## Request Flow
 1. Client calls `/api/llm/orchestrate`.
-2. Next.js validates/authenticates request (guest-enabled path).
+2. Next.js validates/authenticates request according to current auth mode (strict in production; guest/demo only in non-production modes).
 3. Route proxies payload to Python service at `${PYTHON_CORE_URL}/api/v1/llm/orchestrate`.
 4. If the sidecar responds successfully, response is returned to client.
 5. If the sidecar is unavailable/unhealthy (5xx class), route falls back to local orchestration using `/api/llm/chat` per request and returns 200 with `x-orchestration-fallback: local`.
+
+## Current Limitation
+- Python sidecar stream parity is incomplete:
+  - `src/core/main.py` currently includes `# TODO: Add /api/v1/llm/stream endpoint`.
+  - Sidecar should not be described as full parity with Next.js streaming until this endpoint and tests are implemented.
 
 ## Local Setup
 ### Node app

@@ -1,12 +1,14 @@
+import { sanitizeLogValue } from '@/lib/log-sanitizer'
+
 type Level = 'info' | 'warn' | 'error'
 
 function log(level: Level, event: string, data?: Record<string, any>) {
-  const entry = {
+  const entry = sanitizeLogValue({
     ts: new Date().toISOString(),
     level,
-    event,
-    ...data,
-  }
+    event: String(sanitizeLogValue(event)),
+    ...(data ?? {}),
+  })
   console[level](JSON.stringify(entry))
 }
 

@@ -11,8 +11,8 @@
 - Auth/session: NextAuth + custom auth helpers (`lib/auth.ts`, `lib/api-auth.ts`)
 - API layer: Route Handlers under `app/api/*`
 - Data layer:
-  - Prisma runtime client when `DATABASE_URL` is configured (`lib/prisma.ts`)
-  - DB-unavailable fallback strategy at service level
+  - Production requires Prisma runtime client with `DATABASE_URL` (`lib/prisma.ts`)
+  - In-memory fallback paths are development-only
 - Validation: Zod at route boundaries
 - Testing: Vitest (unit/integration), optional Pytest for Python side
 
@@ -28,7 +28,7 @@
 1. UI routes call API routes in `app/api/*`.
 2. API routes validate input and resolve identity via `getAuthenticatedUser`.
 3. Domain operations execute in `services/*` or dedicated `lib/*` modules.
-4. Persistence path is DB-first, with controlled in-memory fallback when DB access is unavailable.
+4. Persistence path is DB-first; production fails closed when required DB/auth dependencies are missing.
 5. Provider calls are routed through provider-aware LLM handlers (`/api/llm/*`).
 
 ## API Surface (Key Domains)
@@ -50,11 +50,14 @@
   - `/api/admin/errors/stats`
 
 ## Authentication Model
-- Strict auth mode (`AUTH_REQUIRE_LOGIN=true`):
+- Production strict auth:
+  - Always enforced in production (independent of toggle flags)
   - Requires valid session flows
-  - Requires `NEXTAUTH_SECRET`
+  - Requires `NEXTAUTH_SECRET` (or `AUTH_SECRET`) + `NEXTAUTH_URL`
+- Strict auth mode (`AUTH_REQUIRE_LOGIN=true` in non-production):
+  - Mirrors production access controls during local/dev verification
 - Guest/demo mode (`AUTH_REQUIRE_LOGIN=false`):
-  - Guest-friendly access paths remain available where explicitly allowed
+  - Guest-friendly access paths remain available only outside production
   - Supports local evaluation without full account setup
 
 Primary auth files:
@@ -66,7 +69,7 @@ Primary auth files:
 ## Persistence and Fallback Model
 - `lib/prisma.ts`:
   - Uses Prisma runtime client when `DATABASE_URL` is set.
-  - Uses stub client when DB is not configured.
+  - Fails fast in production if `DATABASE_URL` is missing.
 - Services implement DB-first + fallback behavior, including:
   - `lib/api-key-service.ts`
   - `services/conversation-service.db.ts`
@@ -76,7 +79,7 @@ Primary auth files:
 - Shared fallback behavior is centralized in `lib/db-fallback.ts`:
   - DB unavailability detection
   - retry-after interval (prevents permanent one-way fallback)
-  - once-per-scope fallback warnings
+  - once-per-scope fallback warnings (non-production)
   - capped in-memory store growth
 
 ## LLM and Orchestration
@@ -109,13 +112,16 @@ Primary auth files:
 
 ### Production verification + protection scripts
 - `scripts/verify-production.sh` (`npm run verify:prod`)
-  - validates env, DB reachability/migration status, optional Stripe/webhook checks
+  - validates required env, DB reachability/migration status
+  - validates optional Stripe/webhook checks when enabled (`--check-webhook` requires `--base-url`)
+  - validates optional sidecar health when `--require-sidecar` is used
 - `scripts/enforce-branch-protection.sh` (`npm run protect:main`)
   - enforces required checks on `main` (`Quality Checks`, `Smoke Tests`)
 
 ## Deployment
 - Primary target: Vercel (`vercel.json`)
 - Deployment docs:
+  - `docs/OPERATOR_RUNBOOK.md`
   - `VERCEL_DEPLOYMENT.md`
   - `docs/DEPLOYMENT_GUIDE.md`
 

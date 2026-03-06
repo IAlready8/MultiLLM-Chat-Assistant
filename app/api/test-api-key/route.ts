@@ -95,43 +95,51 @@ export async function POST(request: NextRequest) {
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const body = await request.json()
-  const providerRaw = body?.provider
-  const testSaved = body?.testSaved === true
+  try {
+    const body = await request.json()
+    const providerRaw = body?.provider
+    const testSaved = body?.testSaved === true
 
-  if (!providerRaw || typeof providerRaw !== 'string') {
-    return NextResponse.json(
-      { valid: false, message: 'Provider is required.' },
-      { status: 400 }
-    )
-  }
-
-  const provider = providerRaw.trim().toLowerCase()
-
-  // Mode 1: Test a saved/stored key without re-entry
-  if (testSaved) {
-    const savedKey = await getUserApiKey(user.id, provider)
-    if (!savedKey) {
+    if (!providerRaw || typeof providerRaw !== 'string') {
       return NextResponse.json(
-        buildResult(false, 'No saved API key found for this provider.', 'invalid'),
-        { status: 200 }
+        { valid: false, message: 'Provider is required.' },
+        { status: 400 }
       )
     }
 
-    const result = await testKey(provider, savedKey)
-    return NextResponse.json(result, { status: 200 })
-  }
+    const provider = providerRaw.trim().toLowerCase()
 
-  // Mode 2: Test a provided key (original behavior)
-  const apiKeyRaw = body?.apiKey
-  if (!apiKeyRaw || typeof apiKeyRaw !== 'string') {
+    // Mode 1: Test a saved/stored key without re-entry
+    if (testSaved) {
+      const savedKey = await getUserApiKey(user.id, provider)
+      if (!savedKey) {
+        return NextResponse.json(
+          buildResult(false, 'No saved API key found for this provider.', 'invalid'),
+          { status: 200 }
+        )
+      }
+
+      const result = await testKey(provider, savedKey)
+      return NextResponse.json(result, { status: 200 })
+    }
+
+    // Mode 2: Test a provided key (original behavior)
+    const apiKeyRaw = body?.apiKey
+    if (!apiKeyRaw || typeof apiKeyRaw !== 'string') {
+      return NextResponse.json(
+        { valid: false, message: 'API key is required.' },
+        { status: 400 }
+      )
+    }
+
+    const apiKey = apiKeyRaw.trim()
+    const result = await testKey(provider, apiKey)
+    return NextResponse.json(result, { status: 200 })
+  } catch (error) {
+    console.error('Failed to test API key.')
     return NextResponse.json(
-      { valid: false, message: 'API key is required.' },
-      { status: 400 }
+      buildResult(false, 'Failed to test API key.', 'unreachable'),
+      { status: 500 }
     )
   }
-
-  const apiKey = apiKeyRaw.trim()
-  const result = await testKey(provider, apiKey)
-  return NextResponse.json(result, { status: 200 })
 }

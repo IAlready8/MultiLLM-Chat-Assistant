@@ -30,6 +30,21 @@ export class StripeConfigurationError extends Error {
   }
 }
 
+export function getStripeConfigurationUserMessage(
+  mode: 'api' | 'checkout' | 'webhook'
+): string {
+  switch (mode) {
+    case 'api':
+      return 'Billing portal is currently unavailable.'
+    case 'checkout':
+      return 'Checkout is currently unavailable.'
+    case 'webhook':
+      return 'Webhook not configured'
+    default:
+      return 'Billing is currently unavailable.'
+  }
+}
+
 export function ensureStripeConfigured(
   mode: 'api' | 'checkout' | 'webhook'
 ): void {

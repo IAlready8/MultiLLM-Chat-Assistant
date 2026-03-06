@@ -15,6 +15,10 @@ const addMessagesSchema = z.array(
     })
   ).min(1)
 
+const updateConversationSchema = z.object({
+  title: z.string().min(1).max(255),
+})
+
 type ConversationRouteContext = {
   params: Promise<{ id: string }>
 }
@@ -92,6 +96,51 @@ export async function POST(
     return NextResponse.json(updatedConversation)
   } catch (error) {
     console.error('Error updating conversation:', error)
+    return NextResponse.json(
+      { error: 'Failed to update conversation' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * PUT /api/conversations/[id]
+ * Updates conversation metadata (currently title).
+ */
+export async function PUT(
+  req: Request,
+  context: ConversationRouteContext
+) {
+  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  if (authCheck instanceof NextResponse) return authCheck
+  const { user } = authCheck
+
+  try {
+    const { params } = context
+    const { id } = await params
+    const body = await req.json()
+    const validation = updateConversationSchema.safeParse(body)
+
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Invalid input', details: validation.error.flatten() },
+        { status: 400 }
+      )
+    }
+
+    const updatedConversation = await ConversationService.updateConversationTitle(
+      id,
+      user.id,
+      validation.data.title
+    )
+
+    if (!updatedConversation) {
+      return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+    }
+
+    return NextResponse.json(updatedConversation)
+  } catch (error) {
+    console.error('Error renaming conversation:', error)
     return NextResponse.json(
       { error: 'Failed to update conversation' },
       { status: 500 }

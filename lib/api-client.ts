@@ -7,6 +7,9 @@ type NewConversation = {
   title: string
   messages: NewMessage[]
 }
+type ConversationUpdate = {
+  title: string
+}
 type NewGoal = Omit<Goal, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
 
 // Types for Orchestration
@@ -133,6 +136,18 @@ export const apiClient = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(messages),
+      })
+    )
+  },
+  async updateConversation(
+    id: string,
+    data: ConversationUpdate
+  ): Promise<Conversation> {
+    return handleResponse(
+      await fetch(`/api/conversations/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
       })
     )
   },

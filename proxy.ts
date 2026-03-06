@@ -36,7 +36,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  const isProduction = process.env.NODE_ENV === 'production'
   const strictAuth =
+    isProduction ||
     process.env.AUTH_REQUIRE_LOGIN === 'true' ||
     process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN === 'true'
 

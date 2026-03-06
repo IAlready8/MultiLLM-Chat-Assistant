@@ -10,12 +10,20 @@ export async function GET() {
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const configs = await getUserProviderConfigs(user.id)
-  const configuredProviders = configs.map(c => c.provider)
+  try {
+    const configs = await getUserProviderConfigs(user.id)
+    const configuredProviders = configs.map(c => c.provider)
 
-  const response = NextResponse.json({ configuredProviders })
-  response.headers.set('Cache-Control', 'no-store')
-  return response
+    const response = NextResponse.json({ configuredProviders })
+    response.headers.set('Cache-Control', 'no-store')
+    return response
+  } catch (error) {
+    console.error('Failed to load provider configuration:', error)
+    return NextResponse.json(
+      { error: 'Failed to load provider configuration' },
+      { status: 500 }
+    )
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -44,7 +52,11 @@ export async function POST(request: NextRequest) {
     try {
       await deleteUserProviderConfig(user.id, provider)
     } catch (error) {
-      console.warn(`Failed to delete provider config for ${provider}:`, error)
+      console.error(`Failed to delete provider config for ${provider}.`)
+      return NextResponse.json(
+        { error: 'Failed to clear provider configuration' },
+        { status: 500 }
+      )
     }
     return NextResponse.json({ success: true })
   }
@@ -65,7 +77,7 @@ export async function POST(request: NextRequest) {
     await storeUserApiKey(user.id, provider, apiKey, settings)
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Failed to store API key:', error)
+    console.error('Failed to store API key.')
     return NextResponse.json(
       { error: 'Failed to store API key securely' },
       { status: 500 }

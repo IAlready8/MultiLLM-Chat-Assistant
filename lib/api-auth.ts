@@ -13,6 +13,10 @@ type GetAuthenticatedUserOptions = {
   allowGuest?: boolean
 }
 
+type RoleAwareUser = User & {
+  role?: string | null
+}
+
 // Tracks whether we've already logged a session error to avoid log spam
 let sessionErrorLogged = false
 
@@ -103,4 +107,20 @@ export async function getAuthenticatedUser(
 
     return NextResponse.json({ error: 'Auth unavailable' }, { status: 503 })
   }
+}
+
+export async function getAuthenticatedAdmin(): Promise<
+  { user: RoleAwareUser } | NextResponse
+> {
+  const authCheck = await getAuthenticatedUser()
+  if (authCheck instanceof NextResponse) {
+    return authCheck
+  }
+
+  const user = authCheck.user as RoleAwareUser
+  if (user.role !== 'OWNER' && user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  return { user }
 }

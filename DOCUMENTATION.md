@@ -7,6 +7,7 @@ This documentation covers all the APIs, services, components, and hooks implemen
 - Source-of-truth for build, architecture, and deployment is:
   - `README.md`
   - `ARCHITECTURE.md`
+  - `docs/OPERATOR_RUNBOOK.md`
   - `NEXT_UPGRADE_PLAYBOOK.md`
   - `VERCEL_DEPLOYMENT.md`
   - `docs/DEPLOYMENT_GUIDE.md`

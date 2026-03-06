@@ -6,7 +6,7 @@ const mockGetErrorStats = vi.fn()
 const mockGetParsedAnalyticsEvents = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
+  getAuthenticatedAdmin: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/error-system', () => ({
@@ -28,7 +28,7 @@ describe('/api/admin/errors/stats route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAuthenticatedUser.mockResolvedValue({
-      user: { id: 'user-1' },
+      user: { id: 'user-1', role: 'OWNER' },
     })
     mockGetErrorStats.mockResolvedValue({
       total: 1,
@@ -76,6 +76,22 @@ describe('/api/admin/errors/stats route', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Invalid date range: "from" must be before "to".',
     })
+  })
+
+  it('forwards forbidden response for non-admin users', async () => {
+    mockGetAuthenticatedUser.mockResolvedValue(
+      NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    )
+
+    const response = await POST(
+      new Request('http://localhost/api/admin/errors/stats', {
+        method: 'POST',
+      }),
+      routeContext
+    )
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toEqual({ error: 'Forbidden' })
   })
 
   it('merges critical app errors with llm_error analytics events', async () => {

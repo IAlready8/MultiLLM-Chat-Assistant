@@ -200,6 +200,38 @@ describe('/api/llm/stream route', () => {
     expect(body).toContain('"code":"RATE_LIMITED"')
   })
 
+  it('includes PROVIDER_TIMEOUT code when upstream stream request times out', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockRejectedValue(new Error('request timed out while contacting provider'))
+
+    const response = await POST(
+      makeRequest(JSON.stringify({ provider: 'openai', messages: [{ role: 'user', content: 'hello' }] }))
+    )
+
+    expect(response.status).toBe(200)
+    const body = await response.text()
+    expect(body).toContain('"type":"error"')
+    expect(body).toContain('"code":"PROVIDER_TIMEOUT"')
+  })
+
+  it('includes PROVIDER_MALFORMED_RESPONSE when provider stream payload is malformed', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+    } as unknown as Response)
+
+    const response = await POST(
+      makeRequest(JSON.stringify({ provider: 'openai', messages: [{ role: 'user', content: 'hello' }] }))
+    )
+
+    expect(response.status).toBe(200)
+    const body = await response.text()
+    expect(body).toContain('"type":"error"')
+    expect(body).toContain('"code":"PROVIDER_MALFORMED_RESPONSE"')
+  })
+
   it('streams NDJSON chunks on successful provider response', async () => {
     // Build an SSE response body that the adapter can parse
     const sseData = [
