@@ -20,17 +20,23 @@ Set these in Vercel Project Settings -> Environment Variables.
 
 Required:
 - `NEXTAUTH_URL`
-- `NEXTAUTH_SECRET` (required in strict auth mode and recommended for all environments)
+- `NEXTAUTH_SECRET` or `AUTH_SECRET`
 - `API_KEY_ENCRYPTION_SEED`
+- `DATABASE_URL`
 
 Common optional:
 - `AUTH_REQUIRE_LOGIN`
 - `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
 - `DEMO_ACCOUNT_*`
+- `NEXT_PUBLIC_DEMO_ACCOUNT_*`
 - `NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH`
 - `GUEST_USER_*`
+- `NEXT_PUBLIC_GUEST_USER_ID`
 - `PYTHON_CORE_URL` (if using Python orchestration service)
-- `DATABASE_URL` (if you enable real DB-backed behavior)
+- `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` (if billing is enabled)
+- `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL` (for attribution/branding)
+- `LLM_FETCH_TIMEOUT_MS`, `LLM_FETCH_RETRIES` (for outbound request tuning)
+- `NEXT_PUBLIC_SECURE_STORAGE_KEY` (test/dev override)
 
 Use `.env.example` as the source of truth for supported variables.
 
@@ -43,6 +49,8 @@ vercel env add NEXTAUTH_URL production
 vercel env add NEXTAUTH_URL preview
 vercel env add API_KEY_ENCRYPTION_SEED production
 vercel env add API_KEY_ENCRYPTION_SEED preview
+vercel env add DATABASE_URL production
+vercel env add DATABASE_URL preview
 ```
 
 Generate `NEXTAUTH_SECRET` with:
@@ -74,7 +82,7 @@ npm run verify:prod -- --apply-migrations --require-stripe
 ```
 
 This validates:
-- required env vars (`NEXTAUTH_*`, `API_KEY_ENCRYPTION_SEED`, `DATABASE_URL`)
+- required env vars (`NEXTAUTH_*` or `AUTH_SECRET`, `API_KEY_ENCRYPTION_SEED`, `DATABASE_URL`)
 - Prisma migration status/deploy
 - health endpoint status
 - Stripe key + price configuration
@@ -87,6 +95,18 @@ vercel link
 vercel --prod
 ```
 
+## Local Preview-Parity Build
+To validate the branch-scoped preview environment without consuming a deployment:
+
+```bash
+npm run build:preview:local
+npm run verify:preview:local
+npm run smoke:preview:local
+npm run smoke:preview:local:auth
+```
+
+This pulls the current branch's preview env vars from Vercel and runs a local production build with them.
+
 ## Notes on Current Runtime Behavior
 - This repository currently includes Prisma-stubbed data access with service-level in-memory fallbacks.
 - If you deploy exactly as-is, key/conversation fallback data is not durable across process restarts.
@@ -95,8 +115,14 @@ vercel --prod
 ## Troubleshooting
 ### Build fails with auth/env errors
 - Ensure `NEXTAUTH_URL` is set.
-- Ensure `NEXTAUTH_SECRET` is set, especially when strict auth is enabled.
+- Ensure `NEXTAUTH_SECRET` or `AUTH_SECRET` is set.
 - Ensure `API_KEY_ENCRYPTION_SEED` is set.
+- Ensure `DATABASE_URL` is set.
+- Run `vercel env ls preview` and confirm preview vars are available for the branch/environment you are deploying.
+
+### Deployment errors before build starts
+- If Vercel shows `Error` with a `0ms` build, inspect with `vercel deploy --debug` or `vercel inspect <deployment-url>`.
+- A common cause on Hobby plans is hitting the daily deployment API limit (`api-deployments-free-per-day`), which fails before a real build starts.
 
 ### Orchestration endpoint returns 503
 - Set `PYTHON_CORE_URL` to a reachable FastAPI service.

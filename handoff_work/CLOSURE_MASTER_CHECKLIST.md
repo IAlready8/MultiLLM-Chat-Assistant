@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-05 21:49:24 EST` (`2026-03-06T02:49:24Z`)
+- Last updated: `2026-03-06 00:16:44 EST` (`2026-03-06T05:16:44Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -72,6 +72,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - [x] `16.1` Verify `/api/health` truthfulness (PASS)
 - [x] `16.2` Standardize logs and error surfaces (PASS)
 - [x] `16.3` Create operator runbooks (PASS)
+- [x] `17.1` Clean local install proof (PASS)
 
 ---
 

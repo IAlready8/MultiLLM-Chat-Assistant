@@ -13,7 +13,24 @@ class ProviderRequest(BaseModel):
     temperature: float = Field(0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(1000, ge=1, le=4096)
     # ... other params as needed
-    
+
+
+class StreamMessage(BaseModel):
+    """Message model for stream-oriented chat requests."""
+
+    role: Literal["system", "user", "assistant"]
+    content: str = Field(..., max_length=10000)
+
+
+class ProviderStreamRequest(BaseModel):
+    """Request model for streaming chat completions."""
+
+    provider: Literal["openai", "anthropic", "cohere", "google"]
+    messages: List[StreamMessage] = Field(..., min_length=1)
+    model: str
+    temperature: float = Field(0.7, ge=0.0, le=2.0)
+    max_tokens: int = Field(1000, ge=1, le=4096)
+
 class MultiProviderRequest(BaseModel):
     """
     Request model for orchestrating multiple providers.
@@ -39,3 +56,4 @@ class HealthResponse(BaseModel):
     """
     status: Literal["ok", "error"]
     services: dict[str, Literal["ok", "error"]]
+    error: Optional[str] = None

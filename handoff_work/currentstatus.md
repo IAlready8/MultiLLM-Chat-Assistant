@@ -1,7 +1,7 @@
 # .currentstatus
 
-timestamp_local: 2026-03-05 21:49:24 EST
-timestamp_utc: 2026-03-06T02:49:24Z
+timestamp_local: 2026-03-06 00:16:44 EST
+timestamp_utc: 2026-03-06T05:16:44Z
 source: direct repo inspection + command evidence in this session
 
 ## done
@@ -63,18 +63,22 @@ source: direct repo inspection + command evidence in this session
 - `16.1` PASS: `/api/health` now reflects actual dependency state rather than placeholder subsystem values.
 - `16.2` PASS: server logs and route error surfaces now use centralized redaction, and Stripe billing routes return stable safe public errors while preserving operator-visible cause details in logs.
 - `16.3` PASS: operator runbooks are now consolidated into one authoritative procedure set with verified-vs-pending-live-proof boundaries for startup, deploy, rollback, incident response, and recovery.
+- `17.1` PASS: a clean detached worktree from merged `main` completed install, type-check, lint, full tests, and production build successfully.
 
 ## failed
 - none for `01.*` through `16.2`.
 
 ## unverified
-- clean-checkout baseline proof (`npm ci` then `npm run lint`, full-repo `npm run test:run`, `npm run build` in one fresh pass).
 - preview/production deploy + rollback verification.
 - Stripe checkout/portal/webhook live loop.
 - fresh end-to-end preview/production `scripts/verify-production.sh` execution against deployed URLs.
 
 ## blockers
-1. Python stream parity in sidecar is still explicitly TODO (`src/core/main.py:198`).
+1. `17.2` preview deploy proof is infra-blocked:
+   - current PR `#32` has no passing deploy target; Vercel, Netlify, and Cloudflare deploy checks all fail on the latest head commit `2f04591`
+   - older and newly-created Vercel preview URLs are protected by Vercel Authentication, but authenticated `vercel curl` support is now wired into the repo verification scripts for future protected-preview proof runs
+   - preview env remediation was partially completed, but a fresh CLI preview deploy is now blocked by Vercel plan quota exhaustion (`api-deployments-free-per-day`)
+   - local reproduction with pulled Vercel envs passed (`npx prisma migrate status`, `npm run build`), so the remaining blocker is provider-side, not an unresolved repository build failure
 
 ## 01.1 evidence (raw)
 ```text
@@ -150,7 +154,7 @@ DOCS_TOP_COUNT	      22
 | `README.md` | `README.md:115` says runtime uses Prisma stubs in `lib/prisma.ts`. | `lib/prisma.ts:22` checks `DATABASE_URL`; `:63-74` creates real runtime client when set; fallback stub only when absent. | ambiguous/incomplete |
 | `CLAUDE.md` | `CLAUDE.md:106` says Python core exists but not integrated with Next.js runtime. | `app/api/llm/orchestrate/route.ts:198` calls `${PYTHON_CORE_URL}/api/v1/llm/orchestrate`; fallback headers at `:246`, `:270`, `:277`; sidecar is integrated but optional/degraded capable. | stale |
 | `ARCHITECTURE.md` | No contradiction found in this pass (`ARCHITECTURE.md` lines around runtime/auth/llm align with current code). | N/A | no mismatch observed |
-| `PYTHON_INTEGRATION.md` | No contradiction found in this pass (optional sidecar + fallback behavior matches code). | `app/api/llm/orchestrate/route.ts` fallback and `src/core/main.py:198` TODO stream endpoint are consistent with doc scope. | no mismatch observed |
+| `PYTHON_INTEGRATION.md` | No contradiction found in this pass (optional sidecar + fallback behavior matches code). | `app/api/llm/orchestrate/route.ts` fallback behavior and `src/core/main.py:303` `/api/v1/llm/stream` implementation are consistent with current optional-sidecar scope. | no mismatch observed |
 
 ## additional code truth anchors used in `01.3`
 ```text
@@ -174,7 +178,11 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `17.1`: capture clean local install proof from a fresh baseline run (`npm ci`, lint, tests, build).
+Wait for Vercel preview deployment quota to reset (or upgrade plan capacity), then re-run `17.2` from this branch:
+- use the Vercel-linked CLI already authenticated on this machine
+- deploy with required preview env injection
+- run `npm run verify:prod -- --base-url https://<preview-url>` with `USE_VERCEL_CURL=true`
+- run `bash scripts/smoke-test.sh --base-url https://<preview-url>` with `USE_VERCEL_CURL=true`
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -317,7 +325,7 @@ TOTAL (22)
 - Command evidence:
   - `bash scripts/verify-production.sh --help` -> passes and shows new options.
   - `bash scripts/verify-production.sh` -> fails fast on missing `NEXTAUTH_URL` (expected).
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --apply-migrations` -> passed end-to-end.
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --apply-migrations` -> passed end-to-end.
 
 ## 05.1 evidence (stale docs rewritten)
 - Files rewritten/updated:
@@ -381,7 +389,7 @@ TOTAL (22)
   - `rg -n "^model\\s+" prisma/schema.prisma`
   - `ls -la prisma/migrations`
   - `rg -n "prisma\\.(user|conversation|message|persona|goal|analytics|providerConfig|subscription|team|account|session|verificationToken)" app lib services`
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
 - Result:
   - Schema contains all runtime entities referenced by supported feature surfaces.
   - Migration status is up to date on verification DB.
@@ -456,13 +464,13 @@ TOTAL (22)
 
 ## 07.4 evidence (migration path verified)
 - Database target:
-  - `postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302`
+  - `postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302`
 - Commands run:
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
     - output: `Database schema is up to date!`
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate deploy`
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate deploy`
     - output: `No pending migrations to apply.`
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status` (post-deploy recheck)
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status` (post-deploy recheck)
     - output: `Database schema is up to date!`
 - Result:
   - Migration deploy path is clean in production-like mode with no drift or pending mismatch.
@@ -1009,11 +1017,11 @@ TOTAL (22)
     - result: passed; options output still matches intended contract.
   - `bash scripts/verify-production.sh`
     - result: failed fast on missing `NEXTAUTH_URL` (expected).
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --check-webhook`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --check-webhook`
     - result: failed fast with `ERROR: --check-webhook requires --base-url.` (expected).
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --require-sidecar`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --require-sidecar`
     - result: failed fast on missing `PYTHON_CORE_URL` (expected).
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --apply-migrations`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 bash scripts/verify-production.sh --apply-migrations`
     - result: passed end-to-end; DB reachable and Prisma migration status clean.
   - `bash -n scripts/verify-production.sh`
     - result: passed.
@@ -1048,11 +1056,11 @@ TOTAL (22)
     - result: passed.
   - `npm run test:run`
     - result: `33` files passed, `235` tests passed.
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
     - result: passed.
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npm run verify:prod -- --apply-migrations`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npm run verify:prod -- --apply-migrations`
     - result: passed.
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=verify-secret-32chars API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false bash scripts/smoke-test.sh --base-url http://localhost:3000 --start-server`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false bash scripts/smoke-test.sh --base-url http://localhost:3000 --start-server`
     - result: passed with production-mode auth enforcement semantics (`19` passed, `0` failed, `13` skipped).
 - Result:
   - `14.3` PASS: required GitHub gates now map to the actual release contract, and non-required bot noise is reduced without changing the required check names.
@@ -1237,3 +1245,96 @@ TOTAL (22)
     - result: runbook references and verification-state markers present in the intended doc set.
 - Result:
   - `16.3` PASS: another operator now has one clear runbook set for startup, verification, deployment preparation, rollback preparation, and incident handling without needing to reconstruct the procedure from scattered docs.
+
+## 17.1 evidence (Clean local install proof)
+- Execution model:
+  - created a separate clean detached worktree from merged `main` commit `823b1ec` at `/tmp/multillm-cleanproof-I36JJZ`
+  - ran baseline install/build/test gates there instead of reusing the existing working tree
+- Verification commands:
+  - `git worktree add --detach /tmp/multillm-cleanproof-I36JJZ HEAD`
+  - `npm ci`
+    - result: passed in the clean worktree; `postinstall` ran `prisma generate` successfully.
+  - `npm run type-check`
+    - result: passed.
+  - `npm run lint`
+    - result: passed.
+  - `npm run test:run`
+    - result: `35` files passed, `245` tests passed.
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+    - result: passed; production build completed and emitted the expected route manifest.
+- Result:
+  - `17.1` PASS: the merged `main` state can be installed and gated cleanly from a fresh detached worktree without relying on prior workspace artifacts.
+
+## 17.2 evidence (Preview deploy proof discovery, blocked)
+- Target under test:
+  - PR `#32` (`codex/clean-install-proof-20260306`) now at head commit `2f04591`
+- GitHub-side signal:
+  - required GitHub Actions checks pass on the PR head:
+    - `Quality Checks`
+    - `Security Audit`
+    - `Smoke Tests`
+  - external deploy checks fail on the same head:
+    - `Vercel – goodmulti-llm-chat-assistant`
+    - `Vercel – goodmulti-llm-chat-assistant2`
+    - `Vercel – multi-llm-chat-assistant`
+    - `Vercel – multi-llm-chat-assistant-pdpj`
+    - `Vercel – multi-llm-chat-assistantt`
+    - `Vercel – multi-llm-chat-assistanttt`
+    - `netlify/multi-assistantt/deploy-preview`
+    - `Workers Builds: chatassistant`
+    - `Workers Builds: multillm-chat-assistant`
+    - `Workers Builds: multillmchatassistant`
+- Preview URL discovery:
+  - Vercel CLI is now authenticated and project-linked for `itsokialready8/multi-llm-chat-assistant`
+  - older Vercel preview domains referenced from prior Vercel comments were probed directly
+  - all tested domains returned `401 Authentication Required` from Vercel preview protection
+  - repo verification scripts were upgraded to support protected-preview requests through authenticated `vercel curl` when `USE_VERCEL_CURL=true`
+- Preview env audit:
+  - preview environment initially lacked all required app vars:
+    - `DATABASE_URL`
+    - `NEXTAUTH_URL`
+    - `NEXTAUTH_SECRET`
+    - `API_KEY_ENCRYPTION_SEED`
+  - production environment already had all four
+  - branch-scoped preview env entries were added in Vercel, but manual CLI preview deploys still did not consume them
+- Deployment attempts:
+  - authenticated preview probe of user-supplied URL `https://multi-llm-chat-assistant-p40yf9enq-itsokialready8.vercel.app` returned Vercel's `Deployment has failed`
+  - a fresh preview deploy was created at `https://multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app`, but it also failed before application build completion
+  - a follow-up deploy using explicit build-time and runtime env injection was blocked by Vercel quota exhaustion:
+    - `Error: Resource is limited - try again in 17 hours (more than 100, code: "api-deployments-free-per-day")`
+- Local reproduction using Vercel env state:
+  - pulled preview and production env snapshots via authenticated Vercel CLI
+  - set local `DATABASE_URL` to preview `POSTGRES_PRISMA_URL`
+  - reused pulled `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, and `API_KEY_ENCRYPTION_SEED`
+  - `npx prisma migrate status` passed against the preview database target
+  - `npm run build` passed with the same env combination
+- Local operator constraints observed:
+  - `netlify` CLI not installed/authenticated
+  - `wrangler` CLI not installed/authenticated
+- Verification commands:
+  - `gh pr checks 32`
+  - `gh pr view 32 --comments`
+  - `gh pr view 32 --json statusCheckRollup --jq '.statusCheckRollup[] | {name: .name, status: .status, conclusion: .conclusion, detailsUrl: .detailsUrl}'`
+  - `npx --yes vercel whoami`
+  - `cat .vercel/project.json`
+  - `npx --yes vercel env ls`
+  - `curl -I -L https://goodmulti-llm-chat-assistant-git-codex-cl-55be64-itsokialready8.vercel.app`
+  - `curl -I -L https://goodmulti-llm-chat-assistant2-git-codex-c-e0fc39-itsokialready8.vercel.app`
+  - `curl -I -L https://multi-llm-chat-assistant-pdpj-git-codex-c-d756c9-itsokialready8.vercel.app`
+  - `curl -I -L https://multi-llm-chat-assistantt-git-codex-clean-b267ab-itsokialready8.vercel.app`
+  - `curl -I -L https://multi-llm-chat-assistanttt-git-codex-clea-846be1-itsokialready8.vercel.app`
+  - `npx --yes vercel curl /api/health --deployment https://multi-llm-chat-assistant-p40yf9enq-itsokialready8.vercel.app -- -sS`
+  - `npx --yes vercel env add DATABASE_URL preview codex/clean-install-proof-20260306 --value ... --yes --force`
+  - `npx --yes vercel env add NEXTAUTH_URL preview codex/clean-install-proof-20260306 --value ... --yes --force`
+  - `npx --yes vercel env add NEXTAUTH_SECRET preview codex/clean-install-proof-20260306 --value ... --yes --force`
+  - `npx --yes vercel env add API_KEY_ENCRYPTION_SEED preview codex/clean-install-proof-20260306 --value ... --yes --force`
+  - `npx --yes vercel deploy --target preview --force --yes`
+  - `npx --yes vercel inspect https://multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app`
+  - `npx --yes vercel deploy --target preview --force --yes -b ... -e ...`
+  - `npx prisma migrate status` (with pulled Vercel envs)
+  - `npm run build` (with pulled Vercel envs)
+- Result:
+  - `17.2` remains open.
+  - protected-preview access is now supported by repo tooling.
+  - repository-local reproduction using the pulled Vercel env contract passes.
+  - a successful fresh preview deployment is currently blocked by Vercel plan quota and prior failed preview state.

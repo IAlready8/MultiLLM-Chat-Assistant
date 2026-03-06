@@ -29,6 +29,7 @@ Setup:
 3. Set minimum env for local app usage:
    - `NEXTAUTH_URL`
    - `API_KEY_ENCRYPTION_SEED`
+   - `NEXTAUTH_SECRET` or `AUTH_SECRET` when strict auth is enabled
    - `AUTH_REQUIRE_LOGIN` / `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN` (optional; defaults to guest-friendly mode)
 4. Start dev server: `npm run dev`
 
@@ -113,6 +114,15 @@ To apply pending DB migrations and enforce optional integrations:
 npm run verify:prod -- --apply-migrations --require-stripe --require-sidecar
 ```
 
+For branch-aware preview parity without creating a Vercel deployment:
+
+```bash
+npm run build:preview:local
+npm run verify:preview:local
+npm run smoke:preview:local
+npm run smoke:preview:local:auth
+```
+
 ## Architecture Snapshot
 - App/UI: Next.js App Router (`app/*`) + reusable components (`components/*`)
 - API layer: route handlers in `app/api/*`
@@ -129,11 +139,13 @@ Primary reference: `.env.example`
 
 Key groups:
 - Auth/session: `NEXTAUTH_URL`, `NEXTAUTH_SECRET` (or `AUTH_SECRET`), `AUTH_REQUIRE_LOGIN`, `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
-- Demo/guest behavior: `DEMO_ACCOUNT_*`, `NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH`, `GUEST_USER_*`
+- Demo/guest behavior: `DEMO_ACCOUNT_*`, `NEXT_PUBLIC_DEMO_ACCOUNT_*`, `GUEST_USER_*`, `NEXT_PUBLIC_GUEST_USER_ID`
 - Provider key encryption: `API_KEY_ENCRYPTION_SEED`
 - Database: `DATABASE_URL` (required in production)
 - Optional billing: `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
 - Optional sidecar routing: `PYTHON_CORE_URL`
+- Optional app metadata/network tuning: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL`, `LLM_FETCH_TIMEOUT_MS`, `LLM_FETCH_RETRIES`
+- Optional client secure-storage override: `NEXT_PUBLIC_SECURE_STORAGE_KEY`
 
 ## Deployment
 - Operator runbook: `docs/OPERATOR_RUNBOOK.md`
@@ -151,7 +163,7 @@ This is the exact command flow used to deploy without changing source files:
    - `git push origin main`
 2. Create a Vercel preview deployment:
    - `vercel deploy -y`
-3. If `vercel.json` references secrets with `@secret_name` and those secrets are missing, deploy with temporary overrides:
+3. If you must test with temporary CLI overrides instead of permanent project env vars:
    - Build-time (`-b`) and runtime (`-e`) values may both be required for frameworks that read env during build.
    - Example:
      - `vercel deploy -y -b NEXTAUTH_SECRET=... -b NEXTAUTH_URL=... -b API_KEY_ENCRYPTION_SEED=... -b DATABASE_URL=... -e NEXTAUTH_SECRET=... -e NEXTAUTH_URL=... -e API_KEY_ENCRYPTION_SEED=... -e DATABASE_URL=...`
@@ -162,17 +174,22 @@ Configure once in Vercel Project Settings:
 1. Connect this GitHub repository to the Vercel project.
 2. Set `Production Branch` to `main`.
 3. Add required environment variables in Vercel for both `Production` and `Preview`:
-   - `NEXTAUTH_SECRET`
+   - `NEXTAUTH_SECRET` or `AUTH_SECRET`
    - `NEXTAUTH_URL`
    - `API_KEY_ENCRYPTION_SEED`
-   - `DATABASE_URL` (if your runtime/build path needs it)
+   - `DATABASE_URL`
+   - Add Stripe vars to any environment where billing verification is expected:
+     - `STRIPE_SECRET_KEY`
+     - `STRIPE_PRO_PRICE_ID`
+     - `STRIPE_WEBHOOK_SECRET`
+   - Add `PYTHON_CORE_URL` if the sidecar is part of that environment
    - CLI shortcut:
      - `vercel env add NEXTAUTH_SECRET production && vercel env add NEXTAUTH_SECRET preview`
      - `vercel env add NEXTAUTH_URL production && vercel env add NEXTAUTH_URL preview`
      - `vercel env add API_KEY_ENCRYPTION_SEED production && vercel env add API_KEY_ENCRYPTION_SEED preview`
-4. Fix secret wiring so deploys do not depend on CLI overrides:
-   - Option A: Create the Vercel secrets referenced in `vercel.json` (`@database_url`, `@nextauth_secret`, `@nextauth_url`, `@api_key_encryption_seed`).
-   - Option B: Remove secret references from `vercel.json` and manage env vars directly in Vercel settings.
+4. Keep preview and production scopes aligned.
+   - Vercel preview envs can be branch-scoped; verify them with `vercel env ls preview`.
+   - Do not assume preview inherits production-only vars such as Stripe keys.
 5. Ensure your Git author identity is valid and has access to the Vercel team/project (email must match an authorized member).
 
 After this setup, every `git push origin main` should trigger a production deployment automatically via Vercel Git integration.

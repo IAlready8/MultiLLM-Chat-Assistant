@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-05 21:49 EST)
+## Progress snapshot (2026-03-06 00:16 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -65,12 +65,13 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `16.1` Verify `/api/health` truthfulness against configured dependencies
   - `16.2` Standardize log/error surfaces with centralized redaction and safe public billing errors
   - `16.3` Consolidate operator runbooks with verified-vs-pending-proof boundaries
+  - `17.1` Prove clean local install/build/test flow from a fresh detached worktree
 - failed:
   - none
 - unverified:
-  - clean-checkout baseline proof + live deploy/rollback proof not executed yet
+  - live deploy/rollback proof not executed yet
 - blockers:
-  - Python sidecar stream parity still pending (`src/core/main.py` TODO endpoint)
+  - `17.2` preview deploy proof is blocked by Vercel daily deployment quota after authenticated preview-access/tooling remediation (`api-deployments-free-per-day`)
 
 ## Phase A - truth locking
 1. [x] Reconfirm repo baseline
@@ -195,7 +196,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - Usage scan:
   - `rg -n "prisma\\.(...)" app lib services` confirms active model usage paths.
 - Migration status command:
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
   - output: `Database schema is up to date!`
 
 ## 07.2 implementation evidence
@@ -242,11 +243,11 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 
 ## 07.4 implementation evidence
 - Verification database:
-  - `postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302`
+  - `postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302`
 - Commands:
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate deploy`
-  - `DATABASE_URL=postgresql://d4ni3l@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status` (recheck)
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status`
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate deploy`
+  - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 npx prisma migrate status` (recheck)
 - Outcome:
   - `Database schema is up to date!`
   - `No pending migrations to apply.`
@@ -643,7 +644,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 29. [x] Upgrade smoke script to cover actual supported flows
 30. [x] Upgrade production verification script
 31. [x] Align CI with real release gates
-32. [ ] Run clean local install -> type-check -> lint -> tests -> build
+32. [x] Run clean local install -> type-check -> lint -> tests -> build
 33. [ ] Run preview deploy verification
 34. [ ] Run production deploy verification
 35. [ ] Run rollback proof
@@ -668,6 +669,41 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - Outcome:
   - operator procedure docs are now consolidated
   - verified local procedures are separated clearly from still-open live deploy/rollback proof steps
+
+## 17.1 implementation evidence
+- Fresh-baseline proof model:
+  - created detached worktree `/tmp/multillm-cleanproof-I36JJZ` at merged `main` commit `823b1ec`
+  - ran install/build/test there instead of in the long-lived working tree
+- Verification commands:
+  - `npm ci`
+  - `npm run type-check`
+  - `npm run lint`
+  - `npm run test:run`
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+- Outcome:
+  - clean install/build/test proof is now captured on merged `main`
+
+## 17.2 implementation evidence (blocked discovery)
+- PR under test:
+  - `#32` on head commit `2f04591`
+- Confirmed on GitHub:
+  - `Quality Checks`, `Security Audit`, and `Smoke Tests` pass
+  - all visible external deploy providers still fail on the same head commit:
+    - multiple Vercel projects
+    - Netlify preview
+    - Cloudflare Workers builds
+- Confirmed by direct probe and remediation:
+  - authenticated Vercel CLI is now linked to project `itsokialready8/multi-llm-chat-assistant`
+  - repo scripts now support protected-preview requests through `vercel curl`
+  - preview env originally lacked `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, and `API_KEY_ENCRYPTION_SEED`
+  - user-supplied preview deployment `multi-llm-chat-assistant-p40yf9enq-itsokialready8.vercel.app` was already in failed state
+  - freshly created preview deployment `multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app` also failed
+  - deploy-time env injection path was attempted next, but Vercel blocked further preview deploys due daily free deployment quota exhaustion
+  - local reproduction using the pulled Vercel env contract passed:
+    - `npx prisma migrate status`
+    - `npm run build`
+- Outcome:
+  - do not close `17.2` until Vercel quota resets (or plan capacity is increased), one fresh preview deploy succeeds, and `verify:prod` + smoke are run through the new protected-preview-aware tooling
 
 ## 16.2 implementation evidence
 - Code changes:

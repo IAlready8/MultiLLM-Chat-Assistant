@@ -17,6 +17,11 @@ NC='\033[0m'
 BASE_URL="${BASE_URL:-http://localhost:3000}"
 START_SERVER=false
 SESSION_COOKIE="${SMOKE_SESSION_COOKIE:-}"
+AUTH_EMAIL="${SMOKE_AUTH_EMAIL:-}"
+AUTH_PASSWORD="${SMOKE_AUTH_PASSWORD:-}"
+AUTH_NAME="${SMOKE_AUTH_NAME:-Preview Smoke}"
+USE_VERCEL_CURL="${USE_VERCEL_CURL:-false}"
+VERCEL_CURL_DEPLOYMENT="${VERCEL_CURL_DEPLOYMENT:-}"
 SERVER_PID=""
 SERVER_PORT=""
 PASS=0
@@ -29,6 +34,9 @@ while [[ $# -gt 0 ]]; do
     --base-url) BASE_URL="$2"; shift 2 ;;
     --start-server) START_SERVER=true; shift ;;
     --session-cookie) SESSION_COOKIE="$2"; shift 2 ;;
+    --auth-email) AUTH_EMAIL="$2"; shift 2 ;;
+    --auth-password) AUTH_PASSWORD="$2"; shift 2 ;;
+    --auth-name) AUTH_NAME="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -51,6 +59,27 @@ cleanup() {
 }
 trap cleanup EXIT
 
+http_request() {
+  local url="$1"
+  shift
+
+  if [ "$USE_VERCEL_CURL" = true ]; then
+    local deployment="${VERCEL_CURL_DEPLOYMENT:-${BASE_URL}}"
+    local path="${url#${BASE_URL}}"
+
+    if [ "$path" = "$url" ]; then
+      echo "ERROR: URL '${url}' does not match BASE_URL '${BASE_URL}' for vercel curl routing." >&2
+      return 1
+    fi
+    [ -z "$path" ] && path="/"
+
+    npx --yes vercel curl "$path" --deployment "$deployment" -- "$@"
+    return
+  fi
+
+  curl "$@" "$url"
+}
+
 request_json() {
   local method="$1"
   local path="$2"
@@ -68,9 +97,84 @@ request_json() {
     curl_args+=(-H 'Content-Type: application/json' -d "$payload")
   fi
 
-  HTTP_STATUS=$(curl "${curl_args[@]}" "${BASE_URL}${path}" 2>/dev/null || echo "000")
+  HTTP_STATUS=$(http_request "${BASE_URL}${path}" "${curl_args[@]}" 2>/dev/null || echo "000")
   HTTP_BODY=$(cat "$body_file" 2>/dev/null || echo '{}')
   rm -f "$body_file"
+}
+
+obtain_session_cookie() {
+  local email="$1"
+  local password="$2"
+  local name="$3"
+  local cookie_jar
+  local body_file
+  local csrf_json
+  local csrf_token
+  local auth_status
+  local session_body
+  local session_email
+
+  cookie_jar="$(mktemp)"
+  body_file="$(mktemp)"
+
+  csrf_json=$(http_request "${BASE_URL}/api/auth/csrf" -s -c "$cookie_jar" -b "$cookie_jar" 2>/dev/null || echo '{}')
+  csrf_token=$(echo "$csrf_json" | python3 -c "
+import sys, json
+try:
+    print(json.load(sys.stdin).get('csrfToken', ''))
+except Exception:
+    print('')
+" 2>/dev/null || echo "")
+
+  if [ -z "$csrf_token" ]; then
+    rm -f "$cookie_jar" "$body_file"
+    echo "ERROR: Could not obtain CSRF token for authenticated smoke run." >&2
+    return 1
+  fi
+
+  auth_status=$(http_request "${BASE_URL}/api/auth/callback/credentials?json=true" \
+    -s -L -o "$body_file" -w '%{http_code}' \
+    -c "$cookie_jar" -b "$cookie_jar" \
+    -X POST \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    --data-urlencode "csrfToken=${csrf_token}" \
+    --data-urlencode "callbackUrl=${BASE_URL}/" \
+    --data-urlencode "json=true" \
+    --data-urlencode "redirect=false" \
+    --data-urlencode "email=${email}" \
+    --data-urlencode "password=${password}" \
+    --data-urlencode "name=${name}" \
+    2>/dev/null || echo "000")
+
+  if [ "$auth_status" != "200" ] && [ "$auth_status" != "302" ]; then
+    rm -f "$cookie_jar" "$body_file"
+    echo "ERROR: Credential sign-in failed for authenticated smoke run (HTTP ${auth_status})." >&2
+    return 1
+  fi
+
+  session_body=$(http_request "${BASE_URL}/api/auth/session" -s -b "$cookie_jar" 2>/dev/null || echo '{}')
+  session_email=$(echo "$session_body" | python3 -c "
+import sys, json
+try:
+    user = json.load(sys.stdin).get('user') or {}
+    print(user.get('email', ''))
+except Exception:
+    print('')
+" 2>/dev/null || echo "")
+
+  if [ "${session_email}" != "${email}" ]; then
+    rm -f "$cookie_jar" "$body_file"
+    echo "ERROR: Session verification failed for authenticated smoke run." >&2
+    return 1
+  fi
+
+  SESSION_COOKIE=$(awk 'BEGIN { sep="" } (($0 !~ /^#/) || ($0 ~ /^#HttpOnly_/)) && NF >= 7 { printf "%s%s=%s", sep, $6, $7; sep="; " }' "$cookie_jar")
+  rm -f "$cookie_jar" "$body_file"
+
+  if [ -z "$SESSION_COOKIE" ]; then
+    echo "ERROR: No session cookie captured for authenticated smoke run." >&2
+    return 1
+  fi
 }
 
 assert_status_any() {
@@ -137,7 +241,7 @@ if [ "$START_SERVER" = true ]; then
 
   # Wait for server readiness (up to 30s)
   for i in $(seq 1 30); do
-    if curl -sf "${BASE_URL}/api/health" >/dev/null 2>&1; then
+    if http_request "${BASE_URL}/api/health" -sf >/dev/null 2>&1; then
       echo -e "${GREEN}Server ready after ${i}s${NC}"
       break
     fi
@@ -147,6 +251,12 @@ if [ "$START_SERVER" = true ]; then
     fi
     sleep 1
   done
+fi
+
+if [ -z "$SESSION_COOKIE" ] && [ -n "$AUTH_EMAIL" ] && [ -n "$AUTH_PASSWORD" ]; then
+  echo -e "${YELLOW}Obtaining authenticated session cookie for smoke run...${NC}"
+  obtain_session_cookie "$AUTH_EMAIL" "$AUTH_PASSWORD" "$AUTH_NAME"
+  echo -e "${GREEN}Authenticated smoke session ready for ${AUTH_EMAIL}${NC}"
 fi
 
 echo ""
@@ -159,10 +269,10 @@ echo "========================================"
 echo ""
 echo "0) Health endpoint checks"
 
-health_status_code=$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/health" 2>/dev/null || echo "000")
+health_status_code=$(http_request "${BASE_URL}/api/health" -s -o /dev/null -w '%{http_code}' 2>/dev/null || echo "000")
 assert_status "GET /api/health" "200" "$health_status_code"
 
-health_body=$(curl -s "${BASE_URL}/api/health" 2>/dev/null || echo '{}')
+health_body=$(http_request "${BASE_URL}/api/health" -s 2>/dev/null || echo '{}')
 health_state=$(echo "$health_body" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -177,7 +287,7 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-health_metrics_body=$(curl -s "${BASE_URL}/api/health?metrics=1" 2>/dev/null || echo '{}')
+health_metrics_body=$(http_request "${BASE_URL}/api/health?metrics=1" -s 2>/dev/null || echo '{}')
 has_metrics_routes=$(echo "$health_metrics_body" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -200,7 +310,7 @@ echo "1) Page reachability checks"
 
 PAGES=("/" "/multi-chat" "/settings" "/goal-hub" "/analytics" "/personas" "/pipeline" "/comparison")
 for page in "${PAGES[@]}"; do
-  status=$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}${page}" 2>/dev/null || echo "000")
+  status=$(http_request "${BASE_URL}${page}" -s -o /dev/null -w '%{http_code}' 2>/dev/null || echo "000")
   assert_status_any "GET ${page}" "$status" "200" "307" "308"
 done
 
