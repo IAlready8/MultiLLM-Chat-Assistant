@@ -1157,11 +1157,11 @@ TOTAL (22)
   - scope: Vercel/Netlify/Cloudflare statuses on PRs
   - reason accepted now: branch protection only requires `Quality Checks` and `Smoke Tests`; the remaining noise is non-blocking but still operationally noisy until provider-side cleanup is done
   - containment: required GitHub gates were narrowed and stable in `14.3`
-- `RISK-003` Python sidecar stream parity is still incomplete
+- `RISK-003` Optional sidecar runtime remains live-proof pending
   - owner: Repo operator
-  - scope: `src/core/main.py` lacks the stream endpoint parity noted in the handoff pack; orchestration remains optional
-  - reason accepted now: sidecar is outside the locked core production contract, and the Next.js route has tested fallback behavior
-  - containment: optional scope only; no core release gate depends on it
+  - scope: Python sidecar remains outside the locked core production contract and is not configured in the live production deployment
+  - reason accepted now: sidecar stream parity is implemented, but no release gate currently depends on a live sidecar deployment
+  - containment: optional scope only; core release acceptance is covered by Next.js runtime tests and fallback behavior
 - Result:
   - `15.4` PASS: remaining security/operational risks are explicit, owned, and bounded; no serious unknown security risk remains unregistered in the current pass.
 
