@@ -1,8 +1,8 @@
 # .currentstatus
 
-timestamp_local: 2026-03-06 00:16:44 EST
-timestamp_utc: 2026-03-06T05:16:44Z
-source: direct repo inspection + command evidence in this session
+timestamp_local: 2026-03-06 06:59:01 EST
+timestamp_utc: 2026-03-06T11:59:01Z
+source: fresh `origin/main` audit + command evidence in this session
 
 ## done
 - `01.1` PASS: repo identity recorded with raw command output.
@@ -74,11 +74,13 @@ source: direct repo inspection + command evidence in this session
 - fresh end-to-end preview/production `scripts/verify-production.sh` execution against deployed URLs.
 
 ## blockers
-1. `17.2` preview deploy proof is infra-blocked:
-   - current PR `#32` has no passing deploy target; Vercel, Netlify, and Cloudflare deploy checks all fail on the latest head commit `2f04591`
-   - older and newly-created Vercel preview URLs are protected by Vercel Authentication, but authenticated `vercel curl` support is now wired into the repo verification scripts for future protected-preview proof runs
-   - preview env remediation was partially completed, but a fresh CLI preview deploy is now blocked by Vercel plan quota exhaustion (`api-deployments-free-per-day`)
-   - local reproduction with pulled Vercel envs passed (`npx prisma migrate status`, `npm run build`), so the remaining blocker is provider-side, not an unresolved repository build failure
+1. `17.2` preview deploy proof remains open:
+   - merged `main` passes local release gates (`npm run type-check`, `npm run lint`, `npm run test:run`, production `npm run build`)
+   - protected-preview verification tooling is prepared in `scripts/verify-production.sh`, `scripts/smoke-test.sh`, and `scripts/vercel-preview-run.sh`
+   - required preview app vars are now present for branch `codex/post-merge-audit-20260306` in the linked Vercel project
+   - remaining work is live-environment proof against one healthy canonical preview deployment URL
+   - external Vercel / Netlify / Cloudflare preview checks remain informational noise and are not authoritative release gates
+   - a fresh Vercel preview deploy attempt from this branch is still rate-limited on the hobby plan (`api-deployments-free-per-day`)
 
 ## 01.1 evidence (raw)
 ```text
@@ -168,8 +170,10 @@ ORCHESTRATE_PROXY
 243:        const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
 246:          headers: { 'x-orchestration-fallback': 'local' },
 
-PY_MAIN_TODO
-198:# TODO: Add /api/v1/llm/stream endpoint
+PY_MAIN_STREAM
+303:@app.post("/api/v1/llm/stream")
+304:async def post_stream(request: ProviderStreamRequest):
+347:    return StreamingResponse(
 
 PRISMA_SPLIT
 22:const hasDatabaseUrl = Boolean(process.env.DATABASE_URL?.trim())
@@ -178,11 +182,12 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Wait for Vercel preview deployment quota to reset (or upgrade plan capacity), then re-run `17.2` from this branch:
-- use the Vercel-linked CLI already authenticated on this machine
-- deploy with required preview env injection
-- run `npm run verify:prod -- --base-url https://<preview-url>` with `USE_VERCEL_CURL=true`
-- run `bash scripts/smoke-test.sh --base-url https://<preview-url>` with `USE_VERCEL_CURL=true`
+Resume `17.2` from fresh `main` with one healthy canonical preview URL:
+- use the already-linked Vercel CLI/project
+- confirm preview env contains `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET` or `AUTH_SECRET`, and `API_KEY_ENCRYPTION_SEED`
+- run `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> npm run verify:prod -- --base-url https://<preview-url>`
+- run `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> bash scripts/smoke-test.sh --base-url https://<preview-url>`
+- once preview proof passes, continue directly to `17.3` production deploy proof and `17.4` rollback proof
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1152,11 +1157,11 @@ TOTAL (22)
   - scope: Vercel/Netlify/Cloudflare statuses on PRs
   - reason accepted now: branch protection only requires `Quality Checks` and `Smoke Tests`; the remaining noise is non-blocking but still operationally noisy until provider-side cleanup is done
   - containment: required GitHub gates were narrowed and stable in `14.3`
-- `RISK-003` Python sidecar stream parity is still incomplete
+- `RISK-003` Optional sidecar runtime remains live-proof pending
   - owner: Repo operator
-  - scope: `src/core/main.py` lacks the stream endpoint parity noted in the handoff pack; orchestration remains optional
-  - reason accepted now: sidecar is outside the locked core production contract, and the Next.js route has tested fallback behavior
-  - containment: optional scope only; no core release gate depends on it
+  - scope: Python sidecar remains outside the locked core production contract and is not configured in the live production deployment
+  - reason accepted now: sidecar stream parity is implemented, but no release gate currently depends on a live sidecar deployment
+  - containment: optional scope only; core release acceptance is covered by Next.js runtime tests and fallback behavior
 - Result:
   - `15.4` PASS: remaining security/operational risks are explicit, owned, and bounded; no serious unknown security risk remains unregistered in the current pass.
 
@@ -1265,76 +1270,22 @@ TOTAL (22)
 - Result:
   - `17.1` PASS: the merged `main` state can be installed and gated cleanly from a fresh detached worktree without relying on prior workspace artifacts.
 
-## 17.2 evidence (Preview deploy proof discovery, blocked)
-- Target under test:
-  - PR `#32` (`codex/clean-install-proof-20260306`) now at head commit `2f04591`
-- GitHub-side signal:
-  - required GitHub Actions checks pass on the PR head:
-    - `Quality Checks`
-    - `Security Audit`
-    - `Smoke Tests`
-  - external deploy checks fail on the same head:
-    - `Vercel – goodmulti-llm-chat-assistant`
-    - `Vercel – goodmulti-llm-chat-assistant2`
-    - `Vercel – multi-llm-chat-assistant`
-    - `Vercel – multi-llm-chat-assistant-pdpj`
-    - `Vercel – multi-llm-chat-assistantt`
-    - `Vercel – multi-llm-chat-assistanttt`
-    - `netlify/multi-assistantt/deploy-preview`
-    - `Workers Builds: chatassistant`
-    - `Workers Builds: multillm-chat-assistant`
-    - `Workers Builds: multillmchatassistant`
-- Preview URL discovery:
-  - Vercel CLI is now authenticated and project-linked for `itsokialready8/multi-llm-chat-assistant`
-  - older Vercel preview domains referenced from prior Vercel comments were probed directly
-  - all tested domains returned `401 Authentication Required` from Vercel preview protection
-  - repo verification scripts were upgraded to support protected-preview requests through authenticated `vercel curl` when `USE_VERCEL_CURL=true`
-- Preview env audit:
-  - preview environment initially lacked all required app vars:
-    - `DATABASE_URL`
-    - `NEXTAUTH_URL`
-    - `NEXTAUTH_SECRET`
-    - `API_KEY_ENCRYPTION_SEED`
-  - production environment already had all four
-  - branch-scoped preview env entries were added in Vercel, but manual CLI preview deploys still did not consume them
-- Deployment attempts:
-  - authenticated preview probe of user-supplied URL `https://multi-llm-chat-assistant-p40yf9enq-itsokialready8.vercel.app` returned Vercel's `Deployment has failed`
-  - a fresh preview deploy was created at `https://multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app`, but it also failed before application build completion
-  - a follow-up deploy using explicit build-time and runtime env injection was blocked by Vercel quota exhaustion:
-    - `Error: Resource is limited - try again in 17 hours (more than 100, code: "api-deployments-free-per-day")`
-- Local reproduction using Vercel env state:
-  - pulled preview and production env snapshots via authenticated Vercel CLI
-  - set local `DATABASE_URL` to preview `POSTGRES_PRISMA_URL`
-  - reused pulled `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, and `API_KEY_ENCRYPTION_SEED`
-  - `npx prisma migrate status` passed against the preview database target
-  - `npm run build` passed with the same env combination
-- Local operator constraints observed:
-  - `netlify` CLI not installed/authenticated
-  - `wrangler` CLI not installed/authenticated
-- Verification commands:
-  - `gh pr checks 32`
-  - `gh pr view 32 --comments`
-  - `gh pr view 32 --json statusCheckRollup --jq '.statusCheckRollup[] | {name: .name, status: .status, conclusion: .conclusion, detailsUrl: .detailsUrl}'`
-  - `npx --yes vercel whoami`
-  - `cat .vercel/project.json`
-  - `npx --yes vercel env ls`
-  - `curl -I -L https://goodmulti-llm-chat-assistant-git-codex-cl-55be64-itsokialready8.vercel.app`
-  - `curl -I -L https://goodmulti-llm-chat-assistant2-git-codex-c-e0fc39-itsokialready8.vercel.app`
-  - `curl -I -L https://multi-llm-chat-assistant-pdpj-git-codex-c-d756c9-itsokialready8.vercel.app`
-  - `curl -I -L https://multi-llm-chat-assistantt-git-codex-clean-b267ab-itsokialready8.vercel.app`
-  - `curl -I -L https://multi-llm-chat-assistanttt-git-codex-clea-846be1-itsokialready8.vercel.app`
-  - `npx --yes vercel curl /api/health --deployment https://multi-llm-chat-assistant-p40yf9enq-itsokialready8.vercel.app -- -sS`
-  - `npx --yes vercel env add DATABASE_URL preview codex/clean-install-proof-20260306 --value ... --yes --force`
-  - `npx --yes vercel env add NEXTAUTH_URL preview codex/clean-install-proof-20260306 --value ... --yes --force`
-  - `npx --yes vercel env add NEXTAUTH_SECRET preview codex/clean-install-proof-20260306 --value ... --yes --force`
-  - `npx --yes vercel env add API_KEY_ENCRYPTION_SEED preview codex/clean-install-proof-20260306 --value ... --yes --force`
-  - `npx --yes vercel deploy --target preview --force --yes`
-  - `npx --yes vercel inspect https://multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app`
-  - `npx --yes vercel deploy --target preview --force --yes -b ... -e ...`
-  - `npx prisma migrate status` (with pulled Vercel envs)
-  - `npm run build` (with pulled Vercel envs)
+## 17.2 evidence (Preview deploy proof preflight)
+- Stable prerequisites already completed on merged `main`:
+  - Vercel CLI is authenticated and project-linked for the canonical project
+  - repo verification scripts support protected-preview requests through authenticated `vercel curl`
+  - local preview-parity helpers exist in `scripts/vercel-preview-run.sh` and `scripts/run-with-dotenv.js`
+- Local release-gate replay on merged `main`:
+  - `npm run type-check` passed
+  - `npm run lint` passed
+  - `npm run test:run` passed (`35` files, `245` tests)
+  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://USERNAME@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build` passed
+- Preview-specific readiness:
+  - the required preview env contract is known and documented
+  - preview verification can use authenticated `vercel curl` when Vercel Authentication is enabled
+  - required preview app vars were added for branch `codex/post-merge-audit-20260306` and verified via `vercel env pull --git-branch`
+  - external deploy-provider statuses remain noisy and non-blocking relative to the GitHub release gates
 - Result:
-  - `17.2` remains open.
-  - protected-preview access is now supported by repo tooling.
-  - repository-local reproduction using the pulled Vercel env contract passes.
-  - a successful fresh preview deployment is currently blocked by Vercel plan quota and prior failed preview state.
+  - `17.2` remains open because live preview proof has not yet been executed against a healthy current preview deployment URL
+  - there is no repo-local build, lint, or test failure currently blocking `17.2`
+  - the latest deploy attempt failed before build with Vercel hobby-plan rate limiting: `Resource is limited - try again in 10 hours (more than 100, code: "api-deployments-free-per-day")`

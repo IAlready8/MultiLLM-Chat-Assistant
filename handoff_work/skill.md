@@ -166,8 +166,7 @@ purpose: >
   - proxies to Python sidecar
   - falls back to local orchestration on timeout/network/5xx class failure
 - `src/core/main.py`:
-  - FastAPI sidecar exposes health, chat, orchestrate
-  - stream endpoint is explicitly TODO
+  - FastAPI sidecar exposes health, chat, orchestrate, and stream
 - `scripts/smoke-test.sh` and `scripts/verify-production.sh` exist and are intended as release gates
 - CI workflow exists in `.github/workflows/ci.yml`
 

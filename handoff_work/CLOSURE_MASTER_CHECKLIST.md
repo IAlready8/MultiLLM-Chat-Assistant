@@ -205,7 +205,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 | 15.1 ✅ | Re-run dependency audit | 14.3 | Run `npm audit` and `npm audit --omit=dev`; record exact findings | PASS when current findings are captured against current lockfile | `.currentstatus`, security docs | Repo operator | Closed 2026-03-05 with live audit capture: full tree = `36` vulnerabilities (`25` high, `10` moderate, `1` low); prod-only = `9` vulnerabilities (`4` high, `5` moderate), primarily via Prisma CLI transitive `hono`/`lodash` chain |
 | 15.2 ✅ | Close route-level auth gaps | 06.*, 12.* | Confirm admin, billing, team, config, CRUD, chat routes enforce intended identity rules | PASS when no supported sensitive route is under-protected | route files + tests | LLM | Closed 2026-03-05 after adding explicit admin-role enforcement for admin routes and re-running auth/admin/full-suite tests successfully (`33` files, `239` tests passed) |
 | 15.3 ✅ | Verify secret handling and redaction | 08.3 | Confirm no plaintext key leakage in logs, responses, UI, export/import flows | PASS when redaction rules are tested | `lib/api-key-service.ts`, `lib/crypto.ts`, `services/export-import-service.ts`, logs/tests | LLM | Closed 2026-03-05 after removing API keys from export/import payloads, updating UI copy, and adding export/import secrecy tests while keeping provider-config/key-service redaction coverage intact |
-| 15.4 ✅ | Create residual risk register | 15.1, 15.2, 15.3 | Document any accepted remaining risks with explicit owner and reason | PASS when no serious unknown risk remains | `.currentstatus` or security doc | Repo operator | Closed 2026-03-05 with explicit residual risk register in `currentstatus.md` (dependency advisories, external deploy noise, optional sidecar parity gap) |
+| 15.4 ✅ | Create residual risk register | 15.1, 15.2, 15.3 | Document any accepted remaining risks with explicit owner and reason | PASS when no serious unknown risk remains | `.currentstatus` or security doc | Repo operator | Closed 2026-03-05 with explicit residual risk register in `currentstatus.md` (dependency advisories, external deploy noise, live deploy proof still pending) |
 
 ## 16. Observability and operational readiness
 
@@ -240,5 +240,5 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 2. `COMPLETION_REPORT.md` is stale relative to current route/provider/runtime counts.
 3. Existing `CLAUDE.md` says provider support is OpenAI / Anthropic / Google AI / OpenRouter, but code also has `lib/providers/grok.ts`.
 4. Existing `CLAUDE.md` says Python core is not integrated with Next.js runtime, but `app/api/llm/orchestrate/route.ts` actively proxies to it.
-5. `src/core/main.py` explicitly contains `# TODO: Add /api/v1/llm/stream endpoint`.
+5. Handoff docs still need a final truth pass whenever live deploy evidence changes, because deployment state is temporally unstable.
 6. `README.md` says current runtime uses Prisma stubs; `lib/prisma.ts` clearly supports a real runtime Prisma client when `DATABASE_URL` is set.

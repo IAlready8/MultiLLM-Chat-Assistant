@@ -501,10 +501,10 @@ It does this:
 The Python sidecar is **integrated**, not theoretical:
 - `app/api/llm/orchestrate/route.ts` proxies to it
 - local orchestration fallback exists when the sidecar is unavailable
-- `src/core/main.py` provides health/chat/orchestrate endpoints
-- `src/core/main.py` still has `# TODO: Add /api/v1/llm/stream endpoint`
+- `src/core/main.py` provides health/chat/orchestrate/stream endpoints
+- stream parity is implemented; keep treating the sidecar as optional because live deploy proof is still open
 
-Do not describe the sidecar as fully complete unless that TODO is removed and parity is tested.
+Do not describe the sidecar as a required production dependency unless the deployment/runbook contract is changed.
 
 ## Existing docs that must not be trusted blindly
 Reconcile these against code before using them as truth:

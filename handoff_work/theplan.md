@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-06 00:16 EST)
+## Progress snapshot (2026-03-06 06:59 EST)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -71,7 +71,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - unverified:
   - live deploy/rollback proof not executed yet
 - blockers:
-  - `17.2` preview deploy proof is blocked by Vercel daily deployment quota after authenticated preview-access/tooling remediation (`api-deployments-free-per-day`)
+  - `17.2` preview deploy proof still needs one healthy canonical preview URL and live execution of `verify:prod` + smoke; branch-scoped preview env is ready, but fresh preview deploys are still rate-limited by Vercel hobby-plan quota
 
 ## Phase A - truth locking
 1. [x] Reconfirm repo baseline
@@ -683,27 +683,22 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - Outcome:
   - clean install/build/test proof is now captured on merged `main`
 
-## 17.2 implementation evidence (blocked discovery)
-- PR under test:
-  - `#32` on head commit `2f04591`
-- Confirmed on GitHub:
-  - `Quality Checks`, `Security Audit`, and `Smoke Tests` pass
-  - all visible external deploy providers still fail on the same head commit:
-    - multiple Vercel projects
-    - Netlify preview
-    - Cloudflare Workers builds
-- Confirmed by direct probe and remediation:
-  - authenticated Vercel CLI is now linked to project `itsokialready8/multi-llm-chat-assistant`
-  - repo scripts now support protected-preview requests through `vercel curl`
-  - preview env originally lacked `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, and `API_KEY_ENCRYPTION_SEED`
-  - user-supplied preview deployment `multi-llm-chat-assistant-p40yf9enq-itsokialready8.vercel.app` was already in failed state
-  - freshly created preview deployment `multi-llm-chat-assistant-lxg9dkpu1-itsokialready8.vercel.app` also failed
-  - deploy-time env injection path was attempted next, but Vercel blocked further preview deploys due daily free deployment quota exhaustion
-  - local reproduction using the pulled Vercel env contract passed:
-    - `npx prisma migrate status`
+## 17.2 implementation evidence (preflight ready, live proof pending)
+- Confirmed on merged `main`:
+  - `Quality Checks`, `Security Audit`, and `Smoke Tests` passed before merge
+  - local release gates replay cleanly on fresh `main`:
+    - `npm run type-check`
+    - `npm run lint`
+    - `npm run test:run`
     - `npm run build`
+- Preview verification tooling now exists:
+  - authenticated Vercel CLI is linked to the canonical project
+  - repo scripts support protected-preview requests through `vercel curl`
+  - local branch-scoped preview env parity can be replayed with `scripts/vercel-preview-run.sh`
+  - branch `codex/post-merge-audit-20260306` now has the required preview app vars in Vercel
 - Outcome:
-  - do not close `17.2` until Vercel quota resets (or plan capacity is increased), one fresh preview deploy succeeds, and `verify:prod` + smoke are run through the new protected-preview-aware tooling
+  - do not close `17.2` until one healthy preview deployment URL passes `npm run verify:prod -- --base-url <preview-url>` and `bash scripts/smoke-test.sh --base-url <preview-url>`
+  - latest fresh deploy attempt from this branch was blocked by Vercel rate limiting: `api-deployments-free-per-day`
 
 ## 16.2 implementation evidence
 - Code changes:
