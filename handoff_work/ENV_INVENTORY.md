@@ -12,6 +12,16 @@ This inventory lists env families only. No secret values are recorded here.
 - Where it matters: auth routing, session handling, protected pages/routes
 - Effect if absent: production auth fails closed or misroutes
 
+## Demo / Guest Mode
+- Variables:
+  - `DEMO_ACCOUNT_*`
+  - `NEXT_PUBLIC_DEMO_ACCOUNT_*`
+  - `GUEST_USER_*`
+  - `NEXT_PUBLIC_GUEST_USER_ID`
+- Required for core availability: no
+- Where it matters: local development, guest-friendly mode, demo bypass and guest identity behavior outside strict production auth
+- Effect if absent: demo and guest shortcuts are unavailable or reduced, but production core behavior is unchanged because strict auth remains required in production
+
 ## Database
 - Variables:
   - `DATABASE_URL`

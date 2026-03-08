@@ -185,12 +185,14 @@ Application rollback flow proven live:
 2. Promote that deployment to the canonical alias:
    - `npx vercel promote <prior-deployment-id> --yes -S itsokialready8`
 3. Re-run:
-   - `bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+   - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
    - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
 4. Confirm `/api/health` and core routes recover.
 5. Restore the latest intended release:
    - `npx vercel promote <current-deployment-id> --yes -S itsokialready8`
-6. Re-run verify and smoke again.
+6. Re-run verify and smoke again:
+   - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+   - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
 
 Live proof captured:
 - rollback target: `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
