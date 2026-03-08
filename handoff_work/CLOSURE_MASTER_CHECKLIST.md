@@ -1,6 +1,6 @@
 # CLOSURE_MASTER_CHECKLIST
 
-Source basis: direct inspection of the local repository at commit `1e7ca77fd8d51ff8b45f8dbd7ff77d40e0dcbdc0` on branch `codex/protected-main-push-20260302`.
+Source basis: direct inspection of the local repository derived from merged `main` commit `b72f097bcfb77288115c9ee3048e7024dd3f6aad`, with live deploy/rollback evidence captured on branch `codex/live-proof-closeout-20260308`.
 
 Repository remote: `https://github.com/IAlready8/MultiLLM-Chat-Assistant.git`
 
@@ -219,10 +219,10 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 17.1 | Clean local install proof | 14.3 | From clean checkout run install, generate, type-check, lint, tests, build | PASS when all baseline local gates pass from scratch | no code target; capture in status | Repo operator | full command log |
-| 17.2 | Preview deploy proof | 17.1 | Deploy preview with required env; run verify script and smoke against preview URL | PASS when preview passes verify and smoke | deployment docs | Infra owner | URLs + logs |
-| 17.3 | Production deploy proof | 17.2 | Deploy production; run verify script and smoke against production URL | PASS when production passes verify and smoke | deployment docs | Infra owner | URLs + logs |
-| 17.4 | Rollback proof | 17.3 | Trigger or simulate rollback to prior healthy release; verify app recovers | PASS when rollback procedure is executable and proven | rollback docs | Infra owner | rollback log |
+| 17.1 ✅ | Clean local install proof | 14.3 | From clean checkout run install, generate, type-check, lint, tests, build | PASS (closed 2026-03-06) | no code target; capture in status | Repo operator | detached-worktree `npm ci` + type-check + lint + full tests + build all passed |
+| 17.2 ✅ | Preview deploy proof | 17.1 | Deploy preview with required env; run verify script and smoke against preview URL | PASS (closed 2026-03-08) | deployment docs | Infra owner | preview deploy `dpl_7rCmEBpM3mwNNMcvTkoHCoJQ2vhA` at `https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`; verify + smoke passed |
+| 17.3 ✅ | Production deploy proof | 17.2 | Deploy production; run verify script and smoke against production URL | PASS (closed 2026-03-08) | deployment docs | Infra owner | production deploy `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz` promoted to canonical URL; verify + smoke passed on `https://multi-llm-chat-assistant.vercel.app` |
+| 17.4 ✅ | Rollback proof | 17.3 | Trigger or simulate rollback to prior healthy release; verify app recovers | PASS (closed 2026-03-08) | rollback docs | Infra owner | rolled back to `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`, verified healthy, then restored `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz` and re-verified |
 
 ## 18. Final handoff package
 
