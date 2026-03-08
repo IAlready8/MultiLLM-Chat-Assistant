@@ -691,7 +691,8 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
   - deployment id: `dpl_7rCmEBpM3mwNNMcvTkoHCoJQ2vhA`
 - Commands executed:
-  - `npx vercel build` with preview env parity via `scripts/run-with-dotenv.js`
+  - `npx vercel env pull <tmp-preview-env> --environment preview --git-branch codex/post-merge-audit-20260306 --yes`
+  - `node scripts/run-with-dotenv.js <tmp-preview-env> npx vercel build`
   - `npx vercel deploy --prebuilt --target preview --force --yes --logs`
   - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
   - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
@@ -704,10 +705,11 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - canonical URL: `https://multi-llm-chat-assistant.vercel.app`
   - release id: `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz`
 - Commands executed:
-  - `npx vercel build --prod` with production env parity via `scripts/run-with-dotenv.js`
+  - `npx vercel env pull <tmp-prod-env> --environment production --yes -S itsokialready8`
+  - `node scripts/run-with-dotenv.js <tmp-prod-env> npx vercel build --prod`
   - `npx vercel deploy --prebuilt --prod --force --yes --logs`
   - `npx vercel promote dpl_25CyyoAvGsJngacFVhx3TGtNrHhz --yes -S itsokialready8`
-  - `bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app` under pulled production env
+  - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
   - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
 - Outcome:
   - production verification passed
