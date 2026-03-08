@@ -1,8 +1,8 @@
 # .currentstatus
 
-timestamp_local: 2026-03-06 06:59:01 EST
-timestamp_utc: 2026-03-06T11:59:01Z
-source: fresh `origin/main` audit + command evidence in this session
+timestamp_local: 2026-03-08 03:27:43 EDT
+timestamp_utc: 2026-03-08T07:27:49Z
+source: live preview/production/rollback proof + command evidence in this session
 
 ## done
 - `01.1` PASS: repo identity recorded with raw command output.
@@ -64,23 +64,18 @@ source: fresh `origin/main` audit + command evidence in this session
 - `16.2` PASS: server logs and route error surfaces now use centralized redaction, and Stripe billing routes return stable safe public errors while preserving operator-visible cause details in logs.
 - `16.3` PASS: operator runbooks are now consolidated into one authoritative procedure set with verified-vs-pending-live-proof boundaries for startup, deploy, rollback, incident response, and recovery.
 - `17.1` PASS: a clean detached worktree from merged `main` completed install, type-check, lint, full tests, and production build successfully.
+- `17.2` PASS: a fresh protected Vercel preview for current `main` became healthy, `verify-production.sh` passed through authenticated `vercel curl`, and smoke passed on the preview URL.
+- `17.3` PASS: current `main` was deployed to production, explicitly promoted to the canonical alias, and `verify-production.sh` plus smoke both passed on `https://multi-llm-chat-assistant.vercel.app`.
+- `17.4` PASS: rollback was proven live by promoting the previous healthy production deployment, verifying it, then restoring the latest deployment and re-verifying recovery.
 
 ## failed
-- none for `01.*` through `16.2`.
+- none through `17.4`.
 
 ## unverified
-- preview/production deploy + rollback verification.
 - Stripe checkout/portal/webhook live loop.
-- fresh end-to-end preview/production `scripts/verify-production.sh` execution against deployed URLs.
 
 ## blockers
-1. `17.2` preview deploy proof remains open:
-   - merged `main` passes local release gates (`npm run type-check`, `npm run lint`, `npm run test:run`, production `npm run build`)
-   - protected-preview verification tooling is prepared in `scripts/verify-production.sh`, `scripts/smoke-test.sh`, and `scripts/vercel-preview-run.sh`
-   - required preview app vars are now present for branch `codex/post-merge-audit-20260306` in the linked Vercel project
-   - remaining work is live-environment proof against one healthy canonical preview deployment URL
-   - external Vercel / Netlify / Cloudflare preview checks remain informational noise and are not authoritative release gates
-   - a fresh Vercel preview deploy attempt from this branch is still rate-limited on the hobby plan (`api-deployments-free-per-day`)
+- none
 
 ## 01.1 evidence (raw)
 ```text
@@ -182,12 +177,10 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Resume `17.2` from fresh `main` with one healthy canonical preview URL:
-- use the already-linked Vercel CLI/project
-- confirm preview env contains `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET` or `AUTH_SECRET`, and `API_KEY_ENCRYPTION_SEED`
-- run `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> npm run verify:prod -- --base-url https://<preview-url>`
-- run `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> bash scripts/smoke-test.sh --base-url https://<preview-url>`
-- once preview proof passes, continue directly to `17.3` production deploy proof and `17.4` rollback proof
+Start `18.1` final truth pass:
+- reconcile README, architecture, deployment docs, and runbooks against the now-proven preview, production, and rollback behavior
+- capture the operational alias requirement (`vercel promote ... -S itsokialready8`) anywhere docs imply production deploy alone is sufficient
+- then assemble the final handoff bundle (`18.2`) and declare handoff-ready state (`18.3`)
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1270,22 +1263,47 @@ TOTAL (22)
 - Result:
   - `17.1` PASS: the merged `main` state can be installed and gated cleanly from a fresh detached worktree without relying on prior workspace artifacts.
 
-## 17.2 evidence (Preview deploy proof preflight)
-- Stable prerequisites already completed on merged `main`:
-  - Vercel CLI is authenticated and project-linked for the canonical project
-  - repo verification scripts support protected-preview requests through authenticated `vercel curl`
-  - local preview-parity helpers exist in `scripts/vercel-preview-run.sh` and `scripts/run-with-dotenv.js`
-- Local release-gate replay on merged `main`:
-  - `npm run type-check` passed
-  - `npm run lint` passed
-  - `npm run test:run` passed (`35` files, `245` tests)
-  - `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<REDACTED_SECRET> API_KEY_ENCRYPTION_SEED=<REDACTED_SEED> DATABASE_URL=postgresql://USERNAME@127.0.0.1:5432/multillm_verify_20260302 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build` passed
-- Preview-specific readiness:
-  - the required preview env contract is known and documented
-  - preview verification can use authenticated `vercel curl` when Vercel Authentication is enabled
-  - required preview app vars were added for branch `codex/post-merge-audit-20260306` and verified via `vercel env pull --git-branch`
-  - external deploy-provider statuses remain noisy and non-blocking relative to the GitHub release gates
+## 17.2 evidence (Preview deploy proof)
+- Preview deployment path:
+  - direct Vercel preview deploy acceptance confirmed quota was no longer blocking
+  - local `vercel build` completed successfully with preview env parity
+  - prebuilt preview deployment succeeded as `dpl_7rCmEBpM3mwNNMcvTkoHCoJQ2vhA`
+  - verified preview URL: `https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
+- Preview verification:
+  - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app node scripts/run-with-dotenv.js <preview-env-file> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
+    - result: passed (`status=healthy`, database `connected`)
+  - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
+    - result: passed (`19` passed, `0` failed, `13` skipped in strict-auth mode)
 - Result:
-  - `17.2` remains open because live preview proof has not yet been executed against a healthy current preview deployment URL
-  - there is no repo-local build, lint, or test failure currently blocking `17.2`
-  - the latest deploy attempt failed before build with Vercel hobby-plan rate limiting: `Resource is limited - try again in 10 hours (more than 100, code: "api-deployments-free-per-day")`
+  - `17.2` PASS: preview deployment proof is complete on a healthy current preview deployment URL.
+
+## 17.3 evidence (Production deploy proof)
+- Production deployment path:
+  - local `vercel build --prod` completed successfully with production env pulled from Vercel
+  - prebuilt production deployment succeeded as `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz`
+  - explicit promotion under the linked team scope was required to move the canonical alias:
+    - `npx vercel promote dpl_25CyyoAvGsJngacFVhx3TGtNrHhz --yes -S itsokialready8`
+- Production verification:
+  - `node scripts/run-with-dotenv.js <prod-env-file> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+    - result: passed (`status=healthy`, database `connected`)
+  - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+    - result: passed (`19` passed, `0` failed, `13` skipped in strict-auth mode)
+- Result:
+  - `17.3` PASS: current `main` is deployed and verified on the canonical production URL.
+
+## 17.4 evidence (Rollback proof)
+- Rollback drill:
+  - prior healthy production deployment identified as `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
+  - rollback executed via:
+    - `npx vercel promote dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c --yes -S itsokialready8`
+  - canonical production URL then verified successfully:
+    - `verify-production.sh` passed
+    - smoke passed (`19` passed, `0` failed, `13` skipped)
+- Recovery to latest release:
+  - latest production deployment restored via:
+    - `npx vercel promote dpl_25CyyoAvGsJngacFVhx3TGtNrHhz --yes -S itsokialready8`
+  - canonical production URL re-verified successfully:
+    - `verify-production.sh` passed
+    - smoke passed (`19` passed, `0` failed, `13` skipped)
+- Result:
+  - `17.4` PASS: rollback and forward recovery are both executable and proven on the live production alias.

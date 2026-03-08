@@ -5,7 +5,7 @@ goal: move repository to handoff-ready state with zero undocumented ambiguity
 ## Operating rule
 Do everything in dependency order. Do not skip ahead. Update `.currentstatus` after every major checkpoint.
 
-## Progress snapshot (2026-03-06 06:59 EST)
+## Progress snapshot (2026-03-08 03:27 EDT)
 - done:
   - `01.1` Reconfirm repo baseline
   - `01.2` Reconfirm route/page/service/provider inventory
@@ -66,12 +66,15 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `16.2` Standardize log/error surfaces with centralized redaction and safe public billing errors
   - `16.3` Consolidate operator runbooks with verified-vs-pending-proof boundaries
   - `17.1` Prove clean local install/build/test flow from a fresh detached worktree
+  - `17.2` Prove preview deployment with live verify + smoke
+  - `17.3` Prove production deployment with live verify + smoke
+  - `17.4` Prove rollback and forward recovery on live production
 - failed:
   - none
 - unverified:
-  - live deploy/rollback proof not executed yet
+  - Stripe checkout/portal/webhook live loop
 - blockers:
-  - `17.2` preview deploy proof still needs one healthy canonical preview URL and live execution of `verify:prod` + smoke; branch-scoped preview env is ready, but fresh preview deploys are still rate-limited by Vercel hobby-plan quota
+  - none
 
 ## Phase A - truth locking
 1. [x] Reconfirm repo baseline
@@ -683,22 +686,44 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - Outcome:
   - clean install/build/test proof is now captured on merged `main`
 
-## 17.2 implementation evidence (preflight ready, live proof pending)
-- Confirmed on merged `main`:
-  - `Quality Checks`, `Security Audit`, and `Smoke Tests` passed before merge
-  - local release gates replay cleanly on fresh `main`:
-    - `npm run type-check`
-    - `npm run lint`
-    - `npm run test:run`
-    - `npm run build`
-- Preview verification tooling now exists:
-  - authenticated Vercel CLI is linked to the canonical project
-  - repo scripts support protected-preview requests through `vercel curl`
-  - local branch-scoped preview env parity can be replayed with `scripts/vercel-preview-run.sh`
-  - branch `codex/post-merge-audit-20260306` now has the required preview app vars in Vercel
+## 17.2 implementation evidence
+- Preview proof completed against:
+  - `https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
+  - deployment id: `dpl_7rCmEBpM3mwNNMcvTkoHCoJQ2vhA`
+- Commands executed:
+  - `npx vercel env pull <tmp-preview-env> --environment preview --git-branch codex/post-merge-audit-20260306 --yes`
+  - `node scripts/run-with-dotenv.js <tmp-preview-env> npx vercel build`
+  - `npx vercel deploy --prebuilt --target preview --force --yes --logs`
+  - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
+  - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
 - Outcome:
-  - do not close `17.2` until one healthy preview deployment URL passes `npm run verify:prod -- --base-url <preview-url>` and `bash scripts/smoke-test.sh --base-url <preview-url>`
-  - latest fresh deploy attempt from this branch was blocked by Vercel rate limiting: `api-deployments-free-per-day`
+  - preview verification passed
+  - preview smoke passed (`19` passed, `0` failed, `13` skipped)
+
+## 17.3 implementation evidence
+- Production proof completed against:
+  - canonical URL: `https://multi-llm-chat-assistant.vercel.app`
+  - release id: `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz`
+- Commands executed:
+  - `npx vercel env pull <tmp-prod-env> --environment production --yes -S itsokialready8`
+  - `node scripts/run-with-dotenv.js <tmp-prod-env> npx vercel build --prod`
+  - `npx vercel deploy --prebuilt --prod --force --yes --logs`
+  - `npx vercel promote dpl_25CyyoAvGsJngacFVhx3TGtNrHhz --yes -S itsokialready8`
+  - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+  - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+- Outcome:
+  - production verification passed
+  - production smoke passed (`19` passed, `0` failed, `13` skipped)
+  - operator note: canonical alias promotion required explicit `vercel promote ... -S itsokialready8`
+
+## 17.4 implementation evidence
+- Rollback drill completed on live production:
+  - rolled back to prior healthy deployment `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
+  - `verify-production.sh` and smoke both passed on the canonical production URL after rollback
+  - restored latest deployment `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz`
+  - `verify-production.sh` and smoke both passed again on the canonical production URL after recovery
+- Outcome:
+  - rollback and forward recovery are both proven on the live environment
 
 ## 16.2 implementation evidence
 - Code changes:
