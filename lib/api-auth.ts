@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth'
+import prisma from '@/lib/prisma'
 import {
   createDemoUserRecord,
   createGuestUserRecord,
@@ -17,8 +18,23 @@ type RoleAwareUser = User & {
   role?: string | null
 }
 
+const ADMIN_ROLES = new Set(['OWNER', 'ADMIN'])
+
 // Tracks whether we've already logged a session error to avoid log spam
 let sessionErrorLogged = false
+
+const isAdminRole = (role: string | null | undefined): boolean =>
+  typeof role === 'string' && ADMIN_ROLES.has(role)
+
+const isDemoAdminUser = (user: User): boolean => {
+  const demoAccount = getDemoAccountContext()
+  return (
+    !isStrictAuthRequired() &&
+    demoAccount.enabled &&
+    demoAccount.bypassAuth &&
+    user.id === demoAccount.id
+  )
+}
 
 const isJwtDecryptionError = (error: unknown): boolean => {
   if (!(error instanceof Error)) return false
@@ -118,9 +134,35 @@ export async function getAuthenticatedAdmin(): Promise<
   }
 
   const user = authCheck.user as RoleAwareUser
-  if (user.role !== 'OWNER' && user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (isAdminRole(user.role) || isDemoAdminUser(user)) {
+    return { user }
   }
 
-  return { user }
+  try {
+    const membership = await prisma.teamMember.findFirst({
+      where: {
+        userId: user.id,
+        role: {
+          in: Array.from(ADMIN_ROLES),
+        },
+      },
+    })
+
+    if (!membership) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    return {
+      user: {
+        ...user,
+        role: membership.role,
+      },
+    }
+  } catch (error) {
+    console.error('Failed to resolve admin access:', error)
+    return NextResponse.json(
+      { error: 'Admin authorization unavailable' },
+      { status: 503 }
+    )
+  }
 }
