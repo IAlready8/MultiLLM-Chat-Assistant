@@ -18,7 +18,9 @@ This is the platform-agnostic deployment reference for the current release basel
 - `npm run lint`
 - `npm run test:run`
 - `npm run build`
-- `npm run verify:prod -- --apply-migrations`
+- `npm run verify:prod`
+- Optional when DB schema changes are in scope:
+  - `npm run verify:prod -- --apply-migrations`
 
 ## 3. Required Environment Families
 At minimum, configure:

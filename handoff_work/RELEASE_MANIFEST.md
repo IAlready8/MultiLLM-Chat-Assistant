@@ -4,7 +4,7 @@
 - Baseline branch: `main`
 - Closeout branch: `codex/final-handoff-closeout-20260308`
 - Pre-closeout `main` commit SHA: `4ba06123781766e2dff123e491291cf0785d6e25`
-- Final PR number: pending creation on this branch
+- Final PR number: `40` (pending merge while this branch is open)
 - Release tag name: pending final merge date
 
 ## Proven Deployment References

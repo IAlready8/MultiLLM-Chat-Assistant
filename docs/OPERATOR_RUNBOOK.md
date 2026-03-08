@@ -181,16 +181,18 @@ Rules:
 - treat DB rollback as a separate operation if migrations are already applied
 
 Application rollback flow proven live:
-1. Identify the last known healthy deployment.
-2. Promote that deployment to the canonical alias:
+1. Pull the same production env file used for production verification:
+   - `npx vercel env pull <tmp-prod-env> --environment production --yes -S itsokialready8`
+2. Identify the last known healthy deployment.
+3. Promote that deployment to the canonical alias:
    - `npx vercel promote <prior-deployment-id> --yes -S itsokialready8`
-3. Re-run:
+4. Re-run:
    - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
    - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
-4. Confirm `/api/health` and core routes recover.
-5. Restore the latest intended release:
+5. Confirm `/api/health` and core routes recover.
+6. Restore the latest intended release:
    - `npx vercel promote <current-deployment-id> --yes -S itsokialready8`
-6. Re-run verify and smoke again:
+7. Re-run verify and smoke again:
    - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
    - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
 
