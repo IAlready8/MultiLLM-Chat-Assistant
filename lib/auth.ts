@@ -328,16 +328,23 @@ export async function auth() {
   const cookieHeader = allCookies
     .map(({ name, value }) => `${name}=${value}`)
     .join('; ')
+  const requestCookies = allCookies.reduce<Record<string, string>>(
+    (acc, { name, value }) => {
+      if (!(name in acc)) {
+        acc[name] = value
+      }
+      return acc
+    },
+    {}
+  )
 
   const token = await getToken({
     req: {
-      cookies: Object.fromEntries(
-        allCookies.map(({ name, value }) => [name, value])
-      ),
+      cookies: requestCookies,
       headers: {
         cookie: cookieHeader,
       },
-    } as never,
+    } as any,
     secret: authSecret,
   })
 
@@ -345,12 +352,15 @@ export async function auth() {
     return null
   }
 
+  const userId = (token.id || token.sub) as string | undefined
+  if (!token.exp || !userId) {
+    return null
+  }
+
   return {
-    expires: token.exp
-      ? new Date(Number(token.exp) * 1000).toISOString()
-      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    expires: new Date(Number(token.exp) * 1000).toISOString(),
     user: {
-      id: (token.id || token.sub || '') as string,
+      id: userId,
       name: token.name,
       email: token.email,
       role: (token.role || 'MEMBER') as TeamRole,
