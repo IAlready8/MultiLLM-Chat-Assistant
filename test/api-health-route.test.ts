@@ -94,7 +94,7 @@ describe('/api/health route', () => {
     const payload = await response.json()
     expect(payload.status).toBe('degraded')
     expect(payload.checks.sidecar.status).toBe('degraded')
-    expect(payload.checks.sidecar.url).toBe('http://127.0.0.1:8008/api/v1/health')
+    expect(payload.checks.sidecar.url).toBeUndefined()
     expect(payload.checks.sidecar.message).toContain('ECONNREFUSED')
   })
 
