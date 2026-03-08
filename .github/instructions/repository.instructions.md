@@ -92,7 +92,6 @@ Services following this pattern:
 - `services/goal-service.db.ts`
 - `services/persona-service.db.ts`
 - `services/analytics-service.ts`
-- `services/team-service.db.ts`
 - `lib/api-key-service.ts`
 
 ### 2. Provider Adapter Pattern
@@ -188,7 +187,7 @@ TypeScript interfaces for these models live in `types/prisma.ts`, including the 
 After schema changes:
 - Local: `npx prisma migrate dev`
 - Production: `npx prisma migrate deploy`
-- Always run `npx prisma generate` (runs automatically via `postinstall` and `prebuild` scripts)
+- Always run `npx prisma generate` (runs automatically via `postinstall` and as part of `build:webpack` / `build:turbopack`)
 
 ## Code Style & Naming Conventions
 
