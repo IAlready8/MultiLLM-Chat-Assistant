@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server'
 // Mock dependencies before importing the module under test
 const mockAuth = vi.fn()
 const mockCookies = vi.fn()
-const mockTeamMemberFindFirst = vi.fn()
 
 vi.mock('@/lib/auth', () => ({
   auth: () => mockAuth(),
@@ -12,14 +11,6 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('next/headers', () => ({
   cookies: () => mockCookies(),
-}))
-
-vi.mock('@/lib/prisma', () => ({
-  default: {
-    teamMember: {
-      findFirst: (...args: unknown[]) => mockTeamMemberFindFirst(...args),
-    },
-  },
 }))
 
 vi.mock('@/lib/demo-account', () => ({
@@ -60,7 +51,6 @@ import { getAuthenticatedAdmin, getAuthenticatedUser } from '@/lib/api-auth'
 describe('getAuthenticatedUser', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockTeamMemberFindFirst.mockResolvedValue(null)
     mockCookies.mockReturnValue({
       get: () => undefined,
     })
@@ -201,65 +191,5 @@ describe('getAuthenticatedUser', () => {
     const result = await getAuthenticatedAdmin()
     expect(result).toBeInstanceOf(NextResponse)
     expect((result as NextResponse).status).toBe(403)
-  })
-
-  it('resolves admin access from OWNER/ADMIN team membership', async () => {
-    mockCookies.mockReturnValue({
-      get: (name: string) =>
-        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
-    })
-    mockAuth.mockResolvedValue({
-      user: {
-        id: 'member-123',
-        name: 'Member User',
-        email: 'member@test.com',
-        role: 'MEMBER',
-      },
-    })
-    mockTeamMemberFindFirst.mockResolvedValue({
-      id: 'team-member-1',
-      userId: 'member-123',
-      teamId: 'team-1',
-      role: 'OWNER',
-      createdAt: new Date(0),
-    })
-
-    const result = await getAuthenticatedAdmin()
-
-    expect(result).not.toBeInstanceOf(NextResponse)
-    expect(mockTeamMemberFindFirst).toHaveBeenCalledWith({
-      where: {
-        userId: 'member-123',
-        role: {
-          in: ['OWNER', 'ADMIN'],
-        },
-      },
-    })
-    expect((result as { user: { id: string; role: string } }).user).toMatchObject({
-      id: 'member-123',
-      role: 'OWNER',
-    })
-  })
-
-  it('returns 503 when admin authorization lookup fails', async () => {
-    mockCookies.mockReturnValue({
-      get: (name: string) =>
-        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
-    })
-    mockAuth.mockResolvedValue({
-      user: {
-        id: 'member-123',
-        name: 'Member User',
-        email: 'member@test.com',
-      },
-    })
-    mockTeamMemberFindFirst.mockRejectedValue(new Error('database offline'))
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    const result = await getAuthenticatedAdmin()
-
-    expect(result).toBeInstanceOf(NextResponse)
-    expect((result as NextResponse).status).toBe(503)
-    consoleSpy.mockRestore()
   })
 })

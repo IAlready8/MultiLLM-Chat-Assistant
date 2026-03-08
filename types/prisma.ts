@@ -47,14 +47,6 @@ export interface Team extends BaseModel {
   name: string
 }
 
-export interface TeamMember {
-  id: string
-  userId: string
-  teamId: string
-  role: string
-  createdAt: Date
-}
-
 export interface Subscription extends BaseModel {
   userId: string
   tier: string
@@ -93,7 +85,6 @@ export interface PrismaClient {
   analytics: PrismaModelDelegate<Analytics>
   providerConfig: PrismaModelDelegate<any>
   team: PrismaModelDelegate<Team>
-  teamMember: PrismaModelDelegate<TeamMember>
   $transaction: <T>(fn: (tx: PrismaClient) => Promise<T>) => Promise<T>
   $queryRaw: (...args: any[]) => Promise<unknown>
 }

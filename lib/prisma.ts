@@ -11,7 +11,6 @@ import type {
   PrismaModelDelegate,
   Subscription,
   Team,
-  TeamMember,
   User,
 } from '@/types/prisma'
 
@@ -60,7 +59,6 @@ const createStubClient = (): PrismaClient => {
     analytics: createStubDelegate<Analytics>('analytics'),
     providerConfig: createStubDelegate<any>('providerConfig'),
     team: createStubDelegate<Team>('team'),
-    teamMember: createStubDelegate<TeamMember>('teamMember'),
     $transaction: async <T>(fn: (tx: PrismaClient) => Promise<T>) =>
       fn(stub as PrismaClient),
     $queryRaw: async () => {
