@@ -69,12 +69,14 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `17.2` Prove preview deployment with live verify + smoke
   - `17.3` Prove production deployment with live verify + smoke
   - `17.4` Prove rollback and forward recovery on live production
+  - `18.1` Complete final truth pass across operator/deployment/handoff docs
+  - `18.2` Assemble final handoff bundle with manifest, env inventory, risk register, and evidence index
 - failed:
   - none
 - unverified:
-  - Stripe checkout/portal/webhook live loop
+  - billing-ready proof (`Stripe` checkout/portal/webhook live loop)
 - blockers:
-  - none
+  - none for technical handoff closeout; `18.3` awaits final PR checks
 
 ## Phase A - truth locking
 1. [x] Reconfirm repo baseline
@@ -648,14 +650,14 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 30. [x] Upgrade production verification script
 31. [x] Align CI with real release gates
 32. [x] Run clean local install -> type-check -> lint -> tests -> build
-33. [ ] Run preview deploy verification
-34. [ ] Run production deploy verification
-35. [ ] Run rollback proof
+33. [x] Run preview deploy verification
+34. [x] Run production deploy verification
+35. [x] Run rollback proof
 
 ## Phase G - handoff
-36. [ ] Re-run doc/code mismatch check
-37. [ ] Build final handoff bundle
-38. [ ] Mark handoff-ready only when all checklist pass gates are green
+36. [x] Re-run doc/code mismatch check
+37. [x] Build final handoff bundle
+38. [ ] Mark technical handoff-ready only when final PR checks are green
 
 ## 16.3 implementation evidence
 - Docs added/updated:
@@ -724,6 +726,33 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `verify-production.sh` and smoke both passed again on the canonical production URL after recovery
 - Outcome:
   - rollback and forward recovery are both proven on the live environment
+
+## 18.1 implementation evidence
+- Docs reconciled to the proven release flow:
+  - `README.md`
+  - `docs/OPERATOR_RUNBOOK.md`
+  - `VERCEL_DEPLOYMENT.md`
+  - `docs/DEPLOYMENT_GUIDE.md`
+  - `DOCS_SOURCE_OF_TRUTH.md`
+- Locked truths:
+  - preview proof is no longer described as pending
+  - production release flow requires explicit canonical alias promotion
+  - rollback/restore is documented as already proven
+  - billing-ready is tracked separately from technical handoff-ready
+- Outcome:
+  - final truth pass completed for authoritative docs
+
+## 18.2 implementation evidence
+- Added final handoff bundle files:
+  - `handoff_work/HANDOFF_INDEX.md`
+  - `handoff_work/RELEASE_STATUS.md`
+  - `handoff_work/DEPLOYMENT_EVIDENCE.md`
+  - `handoff_work/BILLING_EVIDENCE.md`
+  - `handoff_work/RESIDUAL_RISKS.md`
+  - `handoff_work/RELEASE_MANIFEST.md`
+  - `handoff_work/ENV_INVENTORY.md`
+- Outcome:
+  - final authority chain now exists in one explicit bundle for operator/buyer handoff
 
 ## 16.2 implementation evidence
 - Code changes:

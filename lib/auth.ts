@@ -1,4 +1,8 @@
-import NextAuth, { DefaultSession, NextAuthOptions } from 'next-auth'
+import NextAuth, {
+  DefaultSession,
+  NextAuthOptions,
+  getServerSession,
+} from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
 import GitHubProvider from 'next-auth/providers/github'
@@ -317,8 +321,6 @@ export const authOptions: NextAuthOptions = {
   secret: authSecret,
 }
 
-// Export auth function for server-side session retrieval (NextAuth v4 pattern)
-import { getServerSession } from 'next-auth/next'
 export async function auth() {
   return await getServerSession(authOptions)
 }

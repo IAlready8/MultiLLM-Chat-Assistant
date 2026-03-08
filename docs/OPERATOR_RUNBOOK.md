@@ -1,7 +1,7 @@
 # Operator Runbook
 
 This is the operator-facing runbook for startup, verification, deployment,
-rollback, and incident handling.
+rollback, incident handling, and release closeout.
 
 Truth boundary:
 - Verified locally:
@@ -10,13 +10,19 @@ Truth boundary:
   - `npm run verify:prod -- --apply-migrations`
   - `bash scripts/smoke-test.sh --base-url http://localhost:3000 --start-server`
   - `/api/health` dependency truthfulness
-- Prepared but not yet live-proven:
-  - preview deploy execution (`17.2`)
-  - production deploy execution (`17.3`)
-  - rollback execution (`17.4`)
+- Verified live:
+  - protected Vercel preview verification using authenticated `vercel curl`
+  - prebuilt production deployment to Vercel
+  - explicit promotion of the canonical production alias using `vercel promote`
+  - rollback to the prior healthy deployment and forward recovery to the latest deployment
+- Separately tracked:
+  - Stripe checkout / portal / signed webhook validation (`handoff_work/BILLING_EVIDENCE.md`)
 
-Do not upgrade a prepared procedure to "verified" until the matching checklist
-gate is closed with evidence.
+Current proven references:
+- Preview URL: `https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
+- Production URL: `https://multi-llm-chat-assistant.vercel.app`
+- Current healthy production deployment: `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz`
+- Proven rollback target: `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
 
 ## 1. Ownership and Decision Rules
 
@@ -25,12 +31,12 @@ gate is closed with evidence.
 - Infra owner:
   - owns Vercel project, DNS, preview/prod environment variables, and rollback
 - Billing owner:
-  - owns live Stripe checkout / portal / webhook verification
+  - owns Stripe checkout / portal / webhook verification
 
 Escalate instead of guessing when:
 - `DATABASE_URL` is unavailable or points to the wrong environment
 - Vercel env/config differs from `.env.example`
-- Stripe or sidecar should be required for a deploy gate but env is incomplete
+- Stripe should be required for a billing-ready gate but env is incomplete
 - a rollback would require reversing already-applied database migrations
 
 ## 2. Minimum Runtime Contract
@@ -41,7 +47,7 @@ Production contract:
 - `NEXTAUTH_SECRET` or `AUTH_SECRET` is required.
 - `NEXTAUTH_URL` is required.
 - `API_KEY_ENCRYPTION_SEED` is required.
-- Stripe is optional.
+- Stripe is optional for technical handoff readiness.
 - Python sidecar is optional.
 - Redis is optional.
 
@@ -56,12 +62,8 @@ Health contract:
 
 ## 3. Local Bootstrap Runbook (Verified Locally)
 
-Use this when setting up a fresh local workspace.
-
-1. Install dependencies:
-   - `npm ci`
-2. Create local env file:
-   - `cp .env.example .env.local`
+1. `npm ci`
+2. `cp .env.example .env.local`
 3. Set minimum local env:
    - `NEXTAUTH_URL=http://localhost:3000`
    - `API_KEY_ENCRYPTION_SEED=<32+ char secret>`
@@ -69,17 +71,14 @@ Use this when setting up a fresh local workspace.
    - `AUTH_REQUIRE_LOGIN=true`
    - `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=true`
    - `NEXTAUTH_SECRET=<32+ char secret>`
-5. Start dev server:
-   - `npm run dev`
+5. `npm run dev`
 
 Expected outcome:
 - app loads at `http://localhost:3000`
 - guest mode works when strict-auth flags are false
 - strict-auth redirects unauthenticated users when strict-auth flags are true
 
-## 4. Production-Like Local Gate Runbook (Verified Locally)
-
-Use this before attempting preview or production deployment.
+## 4. Production-Like Local Gate (Verified Locally)
 
 Required env example:
 
@@ -98,124 +97,114 @@ export NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false
 ```
 
 Execution order:
+1. `npm run verify:prod -- --apply-migrations`
+2. `npm run build`
+3. `bash scripts/smoke-test.sh --base-url http://localhost:3000 --start-server`
 
-1. Verify runtime contract and DB wiring:
-   - `npm run verify:prod -- --apply-migrations`
-2. Build production artifact:
-   - `npm run build`
-3. Run prod-like smoke against a started server:
-   - `bash scripts/smoke-test.sh --base-url http://localhost:3000 --start-server`
-
-Expected outcome:
-- `verify:prod` passes env validation, DB reachability, migration status, and
-  health validation
-- smoke exits with zero failures
-- `/api/health` reports real dependency state instead of placeholders
-
-Stop conditions:
+Stop on:
 - missing required env
 - failed DB reachability
 - failed migration status after `--apply-migrations`
-- smoke failure on goals, personas, conversations, config, analytics, or health
+- smoke failure on config, goals, personas, conversations, analytics, or health
 
-## 5. Local Release Gate Runbook (Verified Locally)
-
-Use this before opening or merging a release PR.
+## 5. Local Release Gate (Verified Locally)
 
 1. `npm run type-check`
 2. `npm run lint`
 3. `npm run test:run`
 4. `npm run build`
 
-Use the production-like gate in section 4 when the change affects runtime,
-deployment, auth, health, billing, migrations, or persistence behavior.
+Use section 4 as well when the change affects runtime, deployment, auth,
+health, billing, migrations, or persistence behavior.
 
-## 6. Preview Deploy Runbook (Prepared, Pending Live Proof In `17.2`)
-
-Prerequisites:
-- preview environment variables exist in Vercel
-- preview database target is correct
-- project is linked to this repository
-
-Preferred path:
-1. Push the branch to GitHub.
-2. Trigger preview deployment through Vercel Git integration, or:
-   - `vercel deploy -y`
-3. Capture the preview URL.
-4. Run:
-   - `npm run verify:prod -- --base-url https://<preview-url>`
-5. If Stripe is intentionally enabled on preview:
-   - `npm run verify:prod -- --base-url https://<preview-url> --require-stripe --check-webhook`
-6. Run smoke:
-   - `bash scripts/smoke-test.sh --base-url https://<preview-url>`
-
-Required evidence to close `17.2`:
-- preview URL
-- passing `verify:prod` output
-- passing smoke output
-- `/api/health` result captured from preview
-
-## 7. Production Deploy Runbook (Prepared, Pending Live Proof In `17.3`)
+## 6. Preview Deploy Runbook (Verified Live)
 
 Prerequisites:
-- `main` is protected and only mergeable with green required checks
-- production environment variables are present
-- database target is confirmed
-- on-call owner is available for post-deploy verification
+- preview env exists in Vercel for the branch/environment being tested
+- preview DB target is correct
+- project is linked locally with Vercel CLI access
 
-Preferred path:
-1. Merge the approved PR to `main`.
-2. Confirm Vercel production deployment starts from `main`.
-3. Capture the production URL / deployment id.
-4. Run:
-   - `npm run verify:prod -- --base-url https://<production-domain>`
-5. If Stripe is in scope for this environment:
-   - `npm run verify:prod -- --base-url https://<production-domain> --require-stripe --check-webhook`
+Execution order used in live proof:
+1. Pull branch-scoped preview env locally:
+   - `npx vercel env pull <tmp-preview-env> --environment preview --git-branch <branch> --yes`
+2. Build with preview parity:
+   - `node scripts/run-with-dotenv.js <tmp-preview-env> npx vercel build`
+3. Deploy the prebuilt artifact:
+   - `npx vercel deploy --prebuilt --target preview --force --yes --logs`
+4. Verify through authenticated preview access:
+   - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> node scripts/run-with-dotenv.js <tmp-preview-env> bash scripts/verify-production.sh --base-url https://<preview-url>`
+5. Run smoke:
+   - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> bash scripts/smoke-test.sh --base-url https://<preview-url>`
+6. If billing is intentionally enabled on preview:
+   - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> node scripts/run-with-dotenv.js <tmp-preview-env> bash scripts/verify-production.sh --base-url https://<preview-url> --require-stripe --check-webhook`
+
+Live proof captured:
+- preview deployment: `dpl_7rCmEBpM3mwNNMcvTkoHCoJQ2vhA`
+- verified URL: `https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
+- verify result: passed (`status=healthy`, database `connected`)
+- smoke result: `19` passed, `0` failed, `13` skipped
+
+## 7. Production Deploy Runbook (Verified Live)
+
+Important rule:
+- a successful production deploy did not move the canonical alias automatically
+- explicit promotion was required using:
+  - `npx vercel promote <deployment-id> --yes -S itsokialready8`
+
+Execution order used in live proof:
+1. Pull production env locally:
+   - `npx vercel env pull <tmp-prod-env> --environment production --yes -S itsokialready8`
+2. Build with production parity:
+   - `node scripts/run-with-dotenv.js <tmp-prod-env> npx vercel build --prod`
+3. Deploy the prebuilt artifact:
+   - `npx vercel deploy --prebuilt --prod --force --yes --logs`
+4. Promote the deployment to the canonical alias:
+   - `npx vercel promote <deployment-id> --yes -S itsokialready8`
+5. Verify on the canonical production URL:
+   - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
 6. Run smoke:
-   - `bash scripts/smoke-test.sh --base-url https://<production-domain>`
-7. Review `/api/health` and required user-critical surfaces:
-   - home
-   - auth
-   - settings/provider config
-   - multi-chat
-   - goals
-   - personas
-   - analytics
+   - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+7. If billing-ready proof is in scope:
+   - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app --require-stripe --check-webhook`
 
-Required evidence to close `17.3`:
-- production deployment identifier
-- passing `verify:prod` output
-- passing smoke output
-- `/api/health` payload/status capture
+Live proof captured:
+- production deployment: `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz`
+- canonical URL: `https://multi-llm-chat-assistant.vercel.app`
+- verify result: passed (`status=healthy`, database `connected`)
+- smoke result: `19` passed, `0` failed, `13` skipped
 
-## 8. Rollback Runbook (Prepared, Pending Live Proof In `17.4`)
-
-Use this for application regressions after deploy.
+## 8. Rollback Runbook (Verified Live)
 
 Rules:
 - prefer application rollback before database rollback
 - do not guess on destructive DB rollback
-- if migrations were already applied, treat DB rollback as a separate change
+- treat DB rollback as a separate operation if migrations are already applied
 
-Application rollback flow:
-1. Identify the last known healthy git SHA / Vercel deployment.
-2. Redeploy that prior application version.
-3. Re-run:
-   - `npm run verify:prod -- --base-url https://<target-domain>`
-   - `bash scripts/smoke-test.sh --base-url https://<target-domain>`
-4. Confirm `/api/health` and core routes recover.
-5. Record the incident window, bad SHA, restored SHA, and any user-visible impact.
+Application rollback flow proven live:
+1. Pull the same production env file used for production verification:
+   - `npx vercel env pull <tmp-prod-env> --environment production --yes -S itsokialready8`
+2. Identify the last known healthy deployment.
+3. Promote that deployment to the canonical alias:
+   - `npx vercel promote <prior-deployment-id> --yes -S itsokialready8`
+4. Re-run:
+   - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+   - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+5. Confirm `/api/health` and core routes recover.
+6. Restore the latest intended release:
+   - `npx vercel promote <current-deployment-id> --yes -S itsokialready8`
+7. Re-run verify and smoke again:
+   - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+   - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
 
-Required evidence to close `17.4`:
-- bad deployment id / SHA
-- restored deployment id / SHA
-- passing post-rollback verify output
-- passing post-rollback smoke output
+Live proof captured:
+- rollback target: `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
+- restore target: `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz`
+- verify after rollback: passed
+- smoke after rollback: `19` passed, `0` failed, `13` skipped
+- verify after restore: passed
+- smoke after restore: `19` passed, `0` failed, `13` skipped
 
-## 9. Incident Triage Runbook
-
-Start here when the app is unhealthy, deploy verification fails, or user-facing
-features regress.
+## 9. Incident Triage
 
 First checks:
 1. `GET /api/health`
@@ -233,7 +222,7 @@ Triage map:
 - Health shows sidecar degraded:
   - verify `PYTHON_CORE_URL`
   - confirm sidecar `/api/v1/health`
-  - core app can still operate without sidecar because it is optional
+  - core app remains operable because sidecar is optional
 - Auth failures or redirect loops:
   - verify `NEXTAUTH_URL`
   - verify `NEXTAUTH_SECRET` or `AUTH_SECRET`
@@ -241,37 +230,30 @@ Triage map:
 - Billing routes return unavailable:
   - verify `STRIPE_SECRET_KEY`
   - verify `STRIPE_PRO_PRICE_ID`
-  - verify `STRIPE_WEBHOOK_SECRET` when webhook checks are required
+  - verify `STRIPE_WEBHOOK_SECRET`
 - Smoke fails on conversations/goals/personas/config:
   - treat as release-blocking for preview/prod promotion
   - check DB availability and recent route/service changes
 
 ## 10. Recovery Guidance
 
-Recover by lowest-risk action first:
-
 1. Fix missing or incorrect environment variables and redeploy.
 2. Re-run `verify:prod` to confirm env and health recovery.
 3. If release-blocking core flows still fail, rollback the application version.
 4. If the issue is isolated to optional Stripe or optional sidecar:
    - decide whether to ship degraded
-   - document the accepted risk in the status log
+   - record the accepted risk in the release-status artifacts
 5. If data integrity is in question:
    - stop promotion
    - preserve logs and deployment ids
    - involve the infra owner before any destructive DB action
 
-## 11. Evidence Already Captured
+## 11. Related Evidence
 
-Verified in this repository before this runbook was written:
-- `npm run verify:prod -- --apply-migrations` against local Postgres verification DB
-- guest-mode smoke with supported lifecycle probes
-- production-mode smoke with started production server
-- `/api/health` route truthfulness tests
-- sanitized log/error behavior tests
-
-See also:
+See:
+- `handoff_work/HANDOFF_INDEX.md`
+- `handoff_work/DEPLOYMENT_EVIDENCE.md`
+- `handoff_work/RELEASE_MANIFEST.md`
+- `handoff_work/BILLING_EVIDENCE.md`
 - `handoff_work/currentstatus.md`
 - `handoff_work/CLOSURE_MASTER_CHECKLIST.md`
-- `VERCEL_DEPLOYMENT.md`
-- `docs/DEPLOYMENT_GUIDE.md`
