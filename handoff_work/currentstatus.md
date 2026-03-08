@@ -1,8 +1,8 @@
 # .currentstatus
 
-timestamp_local: 2026-03-08 03:27:43 EDT
+timestamp_local: 2026-03-08 03:27:49 EDT
 timestamp_utc: 2026-03-08T07:27:49Z
-source: live preview/production/rollback proof + command evidence in this session
+source: final closeout truth pass + handoff bundle assembly on `codex/final-handoff-closeout-20260308`
 
 ## done
 - `01.1` PASS: repo identity recorded with raw command output.
@@ -67,15 +67,18 @@ source: live preview/production/rollback proof + command evidence in this sessio
 - `17.2` PASS: a fresh protected Vercel preview for current `main` became healthy, `verify-production.sh` passed through authenticated `vercel curl`, and smoke passed on the preview URL.
 - `17.3` PASS: current `main` was deployed to production, explicitly promoted to the canonical alias, and `verify-production.sh` plus smoke both passed on `https://multi-llm-chat-assistant.vercel.app`.
 - `17.4` PASS: rollback was proven live by promoting the previous healthy production deployment, verifying it, then restoring the latest deployment and re-verifying recovery.
+- `18.1` PASS: authoritative docs and runbooks now match the proven preview, production, rollback, and alias-promotion behavior.
+- `18.2` PASS: final handoff bundle exists under `handoff_work/` with one explicit authority chain (`HANDOFF_INDEX.md`, release status, deployment evidence, billing evidence, residual risks, release manifest, env inventory).
 
 ## failed
-- none through `17.4`.
+- none through `18.2`.
 
 ## unverified
-- Stripe checkout/portal/webhook live loop.
+- billing-ready proof (`Stripe` checkout/portal/signed-webhook live validation).
 
 ## blockers
-- none
+- none for technical handoff closeout.
+- `18.3` remains pending only on final PR required checks.
 
 ## 01.1 evidence (raw)
 ```text
@@ -177,10 +180,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Start `18.1` final truth pass:
-- reconcile README, architecture, deployment docs, and runbooks against the now-proven preview, production, and rollback behavior
-- capture the operational alias requirement (`vercel promote ... -S itsokialready8`) anywhere docs imply production deploy alone is sufficient
-- then assemble the final handoff bundle (`18.2`) and declare handoff-ready state (`18.3`)
+Open the final closeout PR from `codex/final-handoff-closeout-20260308`, wait for required checks on the final head, then close `18.3` and merge to `main`.
 
 ## 02.1 evidence (page grouping)
 ```text
@@ -1307,3 +1307,35 @@ TOTAL (22)
     - smoke passed (`19` passed, `0` failed, `13` skipped)
 - Result:
   - `17.4` PASS: rollback and forward recovery are both executable and proven on the live production alias.
+
+## 18.1 evidence (Final truth pass)
+- Authoritative docs reconciled against the proven release behavior:
+  - `README.md`
+  - `docs/OPERATOR_RUNBOOK.md`
+  - `VERCEL_DEPLOYMENT.md`
+  - `docs/DEPLOYMENT_GUIDE.md`
+  - `DOCS_SOURCE_OF_TRUTH.md`
+- Truth changes locked in:
+  - protected preview verification now documented as a proven path
+  - production deployment now documents explicit canonical alias promotion via `vercel promote ... -S itsokialready8`
+  - rollback and restore are documented as proven live procedures
+  - technical handoff-ready and billing-ready are now tracked separately
+- Result:
+  - `18.1` PASS: authoritative docs now match the shipped runtime and live operational evidence.
+
+## 18.2 evidence (Final handoff bundle)
+- Added handoff authority chain:
+  - `handoff_work/HANDOFF_INDEX.md`
+  - `handoff_work/RELEASE_STATUS.md`
+  - `handoff_work/DEPLOYMENT_EVIDENCE.md`
+  - `handoff_work/BILLING_EVIDENCE.md`
+  - `handoff_work/RESIDUAL_RISKS.md`
+  - `handoff_work/RELEASE_MANIFEST.md`
+  - `handoff_work/ENV_INVENTORY.md`
+- Bundle guarantees:
+  - one top-level entrypoint for operators and buyers
+  - one release manifest with deployment IDs, URLs, and gate references
+  - one env-family inventory without secret values
+  - billing readiness explicitly separated from technical handoff readiness
+- Result:
+  - `18.2` PASS: the final handoff bundle is assembled and internally coherent.

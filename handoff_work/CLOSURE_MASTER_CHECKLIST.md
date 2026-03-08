@@ -1,6 +1,6 @@
 # CLOSURE_MASTER_CHECKLIST
 
-Source basis: direct inspection of the local repository derived from merged `main` commit `b72f097bcfb77288115c9ee3048e7024dd3f6aad`, with live deploy/rollback evidence captured on branch `codex/live-proof-closeout-20260308`.
+Source basis: direct inspection of the local repository derived from merged `main` commit `4ba06123781766e2dff123e491291cf0785d6e25`, with live deploy/rollback evidence already captured and final closeout work assembled on branch `codex/final-handoff-closeout-20260308`.
 
 Repository remote: `https://github.com/IAlready8/MultiLLM-Chat-Assistant.git`
 
@@ -13,7 +13,7 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 - **Billing owner** = human with Stripe access
 
 ## Execution progress
-- Last updated: `2026-03-06 00:16:44 EST` (`2026-03-06T05:16:44Z`)
+- Last updated: `2026-03-08 03:27:49 EDT` (`2026-03-08T07:27:49Z`)
 - [x] `01.1` Record repo identity (PASS)
 - [x] `01.2` Capture repo topology (PASS)
 - [x] `01.3` Mark stale docs (PASS)
@@ -228,17 +228,14 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 
 | ID | Task | Depends On | Sub-tasks | Pass/Fail gate | File targets | Owner | Evidence |
 |---|---|---|---|---|---|---|---|
-| 18.1 | Final truth pass | 05.*, 17.* | Re-read README, architecture, env docs, handoff docs against final code | PASS when docs and code match exactly | docs + handoff files | LLM | final mismatch check = zero unresolved |
-| 18.2 | Assemble handoff bundle | 18.1 | Include final docs, closure checklist, status, plan, runbooks, evidence references, release tag | PASS when new maintainer can take over with no missing context | handoff folder / release artifact | Repo operator | bundle manifest |
-| 18.3 | Declare handoff-ready state | 18.2 | Only after all PASS gates above are green | PASS when no blocker remains open | `.currentstatus` | Repo operator | signed checklist |
+| 18.1 ✅ | Final truth pass | 05.*, 17.* | Re-read README, architecture, env docs, handoff docs against final code | PASS (closed 2026-03-08) when docs and code match exactly | docs + handoff files | LLM | deployment/runbook/docs truth pass completed; stale pending-proof wording removed or reframed |
+| 18.2 ✅ | Assemble handoff bundle | 18.1 | Include final docs, closure checklist, status, plan, runbooks, evidence references, release manifest, env inventory, risk index | PASS (closed 2026-03-08) when new maintainer can take over with no missing context | handoff folder / release artifact | Repo operator | `HANDOFF_INDEX.md`, `RELEASE_STATUS.md`, `DEPLOYMENT_EVIDENCE.md`, `BILLING_EVIDENCE.md`, `RESIDUAL_RISKS.md`, `RELEASE_MANIFEST.md`, `ENV_INVENTORY.md` |
+| 18.3 | Declare handoff-ready state | 18.2 | Only after final PR checks on the closeout head are green | PASS when no technical blocker remains open and final PR gates are green | `.currentstatus`, `RELEASE_STATUS.md` | Repo operator | final PR + signed checklist |
 
 ---
 
-## Immediate high-value blockers already visible from inspection
+## Final closeout note
 
-1. `STATUS_UPDATE.md` points to `chore-next16-migration`, while `.git/HEAD` points to `codex/protected-main-push-20260302`.
-2. `COMPLETION_REPORT.md` is stale relative to current route/provider/runtime counts.
-3. Existing `CLAUDE.md` says provider support is OpenAI / Anthropic / Google AI / OpenRouter, but code also has `lib/providers/grok.ts`.
-4. Existing `CLAUDE.md` says Python core is not integrated with Next.js runtime, but `app/api/llm/orchestrate/route.ts` actively proxies to it.
-5. Handoff docs still need a final truth pass whenever live deploy evidence changes, because deployment state is temporally unstable.
-6. `README.md` says current runtime uses Prisma stubs; `lib/prisma.ts` clearly supports a real runtime Prisma client when `DATABASE_URL` is set.
+- `18.1` and `18.2` are complete on this branch.
+- `18.3` remains intentionally open until the final closeout PR head has green required checks.
+- Billing-ready remains a separate gate and is tracked in `handoff_work/BILLING_EVIDENCE.md`.

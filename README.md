@@ -151,22 +151,37 @@ Key groups:
 - Operator runbook: `docs/OPERATOR_RUNBOOK.md`
 - Vercel setup: `VERCEL_DEPLOYMENT.md`
 - General deployment notes: `docs/DEPLOYMENT_GUIDE.md`
+- Release handoff bundle: `handoff_work/HANDOFF_INDEX.md`
 
 ### Deploy Technique Used (Current Workflow)
-This is the exact command flow used to deploy without changing source files:
+This is the proven command model used for preview and production verification:
 
-1. Stage/commit/push current state:
-   - `git add -A`
-   - `git commit -m "chore: snapshot current working state"`
-   - If there are no file changes but you still want a new snapshot commit:
-     - `git commit --allow-empty -m "chore: maintain working snapshot"`
-   - `git push origin main`
-2. Create a Vercel preview deployment:
-   - `vercel deploy -y`
-3. If you must test with temporary CLI overrides instead of permanent project env vars:
-   - Build-time (`-b`) and runtime (`-e`) values may both be required for frameworks that read env during build.
-   - Example:
-     - `vercel deploy -y -b NEXTAUTH_SECRET=... -b NEXTAUTH_URL=... -b API_KEY_ENCRYPTION_SEED=... -b DATABASE_URL=... -e NEXTAUTH_SECRET=... -e NEXTAUTH_URL=... -e API_KEY_ENCRYPTION_SEED=... -e DATABASE_URL=...`
+1. Pull the environment for the target scope:
+   - Preview branch parity:
+     - `npx vercel env pull <tmp-preview-env> --environment preview --git-branch <branch> --yes`
+   - Production parity:
+     - `npx vercel env pull <tmp-prod-env> --environment production --yes -S itsokialready8`
+2. Build the prebuilt artifact locally:
+   - Preview:
+     - `node scripts/run-with-dotenv.js <tmp-preview-env> npx vercel build`
+   - Production:
+     - `node scripts/run-with-dotenv.js <tmp-prod-env> npx vercel build --prod`
+3. Deploy the prebuilt artifact:
+   - Preview:
+     - `npx vercel deploy --prebuilt --target preview --force --yes --logs`
+   - Production:
+     - `npx vercel deploy --prebuilt --prod --force --yes --logs`
+4. Important production rule:
+   - A successful production deploy did not automatically move the canonical alias.
+   - The proven flow required:
+     - `npx vercel promote <deployment-id> --yes -S itsokialready8`
+5. Verify and smoke the deployed target:
+   - Preview:
+     - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> node scripts/run-with-dotenv.js <tmp-preview-env> bash scripts/verify-production.sh --base-url https://<preview-url>`
+     - `USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> bash scripts/smoke-test.sh --base-url https://<preview-url>`
+   - Production:
+     - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+     - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
 
 ### Make Every Push To `main` Auto-Deploy
 Configure once in Vercel Project Settings:
@@ -193,6 +208,10 @@ Configure once in Vercel Project Settings:
 5. Ensure your Git author identity is valid and has access to the Vercel team/project (email must match an authorized member).
 
 After this setup, every `git push origin main` should trigger a production deployment automatically via Vercel Git integration.
+
+Operational note:
+- auto-deploy initiation and canonical alias promotion are not the same thing
+- in the proven release flow, explicit `vercel promote ... -S itsokialready8` was still required to move the production alias deterministically
 
 ## Additional Docs
 - `docs/OPERATOR_RUNBOOK.md`: startup, verification, deploy, rollback, incident runbooks

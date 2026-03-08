@@ -1,24 +1,38 @@
 # Vercel Deployment
 
-This guide covers deploying the Next.js app to Vercel with the current repository configuration.
+This guide covers the proven Vercel deployment flow for the current repository.
+
+## Current Proven State
+- Protected preview verification: proven
+- Production deployment to canonical alias: proven
+- Rollback and forward recovery: proven
+- Billing-ready validation: tracked separately in `handoff_work/BILLING_EVIDENCE.md`
+
+Current proven references:
+- Preview deployment: `dpl_7rCmEBpM3mwNNMcvTkoHCoJQ2vhA`
+- Preview URL: `https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
+- Production deployment: `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz`
+- Rollback target: `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
+- Production URL: `https://multi-llm-chat-assistant.vercel.app`
 
 ## Prerequisites
-- Vercel account
-- Project connected to this GitHub repository, or Vercel CLI (`npm i -g vercel`)
-- Node.js 20+ locally (for parity with CI/dev)
+- Vercel account with access to the linked team/project
+- Vercel CLI authenticated and linked to this repository
+- Node.js 20+ locally
+- required environment variables configured in Vercel
 
 ## Build Configuration
-Repository already includes `vercel.json`:
+Repository includes `vercel.json`:
 - `buildCommand`: `npm run build`
 - `installCommand`: `npm install`
 - `framework`: `nextjs`
 
-No extra Vercel build command override is required.
+No custom Vercel build override is required.
 
 ## Required Environment Variables
 Set these in Vercel Project Settings -> Environment Variables.
 
-Required:
+Required for core runtime:
 - `NEXTAUTH_URL`
 - `NEXTAUTH_SECRET` or `AUTH_SECRET`
 - `API_KEY_ENCRYPTION_SEED`
@@ -27,76 +41,103 @@ Required:
 Common optional:
 - `AUTH_REQUIRE_LOGIN`
 - `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
-- `DEMO_ACCOUNT_*`
-- `NEXT_PUBLIC_DEMO_ACCOUNT_*`
-- `NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH`
-- `GUEST_USER_*`
-- `NEXT_PUBLIC_GUEST_USER_ID`
-- `PYTHON_CORE_URL` (if using Python orchestration service)
-- `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` (if billing is enabled)
-- `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL` (for attribution/branding)
-- `LLM_FETCH_TIMEOUT_MS`, `LLM_FETCH_RETRIES` (for outbound request tuning)
-- `NEXT_PUBLIC_SECURE_STORAGE_KEY` (test/dev override)
+- `PYTHON_CORE_URL`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_PRO_PRICE_ID`
+- `STRIPE_WEBHOOK_SECRET`
+- `NEXT_PUBLIC_APP_NAME`
+- `NEXT_PUBLIC_APP_URL`
+- `LLM_FETCH_TIMEOUT_MS`
+- `LLM_FETCH_RETRIES`
+- `NEXT_PUBLIC_SECURE_STORAGE_KEY`
 
-Use `.env.example` as the source of truth for supported variables.
+Use `.env.example` and `handoff_work/ENV_INVENTORY.md` as the env references.
 
-CLI alternative (sets permanent project env vars):
+## Preview Deploy Flow (Proven)
+1. Pull branch-scoped preview env:
 
 ```bash
-vercel env add NEXTAUTH_SECRET production
-vercel env add NEXTAUTH_SECRET preview
-vercel env add NEXTAUTH_URL production
-vercel env add NEXTAUTH_URL preview
-vercel env add API_KEY_ENCRYPTION_SEED production
-vercel env add API_KEY_ENCRYPTION_SEED preview
-vercel env add DATABASE_URL production
-vercel env add DATABASE_URL preview
+npx vercel env pull <tmp-preview-env> --environment preview --git-branch <branch> --yes
 ```
 
-Generate `NEXTAUTH_SECRET` with:
+2. Build with preview parity:
 
 ```bash
-openssl rand -base64 32
+node scripts/run-with-dotenv.js <tmp-preview-env> npx vercel build
 ```
 
-## Deploy via GitHub Integration
-1. Import the repository in Vercel.
-2. Set environment variables.
-3. Trigger a deployment from `main`.
-4. Confirm:
-   - Build succeeds
-   - `/api/auth/session` responds
-   - `/api/config` responds
-
-## Production DB + Stripe Verification
-After a successful deploy, validate runtime wiring:
+3. Deploy the prebuilt artifact:
 
 ```bash
-npm run verify:prod -- --base-url https://<your-domain> --require-stripe --check-webhook
+npx vercel deploy --prebuilt --target preview --force --yes --logs
 ```
 
-If your deployment introduced new migrations:
+4. Verify through authenticated preview access:
 
 ```bash
-npm run verify:prod -- --apply-migrations --require-stripe
+USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> \
+node scripts/run-with-dotenv.js <tmp-preview-env> \
+bash scripts/verify-production.sh --base-url https://<preview-url>
+```
+
+5. Run smoke:
+
+```bash
+USE_VERCEL_CURL=true VERCEL_CURL_DEPLOYMENT=https://<preview-url> \
+bash scripts/smoke-test.sh --base-url https://<preview-url>
+```
+
+## Production Deploy Flow (Proven)
+1. Pull production env:
+
+```bash
+npx vercel env pull <tmp-prod-env> --environment production --yes -S itsokialready8
+```
+
+2. Build with production parity:
+
+```bash
+node scripts/run-with-dotenv.js <tmp-prod-env> npx vercel build --prod
+```
+
+3. Deploy the prebuilt artifact:
+
+```bash
+npx vercel deploy --prebuilt --prod --force --yes --logs
+```
+
+4. Promote the deployment to the canonical alias:
+
+```bash
+npx vercel promote <deployment-id> --yes -S itsokialready8
+```
+
+5. Verify production:
+
+```bash
+node scripts/run-with-dotenv.js <tmp-prod-env> \
+bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app
+bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app
+```
+
+Important:
+- a successful deploy alone did not move the canonical production alias
+- explicit `vercel promote ... -S itsokialready8` was required in the proven flow
+
+## Billing-Enabled Validation
+If billing is intentionally enabled in the environment:
+
+```bash
+node scripts/run-with-dotenv.js <tmp-prod-env> \
+bash scripts/verify-production.sh --base-url https://<your-domain> --require-stripe --check-webhook
 ```
 
 This validates:
-- required env vars (`NEXTAUTH_*` or `AUTH_SECRET`, `API_KEY_ENCRYPTION_SEED`, `DATABASE_URL`)
-- Prisma migration status/deploy
-- health endpoint status
-- Stripe key + price configuration
-- webhook endpoint behavior (signed verification when `--require-stripe` is used)
-
-## Deploy via Vercel CLI
-```bash
-vercel login
-vercel link
-vercel --prod
-```
+- Stripe key and price configuration
+- signed webhook path behavior
 
 ## Local Preview-Parity Build
-To validate the branch-scoped preview environment without consuming a deployment:
+To validate branch-scoped preview env without consuming a deployment:
 
 ```bash
 npm run build:preview:local
@@ -105,41 +146,38 @@ npm run smoke:preview:local
 npm run smoke:preview:local:auth
 ```
 
-This pulls the current branch's preview env vars from Vercel and runs a local production build with them.
-
-## Notes on Current Runtime Behavior
-- This repository currently includes Prisma-stubbed data access with service-level in-memory fallbacks.
-- If you deploy exactly as-is, key/conversation fallback data is not durable across process restarts.
-- For durable storage, configure DB-backed data access and `DATABASE_URL`.
+## Operational Notes
+- Preview and production env scopes are separate.
+- Do not assume preview inherits production-only values.
+- Protected preview verification requires authenticated `vercel curl` when preview auth is enabled.
+- Production rollback should use deployment promotion first; do not guess on DB rollback.
+- In-memory fallbacks are development-only; production runtime is DB-required and fail-closed for core persistence paths.
 
 ## Troubleshooting
 ### Build fails with auth/env errors
-- Ensure `NEXTAUTH_URL` is set.
-- Ensure `NEXTAUTH_SECRET` or `AUTH_SECRET` is set.
-- Ensure `API_KEY_ENCRYPTION_SEED` is set.
-- Ensure `DATABASE_URL` is set.
-- Run `vercel env ls preview` and confirm preview vars are available for the branch/environment you are deploying.
+- Verify `NEXTAUTH_URL`
+- Verify `NEXTAUTH_SECRET` or `AUTH_SECRET`
+- Verify `API_KEY_ENCRYPTION_SEED`
+- Verify `DATABASE_URL`
+- Confirm the env exists in the correct Vercel scope
 
 ### Deployment errors before build starts
-- If Vercel shows `Error` with a `0ms` build, inspect with `vercel deploy --debug` or `vercel inspect <deployment-url>`.
-- A common cause on Hobby plans is hitting the daily deployment API limit (`api-deployments-free-per-day`), which fails before a real build starts.
+- Inspect with `vercel inspect <deployment-url>`
+- On Hobby plans, the daily deployment API limit can fail the deploy before build start (`api-deployments-free-per-day`)
 
-### Orchestration endpoint returns 503
-- Set `PYTHON_CORE_URL` to a reachable FastAPI service.
-- Confirm sidecar health and network accessibility from Vercel runtime.
-
-### API config routes return empty/no providers
-- Expected when no provider keys have been saved for the current user/guest identity.
+### Production URL did not move
+- Run explicit promotion:
+  - `npx vercel promote <deployment-id> --yes -S itsokialready8`
 
 ### Webhook returns 503
-- `STRIPE_SECRET_KEY` is missing/invalid in Vercel env vars.
-- Confirm `STRIPE_WEBHOOK_SECRET` exists for the same environment.
-- Re-run:
-  - `npm run verify:prod -- --base-url https://<your-domain> --require-stripe --check-webhook`
+- Verify `STRIPE_SECRET_KEY`
+- Verify `STRIPE_PRO_PRICE_ID`
+- Verify `STRIPE_WEBHOOK_SECRET`
+- Re-run billing-enabled verification
 
 ## Related
 - `docs/OPERATOR_RUNBOOK.md`
-- `README.md`
 - `docs/DEPLOYMENT_GUIDE.md`
-- `ARCHITECTURE.md`
-- `PYTHON_INTEGRATION.md`
+- `handoff_work/HANDOFF_INDEX.md`
+- `handoff_work/DEPLOYMENT_EVIDENCE.md`
+- `handoff_work/BILLING_EVIDENCE.md`

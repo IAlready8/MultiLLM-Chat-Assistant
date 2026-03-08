@@ -1,109 +1,105 @@
 # Deployment Guide
 
-This guide is the platform-agnostic deployment reference for the MultiLLM Chat Assistant.
+This is the platform-agnostic deployment reference for the current release baseline.
 
-## 1. Pre-Deploy Checklist
+## 1. Core Release Contract
+- production requires Postgres
+- production requires strict auth
+- production requires `NEXTAUTH_URL`
+- production requires `NEXTAUTH_SECRET` or `AUTH_SECRET`
+- production requires `API_KEY_ENCRYPTION_SEED`
+- billing is optional for technical handoff readiness
+- Python sidecar is optional
+- Redis is optional
+
+## 2. Pre-Deploy Checklist
 - `npm ci`
 - `npm run type-check`
 - `npm run lint`
+- `npm run test:run`
 - `npm run build`
-- Optional: `npm run test:run`
+- `npm run verify:prod -- --apply-migrations`
 
-## 2. Required Environment Variables
+## 3. Required Environment Families
 At minimum, configure:
-- `NEXTAUTH_URL`
-- `NEXTAUTH_SECRET` or `AUTH_SECRET`
-- `API_KEY_ENCRYPTION_SEED`
-- `DATABASE_URL` for production
+- auth/session envs
+- database envs
+- encryption/secret-management envs
+- provider API key envs as needed for enabled providers
 
-Common toggles and optional vars:
-- `AUTH_REQUIRE_LOGIN`
-- `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
-- `DEMO_ACCOUNT_*`
-- `NEXT_PUBLIC_DEMO_ACCOUNT_*`
-- `NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH`
-- `GUEST_USER_*`
-- `NEXT_PUBLIC_GUEST_USER_ID`
-- `PYTHON_CORE_URL`
-- `STRIPE_SECRET_KEY`
-- `STRIPE_PRO_PRICE_ID`
-- `STRIPE_WEBHOOK_SECRET`
-- `NEXT_PUBLIC_APP_NAME`
-- `NEXT_PUBLIC_APP_URL`
-- `LLM_FETCH_TIMEOUT_MS`
-- `LLM_FETCH_RETRIES`
-- `NEXT_PUBLIC_SECURE_STORAGE_KEY`
+Optional families:
+- Stripe billing envs
+- sidecar envs
+- cache / Redis envs
+- deployment-platform env helpers
 
-Reference: `.env.example`
+Reference:
+- `.env.example`
+- `handoff_work/ENV_INVENTORY.md`
 
-## 3. Build and Start (Node)
+## 4. Build and Start (Node)
 ```bash
 npm ci
 npm run build
 npm run start
 ```
 
-## 4. Container/Platform Notes
-- Ensure the runtime exposes the same env vars used at build/start.
-- Preview and production environments are separate in Vercel; do not assume preview has production-only vars.
-- If orchestration is enabled, `PYTHON_CORE_URL` must be reachable from the app runtime.
-- If database-backed persistence is enabled, provide valid `DATABASE_URL` and schema/migrations.
-- If billing checks are required, provide `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, and `STRIPE_WEBHOOK_SECRET` in that environment.
+## 5. Vercel-Specific Flow
+Use `VERCEL_DEPLOYMENT.md` for the proven Vercel commands.
 
-## 5. Vercel
-Use `VERCEL_DEPLOYMENT.md` for Vercel-specific instructions.
+Operationally important rule:
+- production deploy did not implicitly move the canonical alias in the proven run
+- explicit `vercel promote ... -S itsokialready8` was required
 
-## 6. PM2 (optional local/prod process manager)
-PM2 config exists in `ecosystem.config.js`.
-
-Example:
-```bash
-pm2 start ecosystem.config.js
-pm2 status
-```
-
-## 7. Post-Deploy Validation
-Verify these endpoints/pages:
-- `/` renders
-- `/api/auth/session` returns JSON
-- `/api/config` returns JSON
-- `/settings` loads and can save provider keys
-- `/api/llm/chat` handles configured provider requests
-
-## 8. Production Lock-In Checklist
-Run these checks to confirm production is wired end-to-end:
+## 6. Post-Deploy Validation
+Run:
 
 ```bash
 npm run verify:prod -- --base-url https://<your-domain>
+bash scripts/smoke-test.sh --base-url https://<your-domain>
 ```
 
-With full billing + webhook checks:
+If billing is enabled and part of the release gate:
 
 ```bash
 npm run verify:prod -- --base-url https://<your-domain> --require-stripe --check-webhook
-```
-
-If migrations are pending:
-
-```bash
-npm run verify:prod -- --apply-migrations --require-stripe
+bash scripts/smoke-test.sh --base-url https://<your-domain>
 ```
 
 `verify:prod` validates:
-- required runtime env vars
-- Prisma migration status (and optional deploy)
+- required runtime envs
+- Prisma migration status, with optional deploy
 - `/api/health` status
-- Stripe configuration and price ID (`--require-stripe`)
-- webhook route behavior (`--check-webhook`)
-  - with `--require-stripe`, webhook validation uses a signed test payload and expects HTTP 200
+- optional Stripe configuration and signed webhook path when required
+- optional sidecar requirement when requested
 
-## 9. Known Runtime Tradeoffs
-- Current repository includes in-memory fallback stores for provider config and conversations when DB delegates are unavailable.
-- In-memory fallback data is process-local and non-persistent.
+## 7. Rollback Principle
+- prefer application rollback before database rollback
+- use the last known healthy deployment as the rollback target
+- re-run verify and smoke after rollback
+- re-run verify and smoke again after restoring the intended release
 
-## 10. Related Docs
+## 8. Supported Scope Summary
+Core:
+- home, auth, chat/stream/conversations, provider settings/config, goals, personas, analytics, health
+
+Optional:
+- billing + webhook flow
+- Python orchestration bridge
+- API test page
+
+Experimental:
+- comparison
+- pipeline
+- AI roundtable
+- admin pages/routes
+
+Removed from supported production scope:
+- `/api/teams`
+
+## 9. Related Docs
 - `docs/OPERATOR_RUNBOOK.md`
-- `README.md`
-- `ARCHITECTURE.md`
-- `PYTHON_INTEGRATION.md`
 - `VERCEL_DEPLOYMENT.md`
+- `handoff_work/HANDOFF_INDEX.md`
+- `handoff_work/DEPLOYMENT_EVIDENCE.md`
+- `handoff_work/RELEASE_STATUS.md`
