@@ -1,13 +1,14 @@
 import NextAuth, {
   DefaultSession,
   NextAuthOptions,
-  getServerSession,
 } from 'next-auth'
+import { getToken } from 'next-auth/jwt'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
 import GitHubProvider from 'next-auth/providers/github'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
+import { cookies } from 'next/headers'
 import prisma from '@/lib/prisma'
 import { checkAndConsume } from '@/lib/rate-limit'
 import { validateStartupEnvironment } from '@/lib/startup-validation'
@@ -322,7 +323,50 @@ export const authOptions: NextAuthOptions = {
 }
 
 export async function auth() {
-  return await getServerSession(authOptions)
+  const cookieStore = await cookies()
+  const allCookies = cookieStore.getAll()
+  const cookieHeader = allCookies
+    .map(({ name, value }) => `${name}=${value}`)
+    .join('; ')
+  const requestCookies = allCookies.reduce<Record<string, string>>(
+    (acc, { name, value }) => {
+      if (!(name in acc)) {
+        acc[name] = value
+      }
+      return acc
+    },
+    {}
+  )
+
+  const token = await getToken({
+    req: {
+      cookies: requestCookies,
+      headers: {
+        cookie: cookieHeader,
+      },
+    } as any,
+    secret: authSecret,
+  })
+
+  if (!token) {
+    return null
+  }
+
+  const userId = (token.id || token.sub) as string | undefined
+  if (!token.exp || !userId) {
+    return null
+  }
+
+  return {
+    expires: new Date(Number(token.exp) * 1000).toISOString(),
+    user: {
+      id: userId,
+      name: token.name,
+      email: token.email,
+      role: (token.role || 'MEMBER') as TeamRole,
+      tier: (token.tier || 'FREE') as SubscriptionTier,
+    },
+  }
 }
 
 // Export for API routes
