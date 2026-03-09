@@ -2,9 +2,9 @@
 
 ## Current State
 - Repository baseline branch: `main`
-- Current closeout branch: `codex/final-handoff-closeout-20260308`
-- Technical handoff status: in final closeout review
-- Billing-ready status: pending separate Stripe validation
+- Current closeout branch: `codex/live-auth-cookie-fix-20260308`
+- Technical handoff status: ready pending final PR checks
+- Billing-ready status: complete
 - Blockers: none for technical handoff closeout
 
 ## Supported Scope
@@ -55,6 +55,14 @@ Billing-ready requires:
 - Stripe customer portal verified
 - signed webhook verified
 - billing-enabled verify and smoke run against production
+
+Billing-ready gate status:
+- complete on promoted production deployment `dpl_8PpkUKh3obH4r4oMur8knNyRQ5wu`
+- checkout verified
+- portal verified
+- signed webhook verified
+- billing-enabled production verify passed
+- production smoke passed after the promoted auth fix
 
 ## References
 - `handoff_work/HANDOFF_INDEX.md`

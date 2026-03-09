@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
-const mockGetToken = vi.fn()
+const mockDecode = vi.fn()
 
 vi.mock('next-auth/jwt', () => ({
-  getToken: (...args: unknown[]) => mockGetToken(...args),
+  decode: (...args: unknown[]) => mockDecode(...args),
 }))
 
 import { proxy as middleware } from '@/proxy'
@@ -27,7 +27,7 @@ const setEnvVar = (key: string, value: string | undefined) => {
 describe('middleware strict-auth routing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGetToken.mockResolvedValue(null)
+    mockDecode.mockResolvedValue(null)
   })
 
   afterEach(() => {
@@ -46,7 +46,7 @@ describe('middleware strict-auth routing', () => {
     const response = await middleware(request)
 
     expect(response.status).toBe(200)
-    expect(mockGetToken).not.toHaveBeenCalled()
+    expect(mockDecode).not.toHaveBeenCalled()
   })
 
   it('keeps /api/health public in strict mode', async () => {
@@ -57,7 +57,7 @@ describe('middleware strict-auth routing', () => {
     const response = await middleware(request)
 
     expect(response.status).toBe(200)
-    expect(mockGetToken).not.toHaveBeenCalled()
+    expect(mockDecode).not.toHaveBeenCalled()
   })
 
   it('keeps /api/webhooks/stripe public in strict mode', async () => {
@@ -68,7 +68,7 @@ describe('middleware strict-auth routing', () => {
     const response = await middleware(request)
 
     expect(response.status).toBe(200)
-    expect(mockGetToken).not.toHaveBeenCalled()
+    expect(mockDecode).not.toHaveBeenCalled()
   })
 
   it('returns 500 for protected API routes in strict mode when auth secret is missing', async () => {
@@ -84,7 +84,7 @@ describe('middleware strict-auth routing', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Server authentication is not configured.',
     })
-    expect(mockGetToken).not.toHaveBeenCalled()
+    expect(mockDecode).not.toHaveBeenCalled()
   })
 
   it('redirects page routes to auth/error in strict mode when auth secret is missing', async () => {
@@ -99,7 +99,7 @@ describe('middleware strict-auth routing', () => {
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toContain('/auth/error')
     expect(response.headers.get('location')).toContain('error=Configuration')
-    expect(mockGetToken).not.toHaveBeenCalled()
+    expect(mockDecode).not.toHaveBeenCalled()
   })
 
   it('returns 401 for protected API routes in strict mode when token is missing and secret is present', async () => {
@@ -112,7 +112,7 @@ describe('middleware strict-auth routing', () => {
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
-    expect(mockGetToken).toHaveBeenCalledTimes(1)
+    expect(mockDecode).not.toHaveBeenCalled()
   })
 
   it('enforces strict auth in production even when strict flags are false', async () => {
@@ -126,7 +126,7 @@ describe('middleware strict-auth routing', () => {
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
-    expect(mockGetToken).toHaveBeenCalledTimes(1)
+    expect(mockDecode).not.toHaveBeenCalled()
   })
 
   it('redirects page routes to sign-in in strict mode when token is missing and secret is present', async () => {
@@ -140,6 +140,30 @@ describe('middleware strict-auth routing', () => {
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toContain('/auth/signin')
     expect(response.headers.get('location')).toContain('callbackUrl=%2Fsettings')
-    expect(mockGetToken).toHaveBeenCalledTimes(1)
+    expect(mockDecode).not.toHaveBeenCalled()
+  })
+
+  it('decodes the secure NextAuth session cookie when present', async () => {
+    setEnvVar('AUTH_REQUIRE_LOGIN', 'true')
+    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
+    setEnvVar('NEXTAUTH_SECRET', ' test-secret ')
+    mockDecode.mockResolvedValue({ sub: 'user-123' })
+
+    const request = new NextRequest('https://example.com/settings', {
+      headers: {
+        cookie:
+          '__Secure-next-auth.session-token=secure-token-value; __Host-next-auth.csrf-token=csrf-token',
+      },
+    })
+
+    const response = await middleware(request)
+
+    expect(response.status).toBe(200)
+    expect(mockDecode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        secret: 'test-secret',
+        token: 'secure-token-value',
+      })
+    )
   })
 })
