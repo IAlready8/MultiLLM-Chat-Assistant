@@ -1,8 +1,8 @@
 # .currentstatus
 
-timestamp_local: 2026-03-08 03:27:49 EDT
-timestamp_utc: 2026-03-08T07:27:49Z
-source: final closeout truth pass + handoff bundle assembly on `codex/final-handoff-closeout-20260308`
+timestamp_local: 2026-03-08 22:02:42 EDT
+timestamp_utc: 2026-03-09T02:02:42Z
+source: final auth hotfix merged to `main` and live billing-ready proof completed
 
 ## done
 - `01.1` PASS: repo identity recorded with raw command output.
@@ -69,16 +69,16 @@ source: final closeout truth pass + handoff bundle assembly on `codex/final-hand
 - `17.4` PASS: rollback was proven live by promoting the previous healthy production deployment, verifying it, then restoring the latest deployment and re-verifying recovery.
 - `18.1` PASS: authoritative docs and runbooks now match the proven preview, production, rollback, and alias-promotion behavior.
 - `18.2` PASS: final handoff bundle exists under `handoff_work/` with one explicit authority chain (`HANDOFF_INDEX.md`, release status, deployment evidence, billing evidence, residual risks, release manifest, env inventory).
+- `18.3` PASS: technical handoff-ready declaration is now valid on merged `main` after PR `#42` passed required checks and merged cleanly.
 
 ## failed
-- none through `18.2`.
+- none through `18.3`.
 
 ## unverified
 - none.
 
 ## blockers
-- none for technical handoff closeout.
-- `18.3` remains pending only on final PR required checks.
+- none.
 
 ## 01.1 evidence (raw)
 ```text
@@ -180,7 +180,7 @@ PRISMA_SPLIT
 ```
 
 ## next required move
-Open the final closeout PR from `codex/final-handoff-closeout-20260308`, wait for required checks on the final head, then close `18.3` and merge to `main`.
+Handoff closeout is complete. Continue only with post-release maintenance or new scoped product work.
 
 ## 02.1 evidence (page grouping)
 ```text

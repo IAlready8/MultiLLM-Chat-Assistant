@@ -2,10 +2,12 @@
 
 ## Baseline Identity
 - Baseline branch: `main`
+- Final merged baseline SHA: `8e9e49794a72b534dfd54138e4bdf73581c7fb1c`
 - Closeout branch: `codex/live-auth-cookie-fix-20260308`
 - Pre-closeout `main` commit SHA: `923ecd49f3ab713e4f38c3430e6bf4a481edd92f`
-- Final PR number: `42` (open while this hotfix branch is awaiting merge)
-- Release tag name: pending final merge date
+- Final PR number: `42`
+- Final PR merged at: `2026-03-09T02:15:42Z`
+- Release tag name: `handoff-baseline-2026-03-09`
 
 ## Proven Deployment References
 - Preview deployment ID: `dpl_7rCmEBpM3mwNNMcvTkoHCoJQ2vhA`
@@ -34,8 +36,5 @@
 - `handoff_work/BILLING_EVIDENCE.md`
 
 ## Finalization Note
-After the final closeout PR merges:
-- fill in the merged `main` baseline SHA
-- stamp the final PR number
-- create the release tag using the actual merge date: `handoff-baseline-YYYY-MM-DD`
-- record that tag here
+- release baseline is now merged to `main`
+- actual merge-date tag has been created on the merged baseline

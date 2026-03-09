@@ -1,7 +1,7 @@
 # Handoff Index
 
 ## Quick Start
-- Release baseline: `main` (final auth hotfix PR pending merge while this branch is open)
+- Release baseline: `main` at `8e9e49794a72b534dfd54138e4bdf73581c7fb1c`
 - Production URL: `https://multi-llm-chat-assistant.vercel.app`
 - Rollback reference: `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
 - Billing-ready status: complete
@@ -38,7 +38,7 @@
   - preview / production / rollback proof exists
   - handoff bundle is complete
   - residual risks are explicit
-  - `main` is the release baseline after the final closeout PR merges
+  - `main` is the release baseline
 - Billing-ready:
   - Stripe checkout verified
   - portal verified
