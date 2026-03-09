@@ -2,12 +2,16 @@
 
 ## Baseline Identity
 - Baseline branch: `main`
-- Final merged baseline SHA: `8e9e49794a72b534dfd54138e4bdf73581c7fb1c`
-- Closeout branch: `codex/live-auth-cookie-fix-20260308`
+- Final merged baseline SHA: `c83a83736f0364df3f223399efda58b98c5f9e6e`
+- Runtime-fix baseline SHA: `8e9e49794a72b534dfd54138e4bdf73581c7fb1c`
+- Runtime-fix branch: `codex/live-auth-cookie-fix-20260308`
 - Pre-closeout `main` commit SHA: `923ecd49f3ab713e4f38c3430e6bf4a481edd92f`
-- Final PR number: `42`
-- Final PR merged at: `2026-03-09T02:15:42Z`
+- Runtime-fix PR number: `42`
+- Runtime-fix PR merged at: `2026-03-09T02:15:42Z`
 - Release tag name: `handoff-baseline-2026-03-09`
+- Final baseline stamp PR: `43`
+- Final baseline stamp merged at: `2026-03-09T06:31:18Z`
+- Final baseline stamp merge commit: `c83a83736f0364df3f223399efda58b98c5f9e6e`
 
 ## Proven Deployment References
 - Preview deployment ID: `dpl_7rCmEBpM3mwNNMcvTkoHCoJQ2vhA`
