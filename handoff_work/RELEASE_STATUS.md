@@ -2,8 +2,8 @@
 
 ## Current State
 - Repository baseline branch: `main`
-- Current closeout branch: `codex/live-auth-cookie-fix-20260308`
-- Technical handoff status: ready pending final PR checks
+- Current closeout branch: merged from `codex/live-auth-cookie-fix-20260308`
+- Technical handoff status: complete
 - Billing-ready status: complete
 - Blockers: none for technical handoff closeout
 
@@ -48,6 +48,11 @@ Technical handoff-ready requires:
 - env inventory complete
 - residual risks recorded
 - final PR checks green
+
+Technical handoff-ready gate status:
+- complete on merged `main`
+- final PR `#42` merged at `2026-03-09T02:15:42Z`
+- required checks passed on hotfix head `709103a14efe930bb60294f2ece867ec99760888`
 
 ## Billing Gate
 Billing-ready requires:

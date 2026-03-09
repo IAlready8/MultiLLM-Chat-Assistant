@@ -230,12 +230,12 @@ This checklist is in strict dependency order. Do not skip ahead. A task is close
 |---|---|---|---|---|---|---|---|
 | 18.1 ✅ | Final truth pass | 05.*, 17.* | Re-read README, architecture, env docs, handoff docs against final code | PASS (closed 2026-03-08) when docs and code match exactly | docs + handoff files | LLM | deployment/runbook/docs truth pass completed; stale pending-proof wording removed or reframed |
 | 18.2 ✅ | Assemble handoff bundle | 18.1 | Include final docs, closure checklist, status, plan, runbooks, evidence references, release manifest, env inventory, risk index | PASS (closed 2026-03-08) when new maintainer can take over with no missing context | handoff folder / release artifact | Repo operator | `HANDOFF_INDEX.md`, `RELEASE_STATUS.md`, `DEPLOYMENT_EVIDENCE.md`, `BILLING_EVIDENCE.md`, `RESIDUAL_RISKS.md`, `RELEASE_MANIFEST.md`, `ENV_INVENTORY.md` |
-| 18.3 | Declare handoff-ready state | 18.2 | Only after final PR checks on the closeout head are green | PASS when no technical blocker remains open and final PR gates are green | `.currentstatus`, `RELEASE_STATUS.md` | Repo operator | final PR + signed checklist |
+| 18.3 ✅ | Declare handoff-ready state | 18.2 | Only after final PR checks on the closeout head are green | PASS (closed 2026-03-09) when no technical blocker remains open and final PR gates are green | `.currentstatus`, `RELEASE_STATUS.md` | Repo operator | PR `#42` merged to `main` after required checks passed; technical handoff-ready and billing-ready both recorded on merged baseline |
 
 ---
 
 ## Final closeout note
 
-- `18.1` and `18.2` are complete on this branch.
-- `18.3` remains intentionally open until the final closeout PR head has green required checks.
-- Billing-ready remains a separate gate and is tracked in `handoff_work/BILLING_EVIDENCE.md`.
+- `18.1`, `18.2`, and `18.3` are complete on merged `main`.
+- Billing-ready is also complete and recorded in `handoff_work/BILLING_EVIDENCE.md`.
+- Release baseline tag is `handoff-baseline-2026-03-09`.

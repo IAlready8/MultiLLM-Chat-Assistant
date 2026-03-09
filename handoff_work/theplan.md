@@ -76,7 +76,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - unverified:
   - none
 - blockers:
-  - none for technical handoff closeout; `18.3` awaits final PR checks
+  - none
 
 ## Phase A - truth locking
 1. [x] Reconfirm repo baseline
@@ -657,7 +657,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 ## Phase G - handoff
 36. [x] Re-run doc/code mismatch check
 37. [x] Build final handoff bundle
-38. [ ] Mark technical handoff-ready only when final PR checks are green
+38. [x] Mark technical handoff-ready only when final PR checks are green
 
 ## 16.3 implementation evidence
 - Docs added/updated:
@@ -753,6 +753,22 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
   - `handoff_work/ENV_INVENTORY.md`
 - Outcome:
   - final authority chain now exists in one explicit bundle for operator/buyer handoff
+
+## 18.3 implementation evidence
+- Final release closeout completed on merged `main`:
+  - PR `#42` merged at `2026-03-09T02:15:42Z`
+  - merge commit: `8e9e49794a72b534dfd54138e4bdf73581c7fb1c`
+  - required checks passed on head `709103a14efe930bb60294f2ece867ec99760888`
+- Final release records updated:
+  - `handoff_work/HANDOFF_INDEX.md`
+  - `handoff_work/RELEASE_STATUS.md`
+  - `handoff_work/RELEASE_MANIFEST.md`
+  - `handoff_work/currentstatus.md`
+  - `handoff_work/CLOSURE_MASTER_CHECKLIST.md`
+- Outcome:
+  - technical handoff-ready is complete
+  - billing-ready is complete
+  - merged `main` is the final release baseline
 
 ## 16.2 implementation evidence
 - Code changes:
