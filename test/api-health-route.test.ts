@@ -26,6 +26,8 @@ import { GET } from '@/app/api/health/route'
 
 const originalFetch = global.fetch
 const originalPythonCoreUrl = process.env.PYTHON_CORE_URL
+const originalCommitSha = process.env.VERCEL_GIT_COMMIT_SHA
+const originalCommitRef = process.env.VERCEL_GIT_COMMIT_REF
 
 describe('/api/health route', () => {
   beforeEach(() => {
@@ -44,6 +46,8 @@ describe('/api/health route', () => {
     global.fetch = mockFetch as typeof fetch
     mockFetch.mockReset()
     delete process.env.PYTHON_CORE_URL
+    delete process.env.VERCEL_GIT_COMMIT_SHA
+    delete process.env.VERCEL_GIT_COMMIT_REF
   })
 
   afterEach(() => {
@@ -52,6 +56,16 @@ describe('/api/health route', () => {
       delete process.env.PYTHON_CORE_URL
     } else {
       process.env.PYTHON_CORE_URL = originalPythonCoreUrl
+    }
+    if (originalCommitSha === undefined) {
+      delete process.env.VERCEL_GIT_COMMIT_SHA
+    } else {
+      process.env.VERCEL_GIT_COMMIT_SHA = originalCommitSha
+    }
+    if (originalCommitRef === undefined) {
+      delete process.env.VERCEL_GIT_COMMIT_REF
+    } else {
+      process.env.VERCEL_GIT_COMMIT_REF = originalCommitRef
     }
   })
 
@@ -65,6 +79,13 @@ describe('/api/health route', () => {
     expect(payload.checks.database.status).toBe('connected')
     expect(payload.checks.cache.status).toBe('memory')
     expect(payload.checks.sidecar.status).toBe('disabled')
+    expect(payload.version).toBe('0.1.0')
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: null,
+      commitShort: null,
+      branch: null,
+    })
     expect(payload.metrics).toBeUndefined()
   })
 
@@ -127,6 +148,24 @@ describe('/api/health route', () => {
           statusCodes: { '200': 3 },
         },
       },
+    })
+  })
+
+  it('includes release commit metadata when deploy env is present', async () => {
+    process.env.VERCEL_GIT_COMMIT_SHA =
+      '38bd6ff663ad85a9586de66c42978458fd8f2c25'
+    process.env.VERCEL_GIT_COMMIT_REF = 'main'
+
+    const request = new NextRequest('http://localhost/api/health')
+    const response = await GET(request)
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: '38bd6ff663ad85a9586de66c42978458fd8f2c25',
+      commitShort: '38bd6ff',
+      branch: 'main',
     })
   })
 })

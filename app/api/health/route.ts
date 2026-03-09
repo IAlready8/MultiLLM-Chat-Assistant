@@ -5,6 +5,7 @@ import { metrics } from '@/lib/api-logger'
 import prisma from '@/lib/prisma'
 import { getErrorMessage, isDatabaseUnavailableError } from '@/lib/db-fallback'
 import { getRateLimitDiagnostics } from '@/lib/rate-limit'
+import { getReleaseMetadata } from '@/lib/release-metadata'
 
 const sidecarHealthUrl = () => {
   const baseUrl = process.env.PYTHON_CORE_URL?.trim()
@@ -14,6 +15,7 @@ const sidecarHealthUrl = () => {
 // Health check API route — includes request metrics snapshot
 export async function GET(request: NextRequest) {
   const startTime = Date.now()
+  const release = getReleaseMetadata()
 
   const includeMetrics = request.nextUrl.searchParams.get('metrics') === '1'
 
@@ -91,7 +93,8 @@ export async function GET(request: NextRequest) {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     responseTime: Date.now() - startTime,
-    version: '1.0.0',
+    version: release.version,
+    release,
     environment: process.env.NODE_ENV || 'development',
     checks: {
       database: {
