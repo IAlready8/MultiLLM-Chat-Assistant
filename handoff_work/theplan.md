@@ -74,7 +74,7 @@ Do everything in dependency order. Do not skip ahead. Update `.currentstatus` af
 - failed:
   - none
 - unverified:
-  - billing-ready proof (`Stripe` checkout/portal/webhook live loop)
+  - none
 - blockers:
   - none for technical handoff closeout; `18.3` awaits final PR checks
 

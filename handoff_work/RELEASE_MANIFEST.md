@@ -2,26 +2,28 @@
 
 ## Baseline Identity
 - Baseline branch: `main`
-- Closeout branch: `codex/final-handoff-closeout-20260308`
-- Pre-closeout `main` commit SHA: `4ba06123781766e2dff123e491291cf0785d6e25`
-- Final PR number: `40` (pending merge while this branch is open)
+- Closeout branch: `codex/live-auth-cookie-fix-20260308`
+- Pre-closeout `main` commit SHA: `923ecd49f3ab713e4f38c3430e6bf4a481edd92f`
+- Final PR number: `42` (open while this hotfix branch is awaiting merge)
 - Release tag name: pending final merge date
 
 ## Proven Deployment References
 - Preview deployment ID: `dpl_7rCmEBpM3mwNNMcvTkoHCoJQ2vhA`
 - Preview URL: `https://multi-llm-chat-assistant-gwteq1v5v-itsokialready8.vercel.app`
-- Production deployment ID: `dpl_25CyyoAvGsJngacFVhx3TGtNrHhz`
+- Production deployment ID: `dpl_8PpkUKh3obH4r4oMur8knNyRQ5wu`
 - Rollback deployment ID: `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
 - Production canonical URL: `https://multi-llm-chat-assistant.vercel.app`
 
 ## Latest Proven Verification
-- Last verified status source timestamp: `2026-03-08T07:27:49Z`
+- Last verified status source timestamp: `2026-03-09T02:02:42Z`
 - Last smoke summary: `19` passed, `0` failed, `13` skipped
 - Core deployment gates proven:
   - preview verify + smoke
   - production verify + smoke
   - rollback verify + smoke
   - restore verify + smoke
+  - billing-enabled production verify + smoke
+  - browser-backed checkout + portal proof on promoted production
 
 ## Current CI Release Gates
 - `Quality Checks`

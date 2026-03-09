@@ -74,7 +74,7 @@ source: final closeout truth pass + handoff bundle assembly on `codex/final-hand
 - none through `18.2`.
 
 ## unverified
-- billing-ready proof (`Stripe` checkout/portal/signed-webhook live validation).
+- none.
 
 ## blockers
 - none for technical handoff closeout.

@@ -1,10 +1,10 @@
 # Handoff Index
 
 ## Quick Start
-- Release baseline: `main` (final closeout PR pending merge while this branch is open)
+- Release baseline: `main` (final auth hotfix PR pending merge while this branch is open)
 - Production URL: `https://multi-llm-chat-assistant.vercel.app`
 - Rollback reference: `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
-- Billing-ready status: pending separate Stripe validation
+- Billing-ready status: complete
 - Top 3 residual risks:
   - transitive dependency advisories remain open pending non-trivial version upgrades
   - external preview/deploy integrations still create optional PR noise

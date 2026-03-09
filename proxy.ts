@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getToken } from 'next-auth/jwt'
+import { decode } from 'next-auth/jwt'
+import { readSessionTokenFromCookies } from '@/lib/session-cookie'
 
 const PUBLIC_PATHS = new Set([
   '/auth/signin',
@@ -47,7 +48,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const authSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
+  const authSecret =
+    process.env.NEXTAUTH_SECRET?.trim() || process.env.AUTH_SECRET?.trim()
 
   if (!authSecret) {
     const message =
@@ -67,10 +69,18 @@ export async function proxy(request: NextRequest) {
   }
 
   // In strict auth mode, verify JWT token exists
-  const token = await getToken({
-    req: request,
-    secret: authSecret,
-  })
+  const sessionToken = readSessionTokenFromCookies(request.cookies.getAll())
+  let token = null
+  if (sessionToken) {
+    try {
+      token = await decode({
+        token: sessionToken,
+        secret: authSecret,
+      })
+    } catch {
+      token = null
+    }
+  }
 
   if (!token) {
     // API routes return 401; page routes redirect to signin

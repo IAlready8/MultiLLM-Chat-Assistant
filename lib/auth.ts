@@ -2,7 +2,7 @@ import NextAuth, {
   DefaultSession,
   NextAuthOptions,
 } from 'next-auth'
-import { getToken } from 'next-auth/jwt'
+import { decode } from 'next-auth/jwt'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
 import GitHubProvider from 'next-auth/providers/github'
@@ -11,6 +11,7 @@ import bcrypt from 'bcryptjs'
 import { cookies } from 'next/headers'
 import prisma from '@/lib/prisma'
 import { checkAndConsume } from '@/lib/rate-limit'
+import { readSessionTokenFromCookies } from '@/lib/session-cookie'
 import { validateStartupEnvironment } from '@/lib/startup-validation'
 import {
   createDemoAuthUser,
@@ -22,7 +23,6 @@ import {
 } from '@/lib/demo-account'
 
 const PASSWORD_MIN_LENGTH = 8
-
 // Define the types for subscription tier and team role as strings
 type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
 type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER'
@@ -322,29 +322,19 @@ export const authOptions: NextAuthOptions = {
   secret: authSecret,
 }
 
+export const readSessionTokenFromCookieStore = (
+  cookieStore: Awaited<ReturnType<typeof cookies>>
+) => readSessionTokenFromCookies(cookieStore.getAll())
+
 export async function auth() {
   const cookieStore = await cookies()
-  const allCookies = cookieStore.getAll()
-  const cookieHeader = allCookies
-    .map(({ name, value }) => `${name}=${value}`)
-    .join('; ')
-  const requestCookies = allCookies.reduce<Record<string, string>>(
-    (acc, { name, value }) => {
-      if (!(name in acc)) {
-        acc[name] = value
-      }
-      return acc
-    },
-    {}
-  )
+  const sessionToken = readSessionTokenFromCookieStore(cookieStore)
+  if (!sessionToken) {
+    return null
+  }
 
-  const token = await getToken({
-    req: {
-      cookies: requestCookies,
-      headers: {
-        cookie: cookieHeader,
-      },
-    } as any,
+  const token = await decode({
+    token: sessionToken,
     secret: authSecret,
   })
 
