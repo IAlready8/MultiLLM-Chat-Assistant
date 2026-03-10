@@ -19,6 +19,15 @@ export interface CacheConfig {
   compress?: boolean; // Enable compression for large values
 }
 
+export interface CacheDiagnostics {
+  mode: 'redis' | 'memory'
+  status: 'connected' | 'degraded' | 'memory'
+  message: string
+  redisConfigured: boolean
+  redisConnected: boolean
+  memorySize: number
+}
+
 // Cache entry interface
 interface CacheEntry<T = any> {
   value: T;
@@ -268,10 +277,36 @@ export class Cache {
       redisConnected: this.redisCache['isConnected']
     };
   }
+
+  getDiagnostics(): CacheDiagnostics {
+    const redisConfigured = Boolean(process.env.REDIS_URL?.trim())
+    const redisConnected = this.getStats().redisConnected
+    const status =
+      redisConnected ? 'connected' : redisConfigured ? 'degraded' : 'memory'
+    const message =
+      status === 'connected'
+        ? 'Redis-backed cache is connected'
+        : status === 'degraded'
+          ? 'Redis configured but unavailable; using in-memory cache'
+          : 'Redis not configured; using in-memory cache'
+
+    return {
+      mode: redisConnected ? 'redis' : 'memory',
+      status,
+      message,
+      redisConfigured,
+      redisConnected,
+      memorySize: this.memoryCache.size(),
+    }
+  }
 }
 
 // Default cache instance
 export const cache = new Cache();
+
+export function getCacheDiagnostics(): CacheDiagnostics {
+  return cache.getDiagnostics()
+}
 
 // Cache key builders for different use cases
 export const CacheKeys = {

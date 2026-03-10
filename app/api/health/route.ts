@@ -2,6 +2,7 @@
 
 import { NextRequest } from 'next/server'
 import { metrics } from '@/lib/api-logger'
+import { getCacheDiagnostics } from '@/lib/cache'
 import prisma from '@/lib/prisma'
 import { getErrorMessage, isDatabaseUnavailableError } from '@/lib/db-fallback'
 import { getRateLimitDiagnostics } from '@/lib/rate-limit'
@@ -33,8 +34,8 @@ export async function GET(request: NextRequest) {
 
   const rateLimitStart = Date.now()
   const rateLimitDiagnostics = getRateLimitDiagnostics()
-  const cacheStatus = rateLimitDiagnostics.status
-  const cacheMessage = rateLimitDiagnostics.message
+  const cacheStart = Date.now()
+  const cacheDiagnostics = getCacheDiagnostics()
 
   const sidecarUrl = sidecarHealthUrl()
   const sidecarStart = Date.now()
@@ -73,7 +74,8 @@ export async function GET(request: NextRequest) {
 
   const status =
     databaseStatus === 'connected' &&
-    cacheStatus !== 'degraded' &&
+    cacheDiagnostics.status !== 'degraded' &&
+    rateLimitDiagnostics.status !== 'degraded' &&
     sidecarStatus !== 'degraded'
       ? 'healthy'
       : 'degraded'
@@ -93,9 +95,15 @@ export async function GET(request: NextRequest) {
         ...(databaseMessage ? { message: databaseMessage } : {}),
       },
       cache: {
-        status: cacheStatus,
+        status: cacheDiagnostics.status,
+        responseTime: Date.now() - cacheStart,
+        message: cacheDiagnostics.message,
+        mode: cacheDiagnostics.mode,
+      },
+      rateLimit: {
+        status: rateLimitDiagnostics.status,
         responseTime: Date.now() - rateLimitStart,
-        message: cacheMessage,
+        message: rateLimitDiagnostics.message,
         mode: rateLimitDiagnostics.mode,
       },
       sidecar: {

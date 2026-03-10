@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 
 const mockQueryRaw = vi.fn()
 const mockMetricsSnapshot = vi.fn()
+const mockGetCacheDiagnostics = vi.fn()
 const mockGetRateLimitDiagnostics = vi.fn()
 const mockFetch = vi.fn()
 
@@ -16,6 +17,10 @@ vi.mock('@/lib/api-logger', () => ({
   metrics: {
     snapshot: () => mockMetricsSnapshot(),
   },
+}))
+
+vi.mock('@/lib/cache', () => ({
+  getCacheDiagnostics: () => mockGetCacheDiagnostics(),
 }))
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -36,6 +41,14 @@ describe('/api/health route', () => {
     mockMetricsSnapshot.mockReturnValue({
       startedAt: '2026-01-01T00:00:00.000Z',
       routes: {},
+    })
+    mockGetCacheDiagnostics.mockReturnValue({
+      mode: 'memory',
+      status: 'memory',
+      message: 'Redis not configured; using in-memory cache',
+      redisConfigured: false,
+      redisConnected: false,
+      memorySize: 0,
     })
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'memory',
@@ -81,6 +94,10 @@ describe('/api/health route', () => {
     expect(payload.checks.database.status).toBe('connected')
     expect(payload.checks.cache.status).toBe('memory')
     expect(payload.checks.cache.message).toBe(
+      'Redis not configured; using in-memory cache'
+    )
+    expect(payload.checks.rateLimit.status).toBe('memory')
+    expect(payload.checks.rateLimit.message).toBe(
       'Redis not configured; using in-memory rate limiting'
     )
     expect(payload.checks.sidecar.status).toBe('disabled')
@@ -125,6 +142,28 @@ describe('/api/health route', () => {
   })
 
   it('returns degraded cache status when Redis is configured but unavailable', async () => {
+    mockGetCacheDiagnostics.mockReturnValue({
+      mode: 'memory',
+      status: 'degraded',
+      message: 'Redis configured but unavailable; using in-memory cache',
+      redisConfigured: true,
+      redisConnected: false,
+      memorySize: 3,
+    })
+
+    const request = new NextRequest('http://localhost/api/health')
+    const response = await GET(request)
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload.status).toBe('degraded')
+    expect(payload.checks.cache.status).toBe('degraded')
+    expect(payload.checks.cache.message).toBe(
+      'Redis configured but unavailable; using in-memory cache'
+    )
+  })
+
+  it('returns degraded rate-limit status when Redis is configured but unavailable', async () => {
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'memory',
       status: 'degraded',
@@ -140,8 +179,8 @@ describe('/api/health route', () => {
     expect(response.status).toBe(200)
     const payload = await response.json()
     expect(payload.status).toBe('degraded')
-    expect(payload.checks.cache.status).toBe('degraded')
-    expect(payload.checks.cache.message).toBe(
+    expect(payload.checks.rateLimit.status).toBe('degraded')
+    expect(payload.checks.rateLimit.message).toBe(
       'Redis configured but unavailable; using in-memory rate limiting'
     )
   })

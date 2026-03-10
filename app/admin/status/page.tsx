@@ -42,6 +42,12 @@ type SystemStatusResponse = {
       checkoutConfigured: boolean
       webhookConfigured: boolean
     }
+    cache: {
+      mode: 'redis' | 'memory'
+      redisConfigured: boolean
+      redisConnected: boolean
+      memorySize: number
+    }
     rateLimit: {
       mode: 'redis' | 'memory'
       redisConfigured: boolean
@@ -56,6 +62,7 @@ const CHECK_ICONS: Record<string, LucideIcon> = {
   database: Database,
   auth: Shield,
   storage: Database,
+  cache: Database,
   'rate-limit': Clock,
   security: Shield,
 }
@@ -285,6 +292,9 @@ export default function SystemStatusPage() {
               <p className="text-sm text-muted-foreground">
                 Stripe webhook configured:{' '}
                 {statusData.systemInfo.stripe.webhookConfigured ? 'Yes' : 'No'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Cache backend: {statusData.systemInfo.cache.mode}
               </p>
               <p className="text-sm text-muted-foreground">
                 Rate-limit backend: {statusData.systemInfo.rateLimit.mode}

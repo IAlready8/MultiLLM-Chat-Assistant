@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getCacheDiagnostics } from '@/lib/cache'
 import prisma from '@/lib/prisma'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 import { getAuthenticatedAdmin } from '@/lib/api-auth'
@@ -42,6 +43,12 @@ type SystemStatusResponse = {
       apiConfigured: boolean
       checkoutConfigured: boolean
       webhookConfigured: boolean
+    }
+    cache: {
+      mode: 'redis' | 'memory'
+      redisConfigured: boolean
+      redisConnected: boolean
+      memorySize: number
     }
     rateLimit: {
       mode: 'redis' | 'memory'
@@ -178,6 +185,21 @@ export const GET = withApiMetrics(async () => {
     )
   )
 
+  const cacheStart = Date.now()
+  const cacheDiagnostics = getCacheDiagnostics()
+  const cacheStatus: CheckStatus =
+    cacheDiagnostics.status === 'connected' ? 'ok' : 'warning'
+  checks.push(
+    createCheck(
+      'cache',
+      'Cache',
+      'Check application cache backend and fallback state',
+      cacheStatus,
+      cacheDiagnostics.message,
+      Date.now() - cacheStart
+    )
+  )
+
   const rateLimitStart = Date.now()
   const rateLimitDiagnostics = getRateLimitDiagnostics()
   const rateLimitStatus: CheckStatus =
@@ -240,6 +262,7 @@ export const GET = withApiMetrics(async () => {
         checkoutConfigured: isStripeCheckoutConfigured,
         webhookConfigured: isStripeWebhookConfigured,
       },
+      cache: cacheDiagnostics,
       rateLimit: rateLimitDiagnostics,
     },
   }

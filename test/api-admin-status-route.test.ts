@@ -9,6 +9,7 @@ const stripeState = vi.hoisted(() => ({
 
 const mockGetAuthenticatedUser = vi.fn()
 const mockQueryRaw = vi.fn()
+const mockGetCacheDiagnostics = vi.fn()
 const mockGetRateLimitDiagnostics = vi.fn()
 const mockIsStrictAuthRequired = vi.fn()
 
@@ -20,6 +21,10 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     $queryRaw: (...args: unknown[]) => mockQueryRaw(...args),
   },
+}))
+
+vi.mock('@/lib/cache', () => ({
+  getCacheDiagnostics: () => mockGetCacheDiagnostics(),
 }))
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -84,6 +89,14 @@ describe('/api/admin/status route', () => {
     })
     mockQueryRaw.mockResolvedValue([{ ok: 1 }])
     mockIsStrictAuthRequired.mockReturnValue(false)
+    mockGetCacheDiagnostics.mockReturnValue({
+      mode: 'redis',
+      status: 'connected',
+      message: 'Redis-backed cache is connected',
+      redisConfigured: true,
+      redisConnected: true,
+      memorySize: 0,
+    })
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'redis',
       status: 'connected',
@@ -142,7 +155,7 @@ describe('/api/admin/status route', () => {
     const payload = await response.json()
 
     expect(payload.overallStatus).toBe('ok')
-    expect(payload.checks).toHaveLength(6)
+    expect(payload.checks).toHaveLength(7)
     expect(payload.version).toBe('0.1.0')
     expect(payload.release).toEqual({
       version: '0.1.0',
@@ -151,8 +164,13 @@ describe('/api/admin/status route', () => {
       branch: null,
     })
     expect(payload.systemInfo.databaseUrlConfigured).toBe(true)
+    expect(payload.systemInfo.cache.mode).toBe('redis')
     expect(payload.systemInfo.rateLimit.mode).toBe('redis')
     expect(payload.systemInfo.stripe.apiConfigured).toBe(true)
+    const cacheCheck = payload.checks.find(
+      (check: { id: string }) => check.id === 'cache'
+    )
+    expect(cacheCheck.message).toBe('Redis-backed cache is connected')
     const rateLimitCheck = payload.checks.find(
       (check: { id: string }) => check.id === 'rate-limit'
     )
@@ -221,6 +239,34 @@ describe('/api/admin/status route', () => {
     expect(rateLimitCheck.status).toBe('warning')
     expect(rateLimitCheck.message).toBe(
       'Redis configured but unavailable; using in-memory rate limiting'
+    )
+  })
+
+  it('returns warning cache status when Redis is configured but unavailable', async () => {
+    mockGetCacheDiagnostics.mockReturnValue({
+      mode: 'memory',
+      status: 'degraded',
+      message: 'Redis configured but unavailable; using in-memory cache',
+      redisConfigured: true,
+      redisConnected: false,
+      memorySize: 4,
+    })
+
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
+    const payload = await response.json()
+    const cacheCheck = payload.checks.find(
+      (check: { id: string }) => check.id === 'cache'
+    )
+
+    expect(response.status).toBe(200)
+    expect(payload.overallStatus).toBe('warning')
+    expect(payload.systemInfo.cache.mode).toBe('memory')
+    expect(cacheCheck.status).toBe('warning')
+    expect(cacheCheck.message).toBe(
+      'Redis configured but unavailable; using in-memory cache'
     )
   })
 
