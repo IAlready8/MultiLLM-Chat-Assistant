@@ -15,6 +15,7 @@ import {
   isStripeWebhookConfigured,
 } from '@/lib/stripe'
 import { getReleaseMetadata, type ReleaseMetadata } from '@/lib/release-metadata'
+import { getSidecarDiagnostics } from '@/lib/sidecar-health'
 
 type CheckStatus = 'ok' | 'warning' | 'error'
 
@@ -43,6 +44,10 @@ type SystemStatusResponse = {
       apiConfigured: boolean
       checkoutConfigured: boolean
       webhookConfigured: boolean
+    }
+    sidecar: {
+      configured: boolean
+      status: 'connected' | 'degraded' | 'disabled'
     }
     cache: {
       mode: 'redis' | 'memory'
@@ -217,6 +222,25 @@ export const GET = withApiMetrics(async () => {
     )
   )
 
+  const sidecarStart = Date.now()
+  const sidecarDiagnostics = await getSidecarDiagnostics()
+  const sidecarStatus: CheckStatus =
+    sidecarDiagnostics.status === 'connected'
+      ? 'ok'
+      : sidecarDiagnostics.status === 'disabled'
+        ? 'ok'
+        : 'warning'
+  checks.push(
+    createCheck(
+      'sidecar',
+      'Python Sidecar',
+      'Check optional Python sidecar health and fallback state',
+      sidecarStatus,
+      sidecarDiagnostics.message,
+      Date.now() - sidecarStart
+    )
+  )
+
   const securityStart = Date.now()
   let securityStatus: CheckStatus = 'ok'
   let securityMessage = 'Core runtime secrets are configured'
@@ -261,6 +285,10 @@ export const GET = withApiMetrics(async () => {
         apiConfigured: isStripeApiConfigured,
         checkoutConfigured: isStripeCheckoutConfigured,
         webhookConfigured: isStripeWebhookConfigured,
+      },
+      sidecar: {
+        configured: sidecarDiagnostics.configured,
+        status: sidecarDiagnostics.status,
       },
       cache: cacheDiagnostics,
       rateLimit: rateLimitDiagnostics,

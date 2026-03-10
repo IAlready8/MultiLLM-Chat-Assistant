@@ -12,6 +12,7 @@ const mockQueryRaw = vi.fn()
 const mockGetCacheDiagnostics = vi.fn()
 const mockGetRateLimitDiagnostics = vi.fn()
 const mockIsStrictAuthRequired = vi.fn()
+const mockGetSidecarDiagnostics = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedAdmin: () => mockGetAuthenticatedUser(),
@@ -29,6 +30,10 @@ vi.mock('@/lib/cache', () => ({
 
 vi.mock('@/lib/rate-limit', () => ({
   getRateLimitDiagnostics: () => mockGetRateLimitDiagnostics(),
+}))
+
+vi.mock('@/lib/sidecar-health', () => ({
+  getSidecarDiagnostics: () => mockGetSidecarDiagnostics(),
 }))
 
 vi.mock('@/lib/demo-account', () => ({
@@ -105,6 +110,11 @@ describe('/api/admin/status route', () => {
       redisConnected: true,
       inMemoryKeys: 0,
     })
+    mockGetSidecarDiagnostics.mockResolvedValue({
+      status: 'disabled',
+      message: 'Python sidecar not configured',
+      configured: false,
+    })
   })
 
   afterEach(() => {
@@ -155,7 +165,7 @@ describe('/api/admin/status route', () => {
     const payload = await response.json()
 
     expect(payload.overallStatus).toBe('ok')
-    expect(payload.checks).toHaveLength(7)
+    expect(payload.checks).toHaveLength(8)
     expect(payload.version).toBe('0.1.0')
     expect(payload.release).toEqual({
       version: '0.1.0',
@@ -164,6 +174,7 @@ describe('/api/admin/status route', () => {
       branch: null,
     })
     expect(payload.systemInfo.databaseUrlConfigured).toBe(true)
+    expect(payload.systemInfo.sidecar.status).toBe('disabled')
     expect(payload.systemInfo.cache.mode).toBe('redis')
     expect(payload.systemInfo.rateLimit.mode).toBe('redis')
     expect(payload.systemInfo.stripe.apiConfigured).toBe(true)
@@ -175,6 +186,10 @@ describe('/api/admin/status route', () => {
       (check: { id: string }) => check.id === 'rate-limit'
     )
     expect(rateLimitCheck.message).toBe('Redis-backed rate limiting is connected')
+    const sidecarCheck = payload.checks.find(
+      (check: { id: string }) => check.id === 'sidecar'
+    )
+    expect(sidecarCheck.message).toBe('Python sidecar not configured')
   })
 
   it('returns warning status when database is unavailable and fallback is active', async () => {
@@ -268,6 +283,29 @@ describe('/api/admin/status route', () => {
     expect(cacheCheck.message).toBe(
       'Redis configured but unavailable; using in-memory cache'
     )
+  })
+
+  it('returns warning sidecar status when the optional Python service is degraded', async () => {
+    mockGetSidecarDiagnostics.mockResolvedValue({
+      status: 'degraded',
+      message: 'Python sidecar health check failed (503)',
+      configured: true,
+    })
+
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
+    const payload = await response.json()
+    const sidecarCheck = payload.checks.find(
+      (check: { id: string }) => check.id === 'sidecar'
+    )
+
+    expect(response.status).toBe(200)
+    expect(payload.overallStatus).toBe('warning')
+    expect(payload.systemInfo.sidecar.status).toBe('degraded')
+    expect(sidecarCheck.status).toBe('warning')
+    expect(sidecarCheck.message).toBe('Python sidecar health check failed (503)')
   })
 
   it('includes release commit metadata when deploy env is present', async () => {

@@ -7,11 +7,7 @@ import prisma from '@/lib/prisma'
 import { getErrorMessage, isDatabaseUnavailableError } from '@/lib/db-fallback'
 import { getRateLimitDiagnostics } from '@/lib/rate-limit'
 import { getReleaseMetadata } from '@/lib/release-metadata'
-
-const sidecarHealthUrl = () => {
-  const baseUrl = process.env.PYTHON_CORE_URL?.trim()
-  return baseUrl ? `${baseUrl.replace(/\/$/, '')}/api/v1/health` : null
-}
+import { getSidecarDiagnostics } from '@/lib/sidecar-health'
 
 // Health check API route — includes request metrics snapshot
 export async function GET(request: NextRequest) {
@@ -37,46 +33,14 @@ export async function GET(request: NextRequest) {
   const cacheStart = Date.now()
   const cacheDiagnostics = getCacheDiagnostics()
 
-  const sidecarUrl = sidecarHealthUrl()
   const sidecarStart = Date.now()
-  let sidecarStatus: 'connected' | 'degraded' | 'disabled' = 'disabled'
-  let sidecarMessage = 'Python sidecar not configured'
-
-  if (sidecarUrl) {
-    try {
-      const response = await fetch(sidecarUrl, {
-        signal: AbortSignal.timeout(2000),
-        cache: 'no-store',
-      })
-      const payload = await response.json().catch(() => ({}))
-      const payloadStatus = String(payload?.status || '').toLowerCase()
-
-      if (
-        response.ok &&
-        (payloadStatus === 'ok' ||
-          payloadStatus === 'healthy' ||
-          payloadStatus === 'degraded')
-      ) {
-        sidecarStatus = payloadStatus === 'degraded' ? 'degraded' : 'connected'
-        sidecarMessage =
-          sidecarStatus === 'connected'
-            ? `Python sidecar responding (${payload.status})`
-            : `Python sidecar reported degraded status (${payload.status})`
-      } else {
-        sidecarStatus = 'degraded'
-        sidecarMessage = `Python sidecar health check failed (${response.status})`
-      }
-    } catch (error) {
-      sidecarStatus = 'degraded'
-      sidecarMessage = getErrorMessage(error) || 'Python sidecar health check failed'
-    }
-  }
+  const sidecarDiagnostics = await getSidecarDiagnostics()
 
   const status =
     databaseStatus === 'connected' &&
     cacheDiagnostics.status !== 'degraded' &&
     rateLimitDiagnostics.status !== 'degraded' &&
-    sidecarStatus !== 'degraded'
+    sidecarDiagnostics.status !== 'degraded'
       ? 'healthy'
       : 'degraded'
 
@@ -107,9 +71,9 @@ export async function GET(request: NextRequest) {
         mode: rateLimitDiagnostics.mode,
       },
       sidecar: {
-        status: sidecarStatus,
+        status: sidecarDiagnostics.status,
         responseTime: Date.now() - sidecarStart,
-        message: sidecarMessage,
+        message: sidecarDiagnostics.message,
       },
       api: { status: 'responsive', responseTime: Date.now() - startTime },
     },

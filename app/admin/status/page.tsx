@@ -42,6 +42,10 @@ type SystemStatusResponse = {
       checkoutConfigured: boolean
       webhookConfigured: boolean
     }
+    sidecar: {
+      configured: boolean
+      status: 'connected' | 'degraded' | 'disabled'
+    }
     cache: {
       mode: 'redis' | 'memory'
       redisConfigured: boolean
@@ -64,6 +68,7 @@ const CHECK_ICONS: Record<string, LucideIcon> = {
   storage: Database,
   cache: Database,
   'rate-limit': Clock,
+  sidecar: Server,
   security: Shield,
 }
 
@@ -292,6 +297,9 @@ export default function SystemStatusPage() {
               <p className="text-sm text-muted-foreground">
                 Stripe webhook configured:{' '}
                 {statusData.systemInfo.stripe.webhookConfigured ? 'Yes' : 'No'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Sidecar status: {statusData.systemInfo.sidecar.status}
               </p>
               <p className="text-sm text-muted-foreground">
                 Cache backend: {statusData.systemInfo.cache.mode}
