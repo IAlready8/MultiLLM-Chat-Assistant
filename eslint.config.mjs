@@ -4,6 +4,7 @@ const config = [
   {
     ignores: [
       '.next/**',
+      '.vercel/**',
       'node_modules/**',
       'backup-minimal/**',
       'coverage/**',
