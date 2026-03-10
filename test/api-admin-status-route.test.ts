@@ -51,6 +51,8 @@ const originalNextAuthSecret = process.env.NEXTAUTH_SECRET
 const originalNextAuthUrl = process.env.NEXTAUTH_URL
 const originalDatabaseUrl = process.env.DATABASE_URL
 const originalApiSeed = process.env.API_KEY_ENCRYPTION_SEED
+const originalCommitSha = process.env.VERCEL_GIT_COMMIT_SHA
+const originalCommitRef = process.env.VERCEL_GIT_COMMIT_REF
 
 const setEnvVar = (key: string, value: string | undefined) => {
   const env = process.env as Record<string, string | undefined>
@@ -70,6 +72,8 @@ describe('/api/admin/status route', () => {
     setEnvVar('NEXTAUTH_URL', 'http://localhost:3000')
     setEnvVar('DATABASE_URL', 'postgresql://localhost:5432/test')
     setEnvVar('API_KEY_ENCRYPTION_SEED', 'seed-123')
+    setEnvVar('VERCEL_GIT_COMMIT_SHA', undefined)
+    setEnvVar('VERCEL_GIT_COMMIT_REF', undefined)
 
     stripeState.apiConfigured = true
     stripeState.checkoutConfigured = true
@@ -94,6 +98,8 @@ describe('/api/admin/status route', () => {
     setEnvVar('NEXTAUTH_URL', originalNextAuthUrl)
     setEnvVar('DATABASE_URL', originalDatabaseUrl)
     setEnvVar('API_KEY_ENCRYPTION_SEED', originalApiSeed)
+    setEnvVar('VERCEL_GIT_COMMIT_SHA', originalCommitSha)
+    setEnvVar('VERCEL_GIT_COMMIT_REF', originalCommitRef)
   })
 
   it('forwards auth failure response', async () => {
@@ -135,6 +141,13 @@ describe('/api/admin/status route', () => {
 
     expect(payload.overallStatus).toBe('ok')
     expect(payload.checks).toHaveLength(6)
+    expect(payload.version).toBe('0.1.0')
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: null,
+      commitShort: null,
+      branch: null,
+    })
     expect(payload.systemInfo.databaseUrlConfigured).toBe(true)
     expect(payload.systemInfo.rateLimit.mode).toBe('redis')
     expect(payload.systemInfo.stripe.apiConfigured).toBe(true)
@@ -177,5 +190,27 @@ describe('/api/admin/status route', () => {
     expect(payload.overallStatus).toBe('error')
     expect(authCheck.status).toBe('error')
     expect(authCheck.message).toContain('NEXTAUTH_SECRET is missing')
+  })
+
+  it('includes release commit metadata when deploy env is present', async () => {
+    setEnvVar(
+      'VERCEL_GIT_COMMIT_SHA',
+      '38bd6ff663ad85a9586de66c42978458fd8f2c25'
+    )
+    setEnvVar('VERCEL_GIT_COMMIT_REF', 'main')
+
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: '38bd6ff663ad85a9586de66c42978458fd8f2c25',
+      commitShort: '38bd6ff',
+      branch: 'main',
+    })
   })
 })

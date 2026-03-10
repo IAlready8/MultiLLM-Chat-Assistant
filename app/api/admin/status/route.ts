@@ -13,6 +13,7 @@ import {
   isStripeCheckoutConfigured,
   isStripeWebhookConfigured,
 } from '@/lib/stripe'
+import { getReleaseMetadata, type ReleaseMetadata } from '@/lib/release-metadata'
 
 type CheckStatus = 'ok' | 'warning' | 'error'
 
@@ -28,6 +29,8 @@ type SystemCheck = {
 type SystemStatusResponse = {
   generatedAt: string
   overallStatus: CheckStatus
+  version: string
+  release: ReleaseMetadata
   checks: SystemCheck[]
   systemInfo: {
     app: string
@@ -81,6 +84,7 @@ export const GET = withApiMetrics(async () => {
     return authCheck
   }
 
+  const release = getReleaseMetadata()
   const strictAuth = isStrictAuthRequired()
   const hasNextAuthSecret = Boolean(process.env.NEXTAUTH_SECRET?.trim())
   const hasNextAuthUrl = Boolean(process.env.NEXTAUTH_URL?.trim())
@@ -225,6 +229,8 @@ export const GET = withApiMetrics(async () => {
   const response: SystemStatusResponse = {
     generatedAt: new Date().toISOString(),
     overallStatus: getOverallStatus(checks),
+    version: release.version,
+    release,
     checks,
     systemInfo: {
       app: 'Multi-LLM Chat Assistant',

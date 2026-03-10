@@ -27,6 +27,12 @@ describe('logging safety', () => {
     })
 
     const payload = JSON.parse(String(errorSpy.mock.calls[0]?.[0]))
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: null,
+      commitShort: null,
+      branch: null,
+    })
     expect(payload.error).toContain('[REDACTED]')
     expect(payload.error).not.toContain('super-secret-token')
     expect(payload.error).not.toContain('postgresql://user:pass@host/db')
@@ -48,6 +54,12 @@ describe('logging safety', () => {
     })
 
     const payload = JSON.parse(String(errorSpy.mock.calls[0]?.[0]))
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: null,
+      commitShort: null,
+      branch: null,
+    })
     expect(payload.error.message).toContain('[REDACTED]')
     expect(payload.error.message).not.toContain('top-secret')
     expect(payload.authorization).toBe('[REDACTED]')
