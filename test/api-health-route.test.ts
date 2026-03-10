@@ -39,6 +39,8 @@ describe('/api/health route', () => {
     })
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'memory',
+      status: 'memory',
+      message: 'Redis not configured; using in-memory rate limiting',
       redisConfigured: false,
       redisConnected: false,
       inMemoryKeys: 0,
@@ -78,6 +80,9 @@ describe('/api/health route', () => {
     expect(payload.status).toBe('healthy')
     expect(payload.checks.database.status).toBe('connected')
     expect(payload.checks.cache.status).toBe('memory')
+    expect(payload.checks.cache.message).toBe(
+      'Redis not configured; using in-memory rate limiting'
+    )
     expect(payload.checks.sidecar.status).toBe('disabled')
     expect(payload.version).toBe('0.1.0')
     expect(payload.release).toEqual({
@@ -117,6 +122,28 @@ describe('/api/health route', () => {
     expect(payload.checks.sidecar.status).toBe('degraded')
     expect(payload.checks.sidecar.url).toBeUndefined()
     expect(payload.checks.sidecar.message).toContain('ECONNREFUSED')
+  })
+
+  it('returns degraded cache status when Redis is configured but unavailable', async () => {
+    mockGetRateLimitDiagnostics.mockReturnValue({
+      mode: 'memory',
+      status: 'degraded',
+      message: 'Redis configured but unavailable; using in-memory rate limiting',
+      redisConfigured: true,
+      redisConnected: false,
+      inMemoryKeys: 3,
+    })
+
+    const request = new NextRequest('http://localhost/api/health')
+    const response = await GET(request)
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload.status).toBe('degraded')
+    expect(payload.checks.cache.status).toBe('degraded')
+    expect(payload.checks.cache.message).toBe(
+      'Redis configured but unavailable; using in-memory rate limiting'
+    )
   })
 
   it('includes metrics snapshot when metrics=1 query is provided', async () => {

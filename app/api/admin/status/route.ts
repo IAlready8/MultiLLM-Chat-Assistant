@@ -181,11 +181,8 @@ export const GET = withApiMetrics(async () => {
   const rateLimitStart = Date.now()
   const rateLimitDiagnostics = getRateLimitDiagnostics()
   const rateLimitStatus: CheckStatus =
-    rateLimitDiagnostics.mode === 'redis' ? 'ok' : 'warning'
-  const rateLimitMessage =
-    rateLimitDiagnostics.mode === 'redis'
-      ? 'Rate limiting is backed by Redis'
-      : 'Rate limiting is using in-memory mode'
+    rateLimitDiagnostics.status === 'connected' ? 'ok' : 'warning'
+  const rateLimitMessage = rateLimitDiagnostics.message
 
   checks.push(
     createCheck(

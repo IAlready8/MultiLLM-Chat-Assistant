@@ -33,18 +33,8 @@ export async function GET(request: NextRequest) {
 
   const rateLimitStart = Date.now()
   const rateLimitDiagnostics = getRateLimitDiagnostics()
-  const cacheStatus =
-    rateLimitDiagnostics.mode === 'redis'
-      ? 'connected'
-      : rateLimitDiagnostics.redisConfigured
-        ? 'degraded'
-        : 'memory'
-  const cacheMessage =
-    rateLimitDiagnostics.mode === 'redis'
-      ? 'Redis-backed rate limiting is connected'
-      : rateLimitDiagnostics.redisConfigured
-        ? 'Redis configured but unavailable; using in-memory rate limiting'
-        : 'Redis not configured; using in-memory rate limiting'
+  const cacheStatus = rateLimitDiagnostics.status
+  const cacheMessage = rateLimitDiagnostics.message
 
   const sidecarUrl = sidecarHealthUrl()
   const sidecarStart = Date.now()

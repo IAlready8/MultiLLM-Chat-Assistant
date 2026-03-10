@@ -86,6 +86,8 @@ describe('/api/admin/status route', () => {
     mockIsStrictAuthRequired.mockReturnValue(false)
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'redis',
+      status: 'connected',
+      message: 'Redis-backed rate limiting is connected',
       redisConfigured: true,
       redisConnected: true,
       inMemoryKeys: 0,
@@ -151,6 +153,10 @@ describe('/api/admin/status route', () => {
     expect(payload.systemInfo.databaseUrlConfigured).toBe(true)
     expect(payload.systemInfo.rateLimit.mode).toBe('redis')
     expect(payload.systemInfo.stripe.apiConfigured).toBe(true)
+    const rateLimitCheck = payload.checks.find(
+      (check: { id: string }) => check.id === 'rate-limit'
+    )
+    expect(rateLimitCheck.message).toBe('Redis-backed rate limiting is connected')
   })
 
   it('returns warning status when database is unavailable and fallback is active', async () => {
@@ -190,6 +196,32 @@ describe('/api/admin/status route', () => {
     expect(payload.overallStatus).toBe('error')
     expect(authCheck.status).toBe('error')
     expect(authCheck.message).toContain('NEXTAUTH_SECRET is missing')
+  })
+
+  it('returns warning rate-limit status when Redis is configured but unavailable', async () => {
+    mockGetRateLimitDiagnostics.mockReturnValue({
+      mode: 'memory',
+      status: 'degraded',
+      message: 'Redis configured but unavailable; using in-memory rate limiting',
+      redisConfigured: true,
+      redisConnected: false,
+      inMemoryKeys: 4,
+    })
+
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
+    const payload = await response.json()
+    const rateLimitCheck = payload.checks.find(
+      (check: { id: string }) => check.id === 'rate-limit'
+    )
+
+    expect(response.status).toBe(200)
+    expect(rateLimitCheck.status).toBe('warning')
+    expect(rateLimitCheck.message).toBe(
+      'Redis configured but unavailable; using in-memory rate limiting'
+    )
   })
 
   it('includes release commit metadata when deploy env is present', async () => {
