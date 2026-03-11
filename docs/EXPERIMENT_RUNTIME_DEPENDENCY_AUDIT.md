@@ -14,7 +14,7 @@ Scope: direct production dependencies only
 
 ## Required compatibility fix
 
-- [lib/stripe.ts](/Users/d4ni3l/Projects/GITREPOS/MultiLLM-Chat-Assistant/lib/stripe.ts)
+- [lib/stripe.ts](/lib/stripe.ts)
   - updated Stripe SDK `apiVersion` from `2025-11-17.clover` to `2026-02-25.clover`
   - reason: the upgraded `stripe` package tightened the accepted API version literal type
 
