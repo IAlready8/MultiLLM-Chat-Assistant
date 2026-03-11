@@ -164,6 +164,8 @@ describe('/api/admin/status route', () => {
     expect(response.status).toBe(200)
     const payload = await response.json()
 
+    expect(payload.source).toBe('admin-status')
+    expect(payload.generatedAt).toBeTypeOf('string')
     expect(payload.overallStatus).toBe('ok')
     expect(payload.checks).toHaveLength(8)
     expect(payload.version).toBe('0.1.0')
@@ -322,6 +324,7 @@ describe('/api/admin/status route', () => {
     const payload = await response.json()
 
     expect(response.status).toBe(200)
+    expect(payload.source).toBe('admin-status')
     expect(payload.release).toEqual({
       version: '0.1.0',
       commitSha: '38bd6ff663ad85a9586de66c42978458fd8f2c25',

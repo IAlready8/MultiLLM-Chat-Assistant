@@ -29,6 +29,7 @@ type SystemCheck = {
 }
 
 type SystemStatusResponse = {
+  source: 'admin-status'
   generatedAt: string
   overallStatus: CheckStatus
   version: string
@@ -270,6 +271,7 @@ export const GET = withApiMetrics(async () => {
   )
 
   const response: SystemStatusResponse = {
+    source: 'admin-status',
     generatedAt: new Date().toISOString(),
     overallStatus: getOverallStatus(checks),
     version: release.version,

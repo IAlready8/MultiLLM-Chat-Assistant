@@ -13,6 +13,7 @@ import { getSidecarDiagnostics } from '@/lib/sidecar-health'
 export async function GET(request: NextRequest) {
   const startTime = Date.now()
   const release = getReleaseMetadata()
+  const generatedAt = new Date().toISOString()
 
   const includeMetrics = request.nextUrl.searchParams.get('metrics') === '1'
 
@@ -45,8 +46,10 @@ export async function GET(request: NextRequest) {
       : 'degraded'
 
   const healthChecks = {
+    source: 'health',
     status,
-    timestamp: new Date().toISOString(),
+    generatedAt,
+    timestamp: generatedAt,
     uptime: process.uptime(),
     responseTime: Date.now() - startTime,
     version: release.version,

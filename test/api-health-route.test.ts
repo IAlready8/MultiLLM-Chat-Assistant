@@ -90,7 +90,10 @@ describe('/api/health route', () => {
 
     expect(response.status).toBe(200)
     const payload = await response.json()
+    expect(payload.source).toBe('health')
     expect(payload.status).toBe('healthy')
+    expect(payload.generatedAt).toBeTypeOf('string')
+    expect(payload.timestamp).toBe(payload.generatedAt)
     expect(payload.checks.database.status).toBe('connected')
     expect(payload.checks.cache.status).toBe('memory')
     expect(payload.checks.cache.message).toBe(
@@ -233,5 +236,6 @@ describe('/api/health route', () => {
       commitShort: '38bd6ff',
       branch: 'main',
     })
+    expect(payload.source).toBe('health')
   })
 })

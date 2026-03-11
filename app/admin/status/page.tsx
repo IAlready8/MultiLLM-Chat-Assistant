@@ -28,8 +28,16 @@ type SystemCheck = {
 }
 
 type SystemStatusResponse = {
+  source: 'admin-status'
   generatedAt: string
   overallStatus: CheckStatus
+  version: string
+  release: {
+    version: string
+    commitSha: string | null
+    commitShort: string | null
+    branch: string | null
+  }
   checks: SystemCheck[]
   systemInfo: {
     app: string
@@ -267,6 +275,12 @@ export default function SystemStatusPage() {
               <h4 className="font-medium">Application</h4>
               <p className="text-sm text-muted-foreground">{statusData.systemInfo.app}</p>
               <p className="text-sm text-muted-foreground">
+                Release version: {statusData.version}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Source: {statusData.source}
+              </p>
+              <p className="text-sm text-muted-foreground">
                 Status generated at: {new Date(statusData.generatedAt).toLocaleString()}
               </p>
             </div>
@@ -277,6 +291,12 @@ export default function SystemStatusPage() {
               </p>
               <p className="text-sm text-muted-foreground">
                 Node.js {statusData.systemInfo.nodeVersion}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Branch: {statusData.release.branch || 'unknown'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Commit: {statusData.release.commitShort || 'unknown'}
               </p>
             </div>
             <div className="space-y-2">
