@@ -35,9 +35,10 @@ Result:
 ## Held intentionally
 
 - Prisma family:
-  - `prisma`
-  - `@prisma/client`
-  - `@prisma/adapter-pg`
+  - coordinated hold applied at `7.3.0`:
+    - `prisma`
+    - `@prisma/client`
+    - `@prisma/adapter-pg`
   - reason: generator/runtime coupling needs a dedicated review, not a mixed runtime patch batch
 - major-version jumps held:
   - `react`
@@ -58,10 +59,20 @@ Result:
   - `@mrleebo/prisma-ast`
   - `chevrotain`
   - `lodash`
+- latest coordinated Prisma-family release check:
+  - `prisma@7.5.0`
+  - `@prisma/client@7.5.0`
+  - `@prisma/adapter-pg@7.5.0`
+- latest Prisma still resolves to the same vulnerable Prisma-dev chain:
+  - `@prisma/dev@0.20.0`
+  - `hono@4.11.4`
+  - `@hono/node-server@1.19.9`
+  - `@mrleebo/prisma-ast@0.13.1`
+- conclusion: upgrading the Prisma family now would widen change risk without removing the current audit chain
 - this batch reduced runtime drift without attempting a risky Prisma toolchain move
 
 ## Recommendation
 
 - keep this batch
-- treat Prisma/toolchain remediation as a separate Milestone 3 decision
+- treat Prisma/toolchain remediation as a separate Milestone 3 decision after a dedicated upgrade plan exists
 - do not bundle Prisma upgrades into unrelated runtime hardening work
