@@ -63,6 +63,8 @@ const originalDatabaseUrl = process.env.DATABASE_URL
 const originalApiSeed = process.env.API_KEY_ENCRYPTION_SEED
 const originalCommitSha = process.env.VERCEL_GIT_COMMIT_SHA
 const originalCommitRef = process.env.VERCEL_GIT_COMMIT_REF
+const originalGithubSha = process.env.GITHUB_SHA
+const originalGithubRefName = process.env.GITHUB_REF_NAME
 
 const setEnvVar = (key: string, value: string | undefined) => {
   const env = process.env as Record<string, string | undefined>
@@ -84,6 +86,8 @@ describe('/api/admin/status route', () => {
     setEnvVar('API_KEY_ENCRYPTION_SEED', 'seed-123')
     setEnvVar('VERCEL_GIT_COMMIT_SHA', undefined)
     setEnvVar('VERCEL_GIT_COMMIT_REF', undefined)
+    setEnvVar('GITHUB_SHA', undefined)
+    setEnvVar('GITHUB_REF_NAME', undefined)
 
     stripeState.apiConfigured = true
     stripeState.checkoutConfigured = true
@@ -125,6 +129,8 @@ describe('/api/admin/status route', () => {
     setEnvVar('API_KEY_ENCRYPTION_SEED', originalApiSeed)
     setEnvVar('VERCEL_GIT_COMMIT_SHA', originalCommitSha)
     setEnvVar('VERCEL_GIT_COMMIT_REF', originalCommitRef)
+    setEnvVar('GITHUB_SHA', originalGithubSha)
+    setEnvVar('GITHUB_REF_NAME', originalGithubRefName)
   })
 
   it('forwards auth failure response', async () => {

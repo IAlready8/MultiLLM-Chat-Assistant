@@ -33,6 +33,8 @@ const originalFetch = global.fetch
 const originalPythonCoreUrl = process.env.PYTHON_CORE_URL
 const originalCommitSha = process.env.VERCEL_GIT_COMMIT_SHA
 const originalCommitRef = process.env.VERCEL_GIT_COMMIT_REF
+const originalGithubSha = process.env.GITHUB_SHA
+const originalGithubRefName = process.env.GITHUB_REF_NAME
 
 describe('/api/health route', () => {
   beforeEach(() => {
@@ -63,6 +65,8 @@ describe('/api/health route', () => {
     delete process.env.PYTHON_CORE_URL
     delete process.env.VERCEL_GIT_COMMIT_SHA
     delete process.env.VERCEL_GIT_COMMIT_REF
+    delete process.env.GITHUB_SHA
+    delete process.env.GITHUB_REF_NAME
   })
 
   afterEach(() => {
@@ -81,6 +85,16 @@ describe('/api/health route', () => {
       delete process.env.VERCEL_GIT_COMMIT_REF
     } else {
       process.env.VERCEL_GIT_COMMIT_REF = originalCommitRef
+    }
+    if (originalGithubSha === undefined) {
+      delete process.env.GITHUB_SHA
+    } else {
+      process.env.GITHUB_SHA = originalGithubSha
+    }
+    if (originalGithubRefName === undefined) {
+      delete process.env.GITHUB_REF_NAME
+    } else {
+      process.env.GITHUB_REF_NAME = originalGithubRefName
     }
   })
 
