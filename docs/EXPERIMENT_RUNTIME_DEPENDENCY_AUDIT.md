@@ -51,14 +51,20 @@ Result:
 
 ## Current audit conclusion
 
-- `npm audit --omit=dev` still reports `9` production-scope vulnerabilities
-- those findings are still chained through the direct `prisma` tool dependency and its transitive tree:
-  - `@prisma/dev`
-  - `hono`
-  - `@hono/node-server`
-  - `@mrleebo/prisma-ast`
-  - `chevrotain`
-  - `lodash`
+- `npm audit --omit=dev` still reports `9` production-scope vulnerabilities as of `2026-03-12`
+- severity breakdown:
+  - `4` high
+  - `5` moderate
+- the current report still chains all findings through the Prisma toolchain:
+  - direct package in the report:
+    - `prisma`
+  - transitive packages in the report:
+    - `@prisma/dev`
+    - `hono`
+    - `@hono/node-server`
+    - `@mrleebo/prisma-ast`
+    - `chevrotain`
+    - `lodash`
 - latest coordinated Prisma-family release check:
   - `prisma@7.5.0`
   - `@prisma/client@7.5.0`
@@ -70,6 +76,40 @@ Result:
   - `@mrleebo/prisma-ast@0.13.1`
 - conclusion: upgrading the Prisma family now would widen change risk without removing the current audit chain
 - this batch reduced runtime drift without attempting a risky Prisma toolchain move
+
+## Finding triage
+
+### Direct vs transitive
+
+| Package | Direct in repo | Severity | Current decision |
+| --- | --- | --- | --- |
+| `prisma` | yes | high | hold at coordinated `7.3.0` until Prisma upgrade removes the toolchain chain |
+| `@prisma/dev` | no | high | transitive via `prisma`; not independently controllable here |
+| `hono` | no | high/moderate | transitive via `@prisma/dev`; hold with Prisma decision |
+| `@hono/node-server` | no | high | transitive via `@prisma/dev`; hold with Prisma decision |
+| `@mrleebo/prisma-ast` | no | moderate | transitive via `@prisma/dev`; hold with Prisma decision |
+| `chevrotain` | no | moderate | transitive via `@mrleebo/prisma-ast`; hold with Prisma decision |
+| `lodash` | no | moderate | transitive via parser toolchain; hold with Prisma decision |
+
+### Operational impact
+
+- current exposure is tied to the Prisma CLI/tooling chain, not to a direct Next.js request-path dependency introduced in this branch
+- this branch did not expand Prisma usage or add a new runtime surface that depends on `hono` or `@hono/node-server`
+- because the current latest Prisma line still resolves to the same transitive chain, an immediate Prisma-family bump would add migration and generator risk without removing the current advisories
+
+### Upgrade trigger
+
+Re-open the Prisma-family decision only when one of these becomes true:
+
+- the latest coordinated Prisma release resolves the `@prisma/dev` chain to fixed versions
+- the project needs a Prisma feature or bugfix that justifies a dedicated coordinated upgrade batch
+- a verified exploit path is found that materially affects this app beyond the current toolchain exposure
+
+Until then, the correct Milestone 3 posture on this branch is:
+
+- keep the Prisma family version-locked together
+- document the hold clearly
+- avoid bundling Prisma changes into unrelated runtime hardening work
 
 ## Recommendation
 
