@@ -49,6 +49,33 @@ Result:
   - `lucide-react`
   - reason: broader API or UI regression risk than this branch phase allows
 
+## Direct dependency decision matrix
+
+| Package | Current | Latest checked | Decision | Reason |
+| --- | --- | --- | --- | --- |
+| `framer-motion` | `12.35.2` | `12.36.0` | hold | low-value patch delta after a fresh runtime upgrade; no current issue driving another bump |
+| `pg` | `8.20.0` | `8.20.0` | keep | current and latest already aligned |
+| `redis` | `5.11.0` | `5.11.0` | keep | current and latest already aligned |
+| `stripe` | `20.4.1` | `20.4.1` | keep | current and latest already aligned after compatibility fix |
+| `zod` | `4.3.6` | `4.3.6` | keep | current and latest already aligned |
+| `react` | `18.3.1` | `19.2.4` | hold | major-version change would widen framework compatibility scope beyond this branch phase |
+| `react-dom` | `18.3.1` | `19.2.4` | hold | same scope risk as `react` |
+| `recharts` | `2.15.4` | `3.8.0` | hold | major UI/runtime change; not justified by current hardening scope |
+| `uuid` | `11.1.0` | `13.0.0` | hold | major-version change with low current risk payoff |
+| `next-themes` | `0.2.1` | `0.4.6` | hold | non-core runtime value; UI/theme regression surface is broader than current phase |
+| `lucide-react` | `0.354.0` | `0.577.0` | hold | wide icon/UI churn potential with no current production issue |
+| Prisma family | `7.3.0` | `7.5.0` | coordinated hold | latest line still preserves the advisory chain and needs a dedicated upgrade batch |
+
+## Upgrade order if this branch continues
+
+Only revisit direct dependency changes in this order:
+
+1. tiny non-breaking patch bumps with direct runtime value and zero contract impact
+2. coordinated Prisma-family change only if the transitive advisory chain is actually improved
+3. major UI/framework upgrades only in a separate branch phase with explicit regression budget
+
+Everything else stays out of scope for this hardening branch until a concrete runtime issue justifies the risk.
+
 ## Current audit conclusion
 
 - `npm audit --omit=dev` still reports `9` production-scope vulnerabilities as of `2026-03-12`
