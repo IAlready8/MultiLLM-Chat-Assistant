@@ -1,14 +1,15 @@
+import { logger } from '@/lib/logger'
+
 // Conditional import for Redis to handle environments where it's not available
-let createClient: any = null;
-let RedisClientType: any = null;
+let createClient: any = null
 
 try {
-  const redis = require('redis');
-  createClient = redis.createClient;
-  RedisClientType = redis.RedisClientType;
+  const redis = require('redis')
+  createClient = redis.createClient
 } catch (error) {
-  // Redis not available, will fall back to memory cache only
-  console.warn('Redis not available, using memory cache only');
+  logger.warn('cache_redis_module_unavailable', {
+    reason: 'Redis package unavailable; using memory cache only',
+  })
 }
 
 // Cache configuration interface
@@ -16,6 +17,15 @@ export interface CacheConfig {
   ttl: number; // Time to live in seconds
   prefix?: string; // Key prefix for namespacing
   compress?: boolean; // Enable compression for large values
+}
+
+export interface CacheDiagnostics {
+  mode: 'redis' | 'memory'
+  status: 'connected' | 'degraded' | 'memory'
+  message: string
+  redisConfigured: boolean
+  redisConnected: boolean
+  memorySize: number
 }
 
 // Cache entry interface
@@ -95,34 +105,37 @@ class MemoryCache {
 
 // Redis cache implementation
 class RedisCache {
-  private client: any = null;
-  private isConnected = false;
+  private client: any = null
+  private isConnected = false
 
   constructor() {
-    this.initializeClient();
+    this.initializeClient()
   }
 
   private async initializeClient() {
     if (!process.env.REDIS_URL || !createClient) return;
 
     try {
-      this.client = createClient({ url: process.env.REDIS_URL });
-      
+      this.client = createClient({ url: process.env.REDIS_URL })
+
       this.client.on('error', (err: Error) => {
-        console.error('Redis Cache Error:', err);
-        this.isConnected = false;
-      });
+        logger.warn('cache_redis_client_error', { error: err })
+        this.isConnected = false
+      })
 
       this.client.on('connect', () => {
-        console.log('✅ Redis cache connected successfully');
-        this.isConnected = true;
-      });
+        logger.info('cache_redis_connected')
+        this.isConnected = true
+      })
 
-      await this.client.connect();
+      await this.client.connect()
     } catch (error) {
-      console.error('Failed to initialize Redis cache:', error);
-      this.client = null;
-      this.isConnected = false;
+      logger.warn('cache_redis_init_failed', {
+        error,
+        fallback: 'memory',
+      })
+      this.client = null
+      this.isConnected = false
     }
   }
 
@@ -132,13 +145,13 @@ class RedisCache {
     try {
       const serializedValue = JSON.stringify({
         value,
-        timestamp: Date.now()
-      });
+        timestamp: Date.now(),
+      })
 
-      const finalKey = config.prefix ? `${config.prefix}:${key}` : key;
-      await this.client.setEx(finalKey, config.ttl, serializedValue);
+      const finalKey = config.prefix ? `${config.prefix}:${key}` : key
+      await this.client.setEx(finalKey, config.ttl, serializedValue)
     } catch (error) {
-      console.error('Redis set error:', error);
+      logger.warn('cache_redis_set_failed', { error })
     }
   }
 
@@ -146,16 +159,16 @@ class RedisCache {
     if (!this.client || !this.isConnected) return null;
 
     try {
-      const finalKey = prefix ? `${prefix}:${key}` : key;
-      const data = await this.client.get(finalKey);
-      
+      const finalKey = prefix ? `${prefix}:${key}` : key
+      const data = await this.client.get(finalKey)
+
       if (!data) return null;
 
-      const parsed = JSON.parse(data);
-      return parsed.value as T;
+      const parsed = JSON.parse(data)
+      return parsed.value as T
     } catch (error) {
-      console.error('Redis get error:', error);
-      return null;
+      logger.warn('cache_redis_get_failed', { error })
+      return null
     }
   }
 
@@ -163,12 +176,12 @@ class RedisCache {
     if (!this.client || !this.isConnected) return false;
 
     try {
-      const finalKey = prefix ? `${prefix}:${key}` : key;
-      const result = await this.client.del(finalKey);
-      return result > 0;
+      const finalKey = prefix ? `${prefix}:${key}` : key
+      const result = await this.client.del(finalKey)
+      return result > 0
     } catch (error) {
-      console.error('Redis delete error:', error);
-      return false;
+      logger.warn('cache_redis_delete_failed', { error })
+      return false
     }
   }
 
@@ -179,13 +192,13 @@ class RedisCache {
       if (prefix) {
         const keys = await this.client.keys(`${prefix}:*`);
         if (keys.length > 0) {
-          await this.client.del(keys);
+          await this.client.del(keys)
         }
       } else {
-        await this.client.flushDb();
+        await this.client.flushDb()
       }
     } catch (error) {
-      console.error('Redis clear error:', error);
+      logger.warn('cache_redis_clear_failed', { error })
     }
   }
 }
@@ -202,9 +215,9 @@ export class Cache {
 
     // Try to set in Redis for distributed caching
     try {
-      await this.redisCache.set(key, value, config);
+      await this.redisCache.set(key, value, config)
     } catch (error) {
-      console.warn('Failed to set value in Redis, using memory cache only:', error);
+      logger.warn('cache_set_fell_back_to_memory', { error })
     }
   }
 
@@ -225,7 +238,7 @@ export class Cache {
         return redisResult;
       }
     } catch (error) {
-      console.warn('Failed to get value from Redis:', error);
+      logger.warn('cache_get_redis_failed', { error })
     }
 
     return null;
@@ -237,9 +250,9 @@ export class Cache {
     
     let redisResult = false;
     try {
-      redisResult = await this.redisCache.delete(key, prefix);
+      redisResult = await this.redisCache.delete(key, prefix)
     } catch (error) {
-      console.warn('Failed to delete from Redis:', error);
+      logger.warn('cache_delete_redis_failed', { error })
     }
 
     return memoryResult || redisResult;
@@ -250,9 +263,9 @@ export class Cache {
     this.memoryCache.clear();
     
     try {
-      await this.redisCache.clear(prefix);
+      await this.redisCache.clear(prefix)
     } catch (error) {
-      console.warn('Failed to clear Redis cache:', error);
+      logger.warn('cache_clear_redis_failed', { error })
     }
   }
 
@@ -264,10 +277,36 @@ export class Cache {
       redisConnected: this.redisCache['isConnected']
     };
   }
+
+  getDiagnostics(): CacheDiagnostics {
+    const redisConfigured = Boolean(process.env.REDIS_URL?.trim())
+    const redisConnected = this.getStats().redisConnected
+    const status =
+      redisConnected ? 'connected' : redisConfigured ? 'degraded' : 'memory'
+    const message =
+      status === 'connected'
+        ? 'Redis-backed cache is connected'
+        : status === 'degraded'
+          ? 'Redis configured but unavailable; using in-memory cache'
+          : 'Redis not configured; using in-memory cache'
+
+    return {
+      mode: redisConnected ? 'redis' : 'memory',
+      status,
+      message,
+      redisConfigured,
+      redisConnected,
+      memorySize: this.memoryCache.size(),
+    }
+  }
 }
 
 // Default cache instance
 export const cache = new Cache();
+
+export function getCacheDiagnostics(): CacheDiagnostics {
+  return cache.getDiagnostics()
+}
 
 // Cache key builders for different use cases
 export const CacheKeys = {

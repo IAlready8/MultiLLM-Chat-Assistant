@@ -2,18 +2,19 @@
 
 import { NextRequest } from 'next/server'
 import { metrics } from '@/lib/api-logger'
+import { getCacheDiagnostics } from '@/lib/cache'
 import prisma from '@/lib/prisma'
 import { getErrorMessage, isDatabaseUnavailableError } from '@/lib/db-fallback'
 import { getRateLimitDiagnostics } from '@/lib/rate-limit'
-
-const sidecarHealthUrl = () => {
-  const baseUrl = process.env.PYTHON_CORE_URL?.trim()
-  return baseUrl ? `${baseUrl.replace(/\/$/, '')}/api/v1/health` : null
-}
+import { getReleaseMetadata } from '@/lib/release-metadata'
+import { getSidecarDiagnostics } from '@/lib/sidecar-health'
 
 // Health check API route — includes request metrics snapshot
 export async function GET(request: NextRequest) {
   const startTime = Date.now()
+  const release = getReleaseMetadata()
+  const generatedAt = new Date().toISOString()
+  const totalResponseTimeMs = Date.now() - startTime
 
   const includeMetrics = request.nextUrl.searchParams.get('metrics') === '1'
 
@@ -31,86 +32,67 @@ export async function GET(request: NextRequest) {
 
   const rateLimitStart = Date.now()
   const rateLimitDiagnostics = getRateLimitDiagnostics()
-  const cacheStatus =
-    rateLimitDiagnostics.mode === 'redis'
-      ? 'connected'
-      : rateLimitDiagnostics.redisConfigured
-        ? 'degraded'
-        : 'memory'
-  const cacheMessage =
-    rateLimitDiagnostics.mode === 'redis'
-      ? 'Redis-backed rate limiting is connected'
-      : rateLimitDiagnostics.redisConfigured
-        ? 'Redis configured but unavailable; using in-memory rate limiting'
-        : 'Redis not configured; using in-memory rate limiting'
+  const cacheStart = Date.now()
+  const cacheDiagnostics = getCacheDiagnostics()
 
-  const sidecarUrl = sidecarHealthUrl()
   const sidecarStart = Date.now()
-  let sidecarStatus: 'connected' | 'degraded' | 'disabled' = 'disabled'
-  let sidecarMessage = 'Python sidecar not configured'
-
-  if (sidecarUrl) {
-    try {
-      const response = await fetch(sidecarUrl, {
-        signal: AbortSignal.timeout(2000),
-        cache: 'no-store',
-      })
-      const payload = await response.json().catch(() => ({}))
-      const payloadStatus = String(payload?.status || '').toLowerCase()
-
-      if (
-        response.ok &&
-        (payloadStatus === 'ok' ||
-          payloadStatus === 'healthy' ||
-          payloadStatus === 'degraded')
-      ) {
-        sidecarStatus = payloadStatus === 'degraded' ? 'degraded' : 'connected'
-        sidecarMessage =
-          sidecarStatus === 'connected'
-            ? `Python sidecar responding (${payload.status})`
-            : `Python sidecar reported degraded status (${payload.status})`
-      } else {
-        sidecarStatus = 'degraded'
-        sidecarMessage = `Python sidecar health check failed (${response.status})`
-      }
-    } catch (error) {
-      sidecarStatus = 'degraded'
-      sidecarMessage = getErrorMessage(error) || 'Python sidecar health check failed'
-    }
-  }
+  const sidecarDiagnostics = await getSidecarDiagnostics()
+  const databaseResponseTimeMs = Date.now() - dbStart
+  const cacheResponseTimeMs = Date.now() - cacheStart
+  const rateLimitResponseTimeMs = Date.now() - rateLimitStart
+  const sidecarResponseTimeMs = Date.now() - sidecarStart
 
   const status =
     databaseStatus === 'connected' &&
-    cacheStatus !== 'degraded' &&
-    sidecarStatus !== 'degraded'
+    cacheDiagnostics.status !== 'degraded' &&
+    rateLimitDiagnostics.status !== 'degraded' &&
+    sidecarDiagnostics.status !== 'degraded'
       ? 'healthy'
       : 'degraded'
 
   const healthChecks = {
+    source: 'health',
     status,
-    timestamp: new Date().toISOString(),
+    generatedAt,
+    timestamp: generatedAt,
     uptime: process.uptime(),
-    responseTime: Date.now() - startTime,
-    version: '1.0.0',
+    responseTime: totalResponseTimeMs,
+    responseTimeMs: totalResponseTimeMs,
+    version: release.version,
+    release,
     environment: process.env.NODE_ENV || 'development',
     checks: {
       database: {
         status: databaseStatus,
-        responseTime: Date.now() - dbStart,
+        responseTime: databaseResponseTimeMs,
+        responseTimeMs: databaseResponseTimeMs,
         ...(databaseMessage ? { message: databaseMessage } : {}),
       },
       cache: {
-        status: cacheStatus,
-        responseTime: Date.now() - rateLimitStart,
-        message: cacheMessage,
+        status: cacheDiagnostics.status,
+        responseTime: cacheResponseTimeMs,
+        responseTimeMs: cacheResponseTimeMs,
+        message: cacheDiagnostics.message,
+        mode: cacheDiagnostics.mode,
+      },
+      rateLimit: {
+        status: rateLimitDiagnostics.status,
+        responseTime: rateLimitResponseTimeMs,
+        responseTimeMs: rateLimitResponseTimeMs,
+        message: rateLimitDiagnostics.message,
         mode: rateLimitDiagnostics.mode,
       },
       sidecar: {
-        status: sidecarStatus,
-        responseTime: Date.now() - sidecarStart,
-        message: sidecarMessage,
+        status: sidecarDiagnostics.status,
+        responseTime: sidecarResponseTimeMs,
+        responseTimeMs: sidecarResponseTimeMs,
+        message: sidecarDiagnostics.message,
       },
-      api: { status: 'responsive', responseTime: Date.now() - startTime },
+      api: {
+        status: 'responsive',
+        responseTime: totalResponseTimeMs,
+        responseTimeMs: totalResponseTimeMs,
+      },
     },
     ...(includeMetrics ? { metrics: metrics.snapshot() } : {}),
   }

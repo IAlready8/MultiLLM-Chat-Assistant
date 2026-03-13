@@ -1,4 +1,5 @@
 import { sanitizeLogValue } from '@/lib/log-sanitizer'
+import { getReleaseMetadata, type ReleaseMetadata } from '@/lib/release-metadata'
 
 /**
  * Structured API logger for server-side route handlers.
@@ -22,6 +23,7 @@ type LogEntry = {
   error?: string
   errorType?: 'validation' | 'auth' | 'upstream' | 'internal'
   meta?: Record<string, unknown>
+  release: ReleaseMetadata
 }
 
 const emit = (entry: LogEntry) => {
@@ -76,6 +78,7 @@ export const apiLog = {
       error: opts.error,
       errorType,
       meta: opts.meta,
+      release: getReleaseMetadata(),
     })
     metrics.record(opts.method, opts.path, opts.status, opts.durationMs)
   },

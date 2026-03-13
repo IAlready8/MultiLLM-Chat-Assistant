@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getCacheDiagnostics } from '@/lib/cache'
 import prisma from '@/lib/prisma'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 import { getAuthenticatedAdmin } from '@/lib/api-auth'
@@ -13,6 +14,8 @@ import {
   isStripeCheckoutConfigured,
   isStripeWebhookConfigured,
 } from '@/lib/stripe'
+import { getReleaseMetadata, type ReleaseMetadata } from '@/lib/release-metadata'
+import { getSidecarDiagnostics } from '@/lib/sidecar-health'
 
 type CheckStatus = 'ok' | 'warning' | 'error'
 
@@ -26,8 +29,11 @@ type SystemCheck = {
 }
 
 type SystemStatusResponse = {
+  source: 'admin-status'
   generatedAt: string
   overallStatus: CheckStatus
+  version: string
+  release: ReleaseMetadata
   checks: SystemCheck[]
   systemInfo: {
     app: string
@@ -39,6 +45,16 @@ type SystemStatusResponse = {
       apiConfigured: boolean
       checkoutConfigured: boolean
       webhookConfigured: boolean
+    }
+    sidecar: {
+      configured: boolean
+      status: 'connected' | 'degraded' | 'disabled'
+    }
+    cache: {
+      mode: 'redis' | 'memory'
+      redisConfigured: boolean
+      redisConnected: boolean
+      memorySize: number
     }
     rateLimit: {
       mode: 'redis' | 'memory'
@@ -81,6 +97,7 @@ export const GET = withApiMetrics(async () => {
     return authCheck
   }
 
+  const release = getReleaseMetadata()
   const strictAuth = isStrictAuthRequired()
   const hasNextAuthSecret = Boolean(process.env.NEXTAUTH_SECRET?.trim())
   const hasNextAuthUrl = Boolean(process.env.NEXTAUTH_URL?.trim())
@@ -174,14 +191,26 @@ export const GET = withApiMetrics(async () => {
     )
   )
 
+  const cacheStart = Date.now()
+  const cacheDiagnostics = getCacheDiagnostics()
+  const cacheStatus: CheckStatus =
+    cacheDiagnostics.status === 'connected' ? 'ok' : 'warning'
+  checks.push(
+    createCheck(
+      'cache',
+      'Cache',
+      'Check application cache backend and fallback state',
+      cacheStatus,
+      cacheDiagnostics.message,
+      Date.now() - cacheStart
+    )
+  )
+
   const rateLimitStart = Date.now()
   const rateLimitDiagnostics = getRateLimitDiagnostics()
   const rateLimitStatus: CheckStatus =
-    rateLimitDiagnostics.mode === 'redis' ? 'ok' : 'warning'
-  const rateLimitMessage =
-    rateLimitDiagnostics.mode === 'redis'
-      ? 'Rate limiting is backed by Redis'
-      : 'Rate limiting is using in-memory mode'
+    rateLimitDiagnostics.status === 'connected' ? 'ok' : 'warning'
+  const rateLimitMessage = rateLimitDiagnostics.message
 
   checks.push(
     createCheck(
@@ -191,6 +220,25 @@ export const GET = withApiMetrics(async () => {
       rateLimitStatus,
       rateLimitMessage,
       Date.now() - rateLimitStart
+    )
+  )
+
+  const sidecarStart = Date.now()
+  const sidecarDiagnostics = await getSidecarDiagnostics()
+  const sidecarStatus: CheckStatus =
+    sidecarDiagnostics.status === 'connected'
+      ? 'ok'
+      : sidecarDiagnostics.status === 'disabled'
+        ? 'ok'
+        : 'warning'
+  checks.push(
+    createCheck(
+      'sidecar',
+      'Python Sidecar',
+      'Check optional Python sidecar health and fallback state',
+      sidecarStatus,
+      sidecarDiagnostics.message,
+      Date.now() - sidecarStart
     )
   )
 
@@ -223,8 +271,11 @@ export const GET = withApiMetrics(async () => {
   )
 
   const response: SystemStatusResponse = {
+    source: 'admin-status',
     generatedAt: new Date().toISOString(),
     overallStatus: getOverallStatus(checks),
+    version: release.version,
+    release,
     checks,
     systemInfo: {
       app: 'Multi-LLM Chat Assistant',
@@ -237,6 +288,11 @@ export const GET = withApiMetrics(async () => {
         checkoutConfigured: isStripeCheckoutConfigured,
         webhookConfigured: isStripeWebhookConfigured,
       },
+      sidecar: {
+        configured: sidecarDiagnostics.configured,
+        status: sidecarDiagnostics.status,
+      },
+      cache: cacheDiagnostics,
       rateLimit: rateLimitDiagnostics,
     },
   }

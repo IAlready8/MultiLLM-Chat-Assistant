@@ -1,10 +1,42 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiLog } from '@/lib/api-logger'
 import { logger } from '@/lib/logger'
+
+const originalCommitSha = process.env.VERCEL_GIT_COMMIT_SHA
+const originalCommitRef = process.env.VERCEL_GIT_COMMIT_REF
+const originalGithubSha = process.env.GITHUB_SHA
+const originalGithubRefName = process.env.GITHUB_REF_NAME
 
 describe('logging safety', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    delete process.env.VERCEL_GIT_COMMIT_SHA
+    delete process.env.VERCEL_GIT_COMMIT_REF
+    delete process.env.GITHUB_SHA
+    delete process.env.GITHUB_REF_NAME
+  })
+
+  afterEach(() => {
+    if (originalCommitSha === undefined) {
+      delete process.env.VERCEL_GIT_COMMIT_SHA
+    } else {
+      process.env.VERCEL_GIT_COMMIT_SHA = originalCommitSha
+    }
+    if (originalCommitRef === undefined) {
+      delete process.env.VERCEL_GIT_COMMIT_REF
+    } else {
+      process.env.VERCEL_GIT_COMMIT_REF = originalCommitRef
+    }
+    if (originalGithubSha === undefined) {
+      delete process.env.GITHUB_SHA
+    } else {
+      process.env.GITHUB_SHA = originalGithubSha
+    }
+    if (originalGithubRefName === undefined) {
+      delete process.env.GITHUB_REF_NAME
+    } else {
+      process.env.GITHUB_REF_NAME = originalGithubRefName
+    }
   })
 
   it('redacts secrets from structured api logs', () => {
@@ -27,6 +59,12 @@ describe('logging safety', () => {
     })
 
     const payload = JSON.parse(String(errorSpy.mock.calls[0]?.[0]))
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: null,
+      commitShort: null,
+      branch: null,
+    })
     expect(payload.error).toContain('[REDACTED]')
     expect(payload.error).not.toContain('super-secret-token')
     expect(payload.error).not.toContain('postgresql://user:pass@host/db')
@@ -48,6 +86,12 @@ describe('logging safety', () => {
     })
 
     const payload = JSON.parse(String(errorSpy.mock.calls[0]?.[0]))
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: null,
+      commitShort: null,
+      branch: null,
+    })
     expect(payload.error.message).toContain('[REDACTED]')
     expect(payload.error.message).not.toContain('top-secret')
     expect(payload.authorization).toBe('[REDACTED]')

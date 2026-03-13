@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 
 const mockQueryRaw = vi.fn()
 const mockMetricsSnapshot = vi.fn()
+const mockGetCacheDiagnostics = vi.fn()
 const mockGetRateLimitDiagnostics = vi.fn()
 const mockFetch = vi.fn()
 
@@ -18,6 +19,10 @@ vi.mock('@/lib/api-logger', () => ({
   },
 }))
 
+vi.mock('@/lib/cache', () => ({
+  getCacheDiagnostics: () => mockGetCacheDiagnostics(),
+}))
+
 vi.mock('@/lib/rate-limit', () => ({
   getRateLimitDiagnostics: () => mockGetRateLimitDiagnostics(),
 }))
@@ -26,6 +31,10 @@ import { GET } from '@/app/api/health/route'
 
 const originalFetch = global.fetch
 const originalPythonCoreUrl = process.env.PYTHON_CORE_URL
+const originalCommitSha = process.env.VERCEL_GIT_COMMIT_SHA
+const originalCommitRef = process.env.VERCEL_GIT_COMMIT_REF
+const originalGithubSha = process.env.GITHUB_SHA
+const originalGithubRefName = process.env.GITHUB_REF_NAME
 
 describe('/api/health route', () => {
   beforeEach(() => {
@@ -35,8 +44,18 @@ describe('/api/health route', () => {
       startedAt: '2026-01-01T00:00:00.000Z',
       routes: {},
     })
+    mockGetCacheDiagnostics.mockReturnValue({
+      mode: 'memory',
+      status: 'memory',
+      message: 'Redis not configured; using in-memory cache',
+      redisConfigured: false,
+      redisConnected: false,
+      memorySize: 0,
+    })
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'memory',
+      status: 'memory',
+      message: 'Redis not configured; using in-memory rate limiting',
       redisConfigured: false,
       redisConnected: false,
       inMemoryKeys: 0,
@@ -44,6 +63,10 @@ describe('/api/health route', () => {
     global.fetch = mockFetch as typeof fetch
     mockFetch.mockReset()
     delete process.env.PYTHON_CORE_URL
+    delete process.env.VERCEL_GIT_COMMIT_SHA
+    delete process.env.VERCEL_GIT_COMMIT_REF
+    delete process.env.GITHUB_SHA
+    delete process.env.GITHUB_REF_NAME
   })
 
   afterEach(() => {
@@ -53,6 +76,26 @@ describe('/api/health route', () => {
     } else {
       process.env.PYTHON_CORE_URL = originalPythonCoreUrl
     }
+    if (originalCommitSha === undefined) {
+      delete process.env.VERCEL_GIT_COMMIT_SHA
+    } else {
+      process.env.VERCEL_GIT_COMMIT_SHA = originalCommitSha
+    }
+    if (originalCommitRef === undefined) {
+      delete process.env.VERCEL_GIT_COMMIT_REF
+    } else {
+      process.env.VERCEL_GIT_COMMIT_REF = originalCommitRef
+    }
+    if (originalGithubSha === undefined) {
+      delete process.env.GITHUB_SHA
+    } else {
+      process.env.GITHUB_SHA = originalGithubSha
+    }
+    if (originalGithubRefName === undefined) {
+      delete process.env.GITHUB_REF_NAME
+    } else {
+      process.env.GITHUB_REF_NAME = originalGithubRefName
+    }
   })
 
   it('returns healthy status when database check succeeds', async () => {
@@ -61,10 +104,49 @@ describe('/api/health route', () => {
 
     expect(response.status).toBe(200)
     const payload = await response.json()
+    expect(payload.source).toBe('health')
     expect(payload.status).toBe('healthy')
+    expect(payload.generatedAt).toBeTypeOf('string')
+    expect(payload.timestamp).toBe(payload.generatedAt)
+    expect(payload.responseTimeMs).toBeTypeOf('number')
+    expect(payload.responseTime).toBe(payload.responseTimeMs)
     expect(payload.checks.database.status).toBe('connected')
+    expect(payload.checks.database.responseTimeMs).toBeTypeOf('number')
+    expect(payload.checks.database.responseTime).toBe(
+      payload.checks.database.responseTimeMs
+    )
     expect(payload.checks.cache.status).toBe('memory')
+    expect(payload.checks.cache.responseTimeMs).toBeTypeOf('number')
+    expect(payload.checks.cache.responseTime).toBe(
+      payload.checks.cache.responseTimeMs
+    )
+    expect(payload.checks.cache.message).toBe(
+      'Redis not configured; using in-memory cache'
+    )
+    expect(payload.checks.rateLimit.status).toBe('memory')
+    expect(payload.checks.rateLimit.responseTimeMs).toBeTypeOf('number')
+    expect(payload.checks.rateLimit.responseTime).toBe(
+      payload.checks.rateLimit.responseTimeMs
+    )
+    expect(payload.checks.rateLimit.message).toBe(
+      'Redis not configured; using in-memory rate limiting'
+    )
     expect(payload.checks.sidecar.status).toBe('disabled')
+    expect(payload.checks.sidecar.responseTimeMs).toBeTypeOf('number')
+    expect(payload.checks.sidecar.responseTime).toBe(
+      payload.checks.sidecar.responseTimeMs
+    )
+    expect(payload.checks.api.responseTimeMs).toBeTypeOf('number')
+    expect(payload.checks.api.responseTime).toBe(
+      payload.checks.api.responseTimeMs
+    )
+    expect(payload.version).toBe('0.1.0')
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: null,
+      commitShort: null,
+      branch: null,
+    })
     expect(payload.metrics).toBeUndefined()
   })
 
@@ -98,6 +180,50 @@ describe('/api/health route', () => {
     expect(payload.checks.sidecar.message).toContain('ECONNREFUSED')
   })
 
+  it('returns degraded cache status when Redis is configured but unavailable', async () => {
+    mockGetCacheDiagnostics.mockReturnValue({
+      mode: 'memory',
+      status: 'degraded',
+      message: 'Redis configured but unavailable; using in-memory cache',
+      redisConfigured: true,
+      redisConnected: false,
+      memorySize: 3,
+    })
+
+    const request = new NextRequest('http://localhost/api/health')
+    const response = await GET(request)
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload.status).toBe('degraded')
+    expect(payload.checks.cache.status).toBe('degraded')
+    expect(payload.checks.cache.message).toBe(
+      'Redis configured but unavailable; using in-memory cache'
+    )
+  })
+
+  it('returns degraded rate-limit status when Redis is configured but unavailable', async () => {
+    mockGetRateLimitDiagnostics.mockReturnValue({
+      mode: 'memory',
+      status: 'degraded',
+      message: 'Redis configured but unavailable; using in-memory rate limiting',
+      redisConfigured: true,
+      redisConnected: false,
+      inMemoryKeys: 3,
+    })
+
+    const request = new NextRequest('http://localhost/api/health')
+    const response = await GET(request)
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload.status).toBe('degraded')
+    expect(payload.checks.rateLimit.status).toBe('degraded')
+    expect(payload.checks.rateLimit.message).toBe(
+      'Redis configured but unavailable; using in-memory rate limiting'
+    )
+  })
+
   it('includes metrics snapshot when metrics=1 query is provided', async () => {
     mockMetricsSnapshot.mockReturnValue({
       startedAt: '2026-01-01T00:00:00.000Z',
@@ -128,5 +254,24 @@ describe('/api/health route', () => {
         },
       },
     })
+  })
+
+  it('includes release commit metadata when deploy env is present', async () => {
+    process.env.VERCEL_GIT_COMMIT_SHA =
+      '38bd6ff663ad85a9586de66c42978458fd8f2c25'
+    process.env.VERCEL_GIT_COMMIT_REF = 'main'
+
+    const request = new NextRequest('http://localhost/api/health')
+    const response = await GET(request)
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: '38bd6ff663ad85a9586de66c42978458fd8f2c25',
+      commitShort: '38bd6ff',
+      branch: 'main',
+    })
+    expect(payload.source).toBe('health')
   })
 })
