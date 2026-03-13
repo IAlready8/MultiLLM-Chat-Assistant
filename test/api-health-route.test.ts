@@ -108,16 +108,38 @@ describe('/api/health route', () => {
     expect(payload.status).toBe('healthy')
     expect(payload.generatedAt).toBeTypeOf('string')
     expect(payload.timestamp).toBe(payload.generatedAt)
+    expect(payload.responseTimeMs).toBeTypeOf('number')
+    expect(payload.responseTime).toBe(payload.responseTimeMs)
     expect(payload.checks.database.status).toBe('connected')
+    expect(payload.checks.database.responseTimeMs).toBeTypeOf('number')
+    expect(payload.checks.database.responseTime).toBe(
+      payload.checks.database.responseTimeMs
+    )
     expect(payload.checks.cache.status).toBe('memory')
+    expect(payload.checks.cache.responseTimeMs).toBeTypeOf('number')
+    expect(payload.checks.cache.responseTime).toBe(
+      payload.checks.cache.responseTimeMs
+    )
     expect(payload.checks.cache.message).toBe(
       'Redis not configured; using in-memory cache'
     )
     expect(payload.checks.rateLimit.status).toBe('memory')
+    expect(payload.checks.rateLimit.responseTimeMs).toBeTypeOf('number')
+    expect(payload.checks.rateLimit.responseTime).toBe(
+      payload.checks.rateLimit.responseTimeMs
+    )
     expect(payload.checks.rateLimit.message).toBe(
       'Redis not configured; using in-memory rate limiting'
     )
     expect(payload.checks.sidecar.status).toBe('disabled')
+    expect(payload.checks.sidecar.responseTimeMs).toBeTypeOf('number')
+    expect(payload.checks.sidecar.responseTime).toBe(
+      payload.checks.sidecar.responseTimeMs
+    )
+    expect(payload.checks.api.responseTimeMs).toBeTypeOf('number')
+    expect(payload.checks.api.responseTime).toBe(
+      payload.checks.api.responseTimeMs
+    )
     expect(payload.version).toBe('0.1.0')
     expect(payload.release).toEqual({
       version: '0.1.0',

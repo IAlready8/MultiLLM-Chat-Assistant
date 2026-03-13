@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now()
   const release = getReleaseMetadata()
   const generatedAt = new Date().toISOString()
+  const totalResponseTimeMs = Date.now() - startTime
 
   const includeMetrics = request.nextUrl.searchParams.get('metrics') === '1'
 
@@ -36,6 +37,10 @@ export async function GET(request: NextRequest) {
 
   const sidecarStart = Date.now()
   const sidecarDiagnostics = await getSidecarDiagnostics()
+  const databaseResponseTimeMs = Date.now() - dbStart
+  const cacheResponseTimeMs = Date.now() - cacheStart
+  const rateLimitResponseTimeMs = Date.now() - rateLimitStart
+  const sidecarResponseTimeMs = Date.now() - sidecarStart
 
   const status =
     databaseStatus === 'connected' &&
@@ -51,34 +56,43 @@ export async function GET(request: NextRequest) {
     generatedAt,
     timestamp: generatedAt,
     uptime: process.uptime(),
-    responseTime: Date.now() - startTime,
+    responseTime: totalResponseTimeMs,
+    responseTimeMs: totalResponseTimeMs,
     version: release.version,
     release,
     environment: process.env.NODE_ENV || 'development',
     checks: {
       database: {
         status: databaseStatus,
-        responseTime: Date.now() - dbStart,
+        responseTime: databaseResponseTimeMs,
+        responseTimeMs: databaseResponseTimeMs,
         ...(databaseMessage ? { message: databaseMessage } : {}),
       },
       cache: {
         status: cacheDiagnostics.status,
-        responseTime: Date.now() - cacheStart,
+        responseTime: cacheResponseTimeMs,
+        responseTimeMs: cacheResponseTimeMs,
         message: cacheDiagnostics.message,
         mode: cacheDiagnostics.mode,
       },
       rateLimit: {
         status: rateLimitDiagnostics.status,
-        responseTime: Date.now() - rateLimitStart,
+        responseTime: rateLimitResponseTimeMs,
+        responseTimeMs: rateLimitResponseTimeMs,
         message: rateLimitDiagnostics.message,
         mode: rateLimitDiagnostics.mode,
       },
       sidecar: {
         status: sidecarDiagnostics.status,
-        responseTime: Date.now() - sidecarStart,
+        responseTime: sidecarResponseTimeMs,
+        responseTimeMs: sidecarResponseTimeMs,
         message: sidecarDiagnostics.message,
       },
-      api: { status: 'responsive', responseTime: Date.now() - startTime },
+      api: {
+        status: 'responsive',
+        responseTime: totalResponseTimeMs,
+        responseTimeMs: totalResponseTimeMs,
+      },
     },
     ...(includeMetrics ? { metrics: metrics.snapshot() } : {}),
   }
