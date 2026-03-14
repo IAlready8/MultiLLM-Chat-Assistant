@@ -7,7 +7,7 @@ Use this file if you need to reconstruct the project to the same stage as the cu
 ## 1. Exact Baseline Identity
 - Repository: `MultiLLM-Chat-Assistant`
 - Canonical branch: `main`
-- Current baseline commit: `013d903f0d97b153a5df9e9125082da4167c421b`
+- Current baseline commit: `57fa76861a7790f399586c27d297a0cb7e36951a`
 - Latest promoted PR: `#45`
 - Release tag: `handoff-baseline-2026-03-09`
 - Production URL: `https://multi-llm-chat-assistant.vercel.app`
