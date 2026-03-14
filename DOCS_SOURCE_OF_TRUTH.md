@@ -2,12 +2,12 @@
 
 ## Authoritative Docs (Current)
 - `README.md`: operator entry point, setup, scripts, deployment notes.
+- `ROADMAP.md`: branch-control pointer for the active roadmap branch and current planning surfaces.
 - `ARCHITECTURE.md`: runtime architecture and contracts.
 - `docs/OPERATOR_RUNBOOK.md`: operator startup, verification, deploy, rollback, and incident procedures.
 - `VERCEL_DEPLOYMENT.md`: proven Vercel deployment and promotion flow.
 - `docs/DEPLOYMENT_GUIDE.md`: platform-agnostic deployment contract.
 - `CLAUDE.md`: code-verified working guidance for coding agents.
-- `STATUS_UPDATE.md`: current repository status snapshot.
 - `PYTHON_INTEGRATION.md`: optional sidecar behavior and known limitations.
 - `handoff_work/HANDOFF_INDEX.md`: operator/buyer handoff entrypoint.
 - `handoff_work/MASTER_REBUILD_SPEC.md`: single-file rebuild specification for the current baseline.
@@ -19,6 +19,8 @@
 - `handoff_work/ENV_INVENTORY.md`: env family inventory without secret values.
 
 ## Demoted / Historical
+- `STATUS_UPDATE.md`: retained as historical context only.
+  - Not a current status source.
 - `COMPLETION_REPORT.md`: retained as historical context only.
   - Not an authoritative "done" signal.
   - See checklist-gated status instead.

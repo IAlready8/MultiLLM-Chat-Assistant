@@ -1,7 +1,7 @@
 # Handoff Index
 
 ## Quick Start
-- Release baseline: `main` at `013d903f0d97b153a5df9e9125082da4167c421b`
+- Release baseline: `main` at `57fa76861a7790f399586c27d297a0cb7e36951a`
 - Release runtime tag: `handoff-baseline-2026-03-09` -> `8e9e49794a72b534dfd54138e4bdf73581c7fb1c`
 - Production URL: `https://multi-llm-chat-assistant.vercel.app`
 - Rollback reference: `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
@@ -11,6 +11,7 @@
   - external preview/deploy integrations still create optional PR noise
   - optional Python sidecar is implemented but not part of live core production proof
 - Read first:
+  - `ROADMAP.md`
   - `handoff_work/MASTER_REBUILD_SPEC.md`
   - `handoff_work/BUYER_OPERATOR_DELIVERY_BRIEF.md`
   - `handoff_work/RELEASE_STATUS.md`

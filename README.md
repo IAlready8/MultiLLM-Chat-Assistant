@@ -218,8 +218,8 @@ Operational note:
 - `DOCS_SOURCE_OF_TRUTH.md`: authoritative-vs-historical doc map
 - `DOCUMENTATION.md`: API/services/components reference
 - `DESIGN_SYSTEM.md`: design tokens and UI conventions
-- `ROADMAP.md`: roadmap and planned work
-- `STATUS_UPDATE.md`: current repository status snapshot
+- `ROADMAP.md`: branch-control pointer for the active roadmap branch and authoritative planning surfaces
+- `STATUS_UPDATE.md`: historical repository snapshot only
 - `SECURITY_AUDIT_TRIAGE.md`: latest dependency-audit triage and remediation notes
 - `NEXT_UPGRADE_PLAYBOOK.md`: staged Next.js major-upgrade execution + rollback plan
 

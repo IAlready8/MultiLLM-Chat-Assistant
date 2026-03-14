@@ -1,44 +1,28 @@
-# Project Roadmap: MultiLLM Chat Assistant
+# Roadmap Control Surface
 
-## Current Position (as of February 20, 2026)
-- Next.js migration branch to `16.1.1` is implemented and quality gates are green.
-- Route/runtime compatibility updates for Next 16 are in place.
-- Security baseline improved substantially from original state, but one production high advisory remains tied to current Next release line.
+This file exists only to anchor Step 1 of the locked plan.
 
-## Phase 1: Foundation and Reliability
-### Status: Complete
-- Unified app/API structure
-- Stable CI quality gates (`type-check`, `lint`, `tests`, `build`)
-- Build reliability with explicit production env requirements
+## Baseline Freeze
+- Stable release branch: `main`
+- Stable release head at branch start: `57fa76861a7790f399586c27d297a0cb7e36951a`
+- Current active roadmap branch: `codex/freeze-baseline-step1-20260314`
 
-## Phase 2: Security and Dependency Hardening
-### Status: In Progress
-- [x] Move tooling packages out of runtime dependency scope
-- [x] Apply non-breaking audit remediations
-- [x] Land Next.js major upgrade branch (`next@16.1.1`) with compatibility fixes
-- [ ] Consume patched Next.js release that clears the remaining production high advisory
-- [ ] Migrate deprecated `middleware.ts` convention to `proxy.ts`
-- [ ] Separate CI reporting/gating for runtime vs tooling vulnerabilities
+## Authoritative Surfaces
+- Forward plan:
+  - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
+- Rebuild and recovery contract:
+  - `handoff_work/MASTER_REBUILD_SPEC.md`
+- Current shipped baseline and acceptance posture:
+  - `handoff_work/RELEASE_STATUS.md`
+  - `handoff_work/RELEASE_MANIFEST.md`
 
-## Phase 3: Runtime Consolidation
-### Status: In Progress
-- [ ] Remove/retire legacy parallel API client paths
-- [ ] Standardize provider calls through unified provider runtime
-- [ ] Reduce fallback-path duplication across services
+## Working Rules
+- keep `main` read-only for normal development
+- keep one active roadmap branch at a time
+- do not create sub-branches from the active roadmap branch
+- do not treat this file as a second roadmap narrative
+- if branch focus changes, update this file and the authoritative surfaces above in the same commit
 
-## Phase 4: Feature Depth and Observability
-### Status: Planned
-- [ ] Expand analytics and admin diagnostics coverage
-- [ ] Add true external-provider integration smoke coverage
-- [ ] Tighten orchestration telemetry and error budgeting
-
-## Phase 5: Product and Platform Scale
-### Status: Planned
-- [ ] Team/collaboration depth
-- [ ] Billing/subscription operational hardening
-- [ ] Deployment/documentation workflow polish
-
-## Next 30-Day Execution Priorities
-1. Track and adopt patched Next.js release; re-baseline audits immediately.
-2. Complete middleware-to-proxy migration and remove deprecation warning.
-3. Enforce production-focused vulnerability threshold in CI while tracking tooling advisories separately.
+## Historical Note
+- older roadmap/status trackers are historical only
+- `STATUS_UPDATE.md` and `COMPLETION_REPORT.md` are preserved as snapshots, not current truth

@@ -2,7 +2,7 @@
 
 ## Baseline Identity
 - Baseline branch: `main`
-- Final merged baseline SHA: `013d903f0d97b153a5df9e9125082da4167c421b`
+- Final merged baseline SHA: `57fa76861a7790f399586c27d297a0cb7e36951a`
 - Runtime-fix baseline SHA: `8e9e49794a72b534dfd54138e4bdf73581c7fb1c`
 - Runtime-fix branch: `codex/live-auth-cookie-fix-20260308`
 - Pre-closeout `main` commit SHA: `923ecd49f3ab713e4f38c3430e6bf4a481edd92f`
@@ -15,6 +15,7 @@
 - Latest hardening promotion PR: `45`
 - Latest hardening promotion merged at: `2026-03-13T10:36:56Z`
 - Latest hardening promotion merge commit: `013d903f0d97b153a5df9e9125082da4167c421b`
+- Latest documentation/control-surface merge commit: `57fa76861a7790f399586c27d297a0cb7e36951a`
 
 ## Proven Deployment References
 - Preview deployment ID: `dpl_7rCmEBpM3mwNNMcvTkoHCoJQ2vhA`
