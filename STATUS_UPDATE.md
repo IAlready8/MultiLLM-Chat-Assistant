@@ -1,4 +1,15 @@
-# Project Status Update (2026-03-02)
+# Project Status Update (Historical Snapshot)
+
+This file is historical only.
+Do not use it as current truth.
+Use:
+- `handoff_work/RELEASE_STATUS.md`
+- `handoff_work/RELEASE_MANIFEST.md`
+- `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
+
+Historical snapshot reference:
+- Snapshot date: `2026-03-02`
+- Snapshot commit: `3a5081be3a69f57cbf56c06d179f58d85eec4b03`
 
 ## Repository Identity (Observed)
 - Branch ref: `codex/protected-main-push-20260302`
@@ -52,5 +63,6 @@
 - Feature-level acceptance verification beyond core runtime hardening remains open in later checklist phases.
 
 ## Source Of Truth
-- Checklist sequencing and closure gates: `CLOSURE_MASTER_CHECKLIST.md`
-- Current execution status + evidence log: `currentstatus.md` (handoff pack)
+- Current release state: `handoff_work/RELEASE_STATUS.md`
+- Current release identifiers and proof references: `handoff_work/RELEASE_MANIFEST.md`
+- Current forward plan: `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`

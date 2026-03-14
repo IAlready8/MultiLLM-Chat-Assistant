@@ -10,6 +10,7 @@
 - `STATUS_UPDATE.md`: current repository status snapshot.
 - `PYTHON_INTEGRATION.md`: optional sidecar behavior and known limitations.
 - `handoff_work/HANDOFF_INDEX.md`: operator/buyer handoff entrypoint.
+- `handoff_work/MASTER_REBUILD_SPEC.md`: single-file rebuild specification for the current baseline.
 - `handoff_work/RELEASE_STATUS.md`: shipped scope and handoff gate status.
 - `handoff_work/DEPLOYMENT_EVIDENCE.md`: preview, production, rollback, and restore proof summary.
 - `handoff_work/BILLING_EVIDENCE.md`: billing-ready state and pending/complete proof.
@@ -23,5 +24,9 @@
   - See checklist-gated status instead.
 
 ## Completion Gate
-Treat repository state as technically handoff-ready only when `CLOSURE_MASTER_CHECKLIST.md` pass gates are complete with evidence.
+Treat repository state as technically handoff-ready only when the current release evidence in:
+- `handoff_work/RELEASE_STATUS.md`
+- `handoff_work/RELEASE_MANIFEST.md`
+- `handoff_work/DEPLOYMENT_EVIDENCE.md`
+is internally consistent and supported by the linked proof.
 Track billing readiness separately in `handoff_work/BILLING_EVIDENCE.md`.

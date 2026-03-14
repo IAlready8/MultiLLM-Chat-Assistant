@@ -1,7 +1,7 @@
 # Handoff Index
 
 ## Quick Start
-- Release baseline: `main` at `c83a83736f0364df3f223399efda58b98c5f9e6e`
+- Release baseline: `main` at `013d903f0d97b153a5df9e9125082da4167c421b`
 - Release runtime tag: `handoff-baseline-2026-03-09` -> `8e9e49794a72b534dfd54138e4bdf73581c7fb1c`
 - Production URL: `https://multi-llm-chat-assistant.vercel.app`
 - Rollback reference: `dpl_C8cHwKsZUsXo7PhZrw6kH7Y3gJ5c`
@@ -11,14 +11,18 @@
   - external preview/deploy integrations still create optional PR noise
   - optional Python sidecar is implemented but not part of live core production proof
 - Read first:
+  - `handoff_work/MASTER_REBUILD_SPEC.md`
   - `handoff_work/BUYER_OPERATOR_DELIVERY_BRIEF.md`
   - `handoff_work/RELEASE_STATUS.md`
   - `handoff_work/RELEASE_MANIFEST.md`
+  - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
   - `docs/OPERATOR_RUNBOOK.md`
   - `handoff_work/DEPLOYMENT_EVIDENCE.md`
   - `handoff_work/RESIDUAL_RISKS.md`
 
 ## Authority Chain
+- `handoff_work/MASTER_REBUILD_SPEC.md`
+  - single-file rebuild and recovery spec for the current baseline
 - `handoff_work/RELEASE_STATUS.md`
   - current shipped state and release posture
 - `handoff_work/RELEASE_MANIFEST.md`
@@ -36,7 +40,7 @@
 - `handoff_work/REMOTE_BRANCH_AUDIT.md`
   - non-destructive branch and PR cleanup audit
 - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
-  - valid next paths from the finished baseline
+  - the only authoritative forward plan from the current baseline
 - `docs/OPERATOR_RUNBOOK.md`
   - operator execution procedures
 

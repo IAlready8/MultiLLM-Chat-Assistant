@@ -253,8 +253,8 @@ Reconcile these against code before using them as truth:
 - old `CLAUDE.md`
 
 ## Mandatory working mode for future edits
-1. Read `.currentstatus`.
-2. Follow `CLOSURE_MASTER_CHECKLIST.md` in order.
+1. Read `handoff_work/RELEASE_STATUS.md`.
+2. Follow `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md` as the only current forward plan.
 3. Update docs only after code truth is known.
 4. Every completion claim must include evidence.
 5. Mark all unverified items explicitly.
