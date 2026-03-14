@@ -24,7 +24,7 @@
 - Production canonical URL: `https://multi-llm-chat-assistant.vercel.app`
 
 ## Latest Proven Verification
-- Last verified status source timestamp: `2026-03-14`
+- Last verified status source timestamp: `2026-03-14T00:00:00Z`
 - Last smoke summary: `19` passed, `0` failed, `13` skipped
 - Core deployment gates proven:
   - preview verify + smoke

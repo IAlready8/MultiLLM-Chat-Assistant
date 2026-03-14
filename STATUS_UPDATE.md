@@ -7,6 +7,10 @@ Use:
 - `handoff_work/RELEASE_MANIFEST.md`
 - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
 
+Historical snapshot reference:
+- Snapshot date: `2026-03-02`
+- Snapshot commit: `3a5081be3a69f57cbf56c06d179f58d85eec4b03`
+
 ## Repository Identity (Observed)
 - Branch ref: `codex/protected-main-push-20260302`
 - HEAD commit: `3a5081be3a69f57cbf56c06d179f58d85eec4b03`
