@@ -25,6 +25,7 @@
 - eliminated the production failure where `/api/auth/session` was valid but `/billing`, `/api/subscriptions`, and `/api/subscriptions/manage` still behaved unauthenticated
 
 ## Read First
+- `handoff_work/MASTER_REBUILD_SPEC.md`
 - `handoff_work/HANDOFF_INDEX.md`
 - `handoff_work/RELEASE_STATUS.md`
 - `handoff_work/RELEASE_MANIFEST.md`

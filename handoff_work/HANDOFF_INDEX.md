@@ -11,6 +11,7 @@
   - external preview/deploy integrations still create optional PR noise
   - optional Python sidecar is implemented but not part of live core production proof
 - Read first:
+  - `handoff_work/MASTER_REBUILD_SPEC.md`
   - `handoff_work/BUYER_OPERATOR_DELIVERY_BRIEF.md`
   - `handoff_work/RELEASE_STATUS.md`
   - `handoff_work/RELEASE_MANIFEST.md`
@@ -20,6 +21,8 @@
   - `handoff_work/RESIDUAL_RISKS.md`
 
 ## Authority Chain
+- `handoff_work/MASTER_REBUILD_SPEC.md`
+  - single-file rebuild and recovery spec for the current baseline
 - `handoff_work/RELEASE_STATUS.md`
   - current shipped state and release posture
 - `handoff_work/RELEASE_MANIFEST.md`
