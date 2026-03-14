@@ -1,11 +1,17 @@
-# Completion Report (Rebased 2026-03-02)
+# Completion Report (Historical Snapshot)
+
+This file is historical only.
+Do not use it as the current completion signal.
+Use:
+- `handoff_work/RELEASE_STATUS.md`
+- `handoff_work/RELEASE_MANIFEST.md`
+- `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
 
 This document supersedes earlier "100% complete" claims that no longer matched current repository state.
 
 ## Current Truth
-- The repository is **not** declared handoff-ready yet.
-- Completion claims must follow `CLOSURE_MASTER_CHECKLIST.md` pass gates.
-- Latest closure execution has completed sections `01.*` through `04.*` and is actively working through `05.*`.
+- The statements below reflect an older execution phase and are preserved only as history.
+- The repository's current release truth is tracked in `handoff_work/RELEASE_STATUS.md`.
 
 ## What Is Actually Complete
 - Runtime contract is locked:
@@ -27,7 +33,8 @@ This document supersedes earlier "100% complete" claims that no longer matched c
   - command/file evidence is captured in the handoff status artifacts
 
 ## Primary References
-- `CLOSURE_MASTER_CHECKLIST.md`
-- `STATUS_UPDATE.md`
+- `handoff_work/RELEASE_STATUS.md`
+- `handoff_work/RELEASE_MANIFEST.md`
+- `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
 - `ARCHITECTURE.md`
 - `README.md`

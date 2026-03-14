@@ -23,5 +23,9 @@
   - See checklist-gated status instead.
 
 ## Completion Gate
-Treat repository state as technically handoff-ready only when `CLOSURE_MASTER_CHECKLIST.md` pass gates are complete with evidence.
+Treat repository state as technically handoff-ready only when the current release evidence in:
+- `handoff_work/RELEASE_STATUS.md`
+- `handoff_work/RELEASE_MANIFEST.md`
+- `handoff_work/DEPLOYMENT_EVIDENCE.md`
+is internally consistent and supported by the linked proof.
 Track billing readiness separately in `handoff_work/BILLING_EVIDENCE.md`.

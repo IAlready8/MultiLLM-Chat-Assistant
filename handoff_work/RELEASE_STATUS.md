@@ -2,8 +2,8 @@
 
 ## Current State
 - Repository baseline branch: `main`
-- Repository baseline head: `c83a83736f0364df3f223399efda58b98c5f9e6e`
-- Current closeout branch: merged from `codex/live-auth-cookie-fix-20260308` and `codex/final-handoff-stamp-20260309`
+- Repository baseline head: `013d903f0d97b153a5df9e9125082da4167c421b`
+- Latest promoted hardening PR: `45`
 - Technical handoff status: complete
 - Billing-ready status: complete
 - Blockers: none for technical handoff closeout
@@ -39,6 +39,7 @@ Removed from supported production scope:
 - production deployment proof: complete
 - rollback and restore proof: complete
 - `/api/health` truthfulness proof: complete
+- fresh production deployment from current `main`: complete
 - CI release gates on `main`: `Quality Checks`, `Smoke Tests`
 
 ## Technical Handoff Gate
@@ -75,3 +76,4 @@ Billing-ready gate status:
 - `handoff_work/DEPLOYMENT_EVIDENCE.md`
 - `handoff_work/RELEASE_MANIFEST.md`
 - `handoff_work/BILLING_EVIDENCE.md`
+- `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`

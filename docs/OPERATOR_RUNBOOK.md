@@ -255,5 +255,5 @@ See:
 - `handoff_work/DEPLOYMENT_EVIDENCE.md`
 - `handoff_work/RELEASE_MANIFEST.md`
 - `handoff_work/BILLING_EVIDENCE.md`
-- `handoff_work/currentstatus.md`
-- `handoff_work/CLOSURE_MASTER_CHECKLIST.md`
+- `handoff_work/RELEASE_STATUS.md`
+- `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`

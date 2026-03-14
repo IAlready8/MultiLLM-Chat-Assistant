@@ -2,7 +2,7 @@
 
 ## Release Identity
 - Baseline branch: `main`
-- Baseline branch head: `c83a83736f0364df3f223399efda58b98c5f9e6e`
+- Baseline branch head: `013d903f0d97b153a5df9e9125082da4167c421b`
 - Release tag: `handoff-baseline-2026-03-09`
 - Tagged runtime-fix baseline: `8e9e49794a72b534dfd54138e4bdf73581c7fb1c`
 - Production URL: `https://multi-llm-chat-assistant.vercel.app`
@@ -17,6 +17,7 @@
 - live Stripe checkout session creation
 - live Stripe customer portal session creation
 - signed Stripe webhook verification
+- fresh production deployment and post-deploy verification from current `main`
 
 ## Final Auth / Billing Repair
 - fixed App Router session reads for secure and chunked NextAuth cookies
@@ -27,6 +28,7 @@
 - `handoff_work/HANDOFF_INDEX.md`
 - `handoff_work/RELEASE_STATUS.md`
 - `handoff_work/RELEASE_MANIFEST.md`
+- `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
 - `docs/OPERATOR_RUNBOOK.md`
 - `handoff_work/DEPLOYMENT_EVIDENCE.md`
 - `handoff_work/RESIDUAL_RISKS.md`
