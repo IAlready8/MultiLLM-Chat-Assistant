@@ -4,13 +4,13 @@ This file exists only to anchor Step 1 of the locked plan.
 
 ## Baseline Freeze
 - Stable release branch: `main`
-- Stable release head at branch start: `57fa76861a7790f399586c27d297a0cb7e36951a`
-- Current active roadmap branch: `codex/define-icp-use-case-step2-20260314`
+- Stable release head at branch start: `57eab60ee0c44fbe2c8546ca4dc27b81d6204313`
+- Current active roadmap branch: `codex/define-primary-metric-step3-20260317`
 
 ## Current Step Lock
-- Step 2 decision is locked in:
+- Step 2 and Step 3 decisions are locked in:
   - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
-- Use that file for the exact ICP, exact use case, and positioning rationale.
+- Use that file for the exact ICP, exact use case, positioning rationale, and primary KPI definition.
 
 ## Authoritative Surfaces
 - Forward plan:
