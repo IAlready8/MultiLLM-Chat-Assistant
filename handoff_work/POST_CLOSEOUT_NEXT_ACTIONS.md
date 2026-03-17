@@ -23,10 +23,15 @@ This is the only authoritative forward plan file in `handoff_work/`.
 - Primary KPI:
   - Weekly Saved Brief Comparisons (`WSBC`)
 - Definition:
-  - the count of saved weekly sessions where a user runs one client brief through at least two provider/persona paths and preserves the result in the application's conversation history or comparison flow
+  - the count per calendar week of qualifying saved comparison sessions
+  - a qualifying session is one in which a user:
+    - runs one client brief through at least two different providers
+    - may use one or more reusable personas during that comparison
+    - preserves the result in the application's conversation history or comparison flow
 - Why this is the primary metric:
   - it measures the exact core workflow end to end instead of rewarding empty volume such as raw prompts, token count, or passive logins
 - Does not count:
+  - multi-persona runs on only one provider
   - single-provider ad hoc chat
   - unsaved test prompts
   - billing events without completed workflow use
