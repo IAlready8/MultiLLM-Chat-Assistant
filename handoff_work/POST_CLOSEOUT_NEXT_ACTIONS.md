@@ -10,6 +10,15 @@ This is the only authoritative forward plan file in `handoff_work/`.
 - do not cut scope by calling partial proof "done"
 - do not treat code quality alone as product or business maturity
 
+## Locked Decisions
+### Step 2: Exact ICP And Use Case
+- Exact ICP:
+  - independent AI consultants and boutique agencies producing repeatable client deliverables with multiple LLM providers
+- Exact use case:
+  - run the same client brief through multiple providers and reusable personas, compare outputs side by side, preserve the conversation history, and use analytics/admin diagnostics to improve repeatability over time
+- Why this exists instead of generic ChatGPT / Claude use:
+  - the product's value is the combination of multi-provider comparison, persona reuse, saved workflow history, and operator-level diagnostics in one controlled workspace
+
 ## Exact Execution Order
 1. freeze baseline
    - preserve `main` as the stable release line
