@@ -79,8 +79,8 @@ export default function Home() {
           <CardHeader>
             <div className="feature-icon-chip p-3 rounded-lg w-fit mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 3v18h18"/>
-                <path d="m19 9-5 5-4-4-3 3"/>
+                <path d="M20 21a8 8 0 0 0-16 0"/>
+                <circle cx="12" cy="7" r="4"/>
               </svg>
             </div>
             <CardTitle>Build Personas</CardTitle>
