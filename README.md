@@ -7,10 +7,10 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org)
 
-Multi-provider LLM workspace for independent AI consultants and boutique agencies that need to compare outputs, reuse personas, preserve conversation history, and improve repeatable client deliverables across providers.
+Multi-provider LLM workspace built for repeatable multi-model work, saved workflow history, and operator visibility across providers.
 
-Current exact use case:
-- run the same client brief through multiple providers and reusable personas, compare outputs side by side, save the conversation trail, and use analytics/admin diagnostics to improve repeatability over time
+Current exact ICP and use case are locked in:
+- `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
 
 ## Highlights
 - Multi-provider chat endpoints with streaming support
