@@ -14,7 +14,7 @@ export default function Home() {
           <span className="rainbow-text">MultiLLM</span> Chat Assistant
         </h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          Your professional tool for interacting with multiple LLM APIs
+          Compare provider outputs, reuse personas, preserve conversation history, and improve repeatable client deliverables.
         </p>
       </div>
       
@@ -32,6 +32,12 @@ export default function Home() {
         </Link>
       </div>
       
+      <div className="mb-6 max-w-4xl px-4 text-center">
+        <p className="text-sm text-muted-foreground">
+          Core workflow: configure providers, run the same brief across models, compare the outputs, save the thread, and review usage patterns over time.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-7xl px-4">
         <Card className="flex flex-col glass-card rainbow-outline-hover smooth-transition hover:-translate-y-1">
           <CardHeader>
@@ -42,7 +48,7 @@ export default function Home() {
               </svg>
             </div>
             <CardTitle>Start New Chat</CardTitle>
-            <CardDescription>Begin a new conversation with your chosen LLM.</CardDescription>
+            <CardDescription>Run the same brief with different providers and preserve the thread for later comparison.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow flex items-end">
             <Button className="w-full glass-button" asChild>
@@ -55,17 +61,16 @@ export default function Home() {
           <CardHeader>
             <div className="feature-icon-chip p-3 rounded-lg w-fit mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8 12h8"/>
-                <path d="M12 8v8"/>
-                <circle cx="12" cy="12" r="9"/>
+                <path d="M3 3v18h18"/>
+                <path d="m19 9-5 5-4-4-3 3"/>
               </svg>
             </div>
-            <CardTitle>AI Roundtable</CardTitle>
-            <CardDescription>Let multiple models debate a goal while you observe.</CardDescription>
+            <CardTitle>Compare Outputs</CardTitle>
+            <CardDescription>Review side-by-side model results and conversation-level differences from saved work.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow flex items-end">
             <Button className="w-full glass-button" asChild>
-              <Link href="/ai-roundtable">Open Roundtable</Link>
+              <Link href="/comparison">Open Comparison</Link>
             </Button>
           </CardContent>
         </Card>
@@ -78,12 +83,12 @@ export default function Home() {
                 <path d="m19 9-5 5-4-4-3 3"/>
               </svg>
             </div>
-            <CardTitle>View Analytics</CardTitle>
-            <CardDescription>See your usage statistics and model comparisons.</CardDescription>
+            <CardTitle>Build Personas</CardTitle>
+            <CardDescription>Create reusable instructions for common client workflows and apply them consistently.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow flex items-end">
             <Button className="w-full glass-button" asChild>
-              <Link href="/analytics">View Analytics</Link>
+              <Link href="/personas">Open Personas</Link>
             </Button>
           </CardContent>
         </Card>
@@ -96,15 +101,21 @@ export default function Home() {
                 <circle cx="12" cy="12" r="3"/>
               </svg>
             </div>
-            <CardTitle>Configure Settings</CardTitle>
-            <CardDescription>Manage your API keys and application preferences.</CardDescription>
+            <CardTitle>Review Analytics</CardTitle>
+            <CardDescription>Track usage and comparison patterns after teams start saving real work in the app.</CardDescription>
           </CardHeader>
           <CardContent className="flex-grow flex items-end">
             <Button className="w-full glass-button" asChild>
-              <Link href="/settings">Go to Settings</Link>
+              <Link href="/analytics">View Analytics</Link>
             </Button>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-8 px-4">
+        <Button variant="outline" asChild>
+          <Link href="/settings">Configure Providers and Settings</Link>
+        </Button>
       </div>
     </div>
   );

@@ -41,6 +41,22 @@ This is the only authoritative forward plan file in `handoff_work/`.
   - paid conversion
   - latency
 
+### Step 4: Scope Cut To Core Workflow
+- Highest-value path to keep prominent:
+  - settings -> personas -> multi-chat/comparison -> saved conversation history -> analytics
+- Primary navigation should emphasize:
+  - `Multi-Chat`
+  - `Comparison`
+  - `Personas`
+  - `Analytics`
+  - `Settings`
+- De-emphasize from primary navigation and home-page promotion:
+  - `Goal Hub`
+  - `Pipeline`
+  - `AI Roundtable`
+- Rule:
+  - non-core surfaces may remain reachable, but they must not compete visually with the main workflow until later steps justify them
+
 ## Exact Execution Order
 1. freeze baseline
    - preserve `main` as the stable release line
