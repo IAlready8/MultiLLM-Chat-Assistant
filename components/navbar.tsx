@@ -10,10 +10,7 @@ export default function Navbar() {
   const navItems = [
     { name: "Home", path: "/" },
     { name: "Multi-Chat", path: "/multi-chat" },
-    { name: "Roundtable", path: "/ai-roundtable" },
-    { name: "Goal Hub", path: "/goal-hub" },
     { name: "Comparison", path: "/comparison" },
-    { name: "Pipeline", path: "/pipeline" },
     { name: "Personas", path: "/personas" },
     { name: "Analytics", path: "/analytics" },
     { name: "Settings", path: "/settings" },

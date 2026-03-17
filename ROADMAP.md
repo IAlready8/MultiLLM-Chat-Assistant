@@ -5,12 +5,12 @@ This file exists only to anchor Step 1 of the locked plan.
 ## Baseline Freeze
 - Stable release branch: `main`
 - Stable release head at branch start: `57eab60ee0c44fbe2c8546ca4dc27b81d6204313`
-- Current active roadmap branch: `codex/define-primary-metric-step3-20260317`
+- Current active roadmap branch: `codex/cut-scope-step4-20260317`
 
 ## Current Step Lock
-- Step 2 and Step 3 decisions are locked in:
+- Step 2, Step 3, and Step 4 decisions are locked in:
   - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
-- Use that file for the exact ICP, exact use case, positioning rationale, and primary KPI definition.
+- Use that file for the exact ICP, exact use case, positioning rationale, primary KPI definition, and scope-cut rules.
 
 ## Authoritative Surfaces
 - Forward plan:
