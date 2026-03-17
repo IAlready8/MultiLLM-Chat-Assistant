@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ActivationChecklist } from "@/components/activation-checklist";
 
 export default function Home() {
   return (
@@ -31,12 +32,8 @@ export default function Home() {
           </svg>
         </Link>
       </div>
-      
-      <div className="mb-6 max-w-4xl px-4 text-center">
-        <p className="text-sm text-muted-foreground">
-          Core workflow: configure providers, run the same brief across models, compare the outputs, save the thread, and review usage patterns over time.
-        </p>
-      </div>
+
+      <ActivationChecklist />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full max-w-7xl px-4">
         <Card className="flex flex-col glass-card rainbow-outline-hover smooth-transition hover:-translate-y-1">

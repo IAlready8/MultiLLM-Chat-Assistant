@@ -57,6 +57,18 @@ This is the only authoritative forward plan file in `handoff_work/`.
 - Rule:
   - non-core surfaces may remain reachable, but they must not compete visually with the main workflow until later steps justify them
 
+### Step 5: Onboarding And Activation
+- Activation sequence to optimize:
+  - configure one provider
+  - create one persona
+  - run and save one brief in `Multi-Chat`
+  - continue into `Comparison`
+  - review `Analytics` after real usage exists
+- First-run UX rule:
+  - home page must expose the next best activation step clearly instead of treating every surface as equally important
+- Interim activation tracking rule:
+  - until Step 7 telemetry work lands, derive activation progress from configured providers, saved personas, and saved conversations
+
 ## Exact Execution Order
 1. freeze baseline
    - preserve `main` as the stable release line
