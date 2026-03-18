@@ -253,6 +253,36 @@ export async function getUserProviderConfigs(userId: string): Promise<ProviderCo
   return Array.from(merged.values())
 }
 
+export async function getUserProviderConfigCount(userId: string): Promise<number> {
+  let dbCount = 0
+
+  if (!db.isKnownUnavailable()) {
+    try {
+      dbCount = await prisma.providerConfig.count({
+        where: {
+          userId,
+          isActive: true,
+        },
+      })
+    } catch (error) {
+      const dbUnavailable = db.markUnavailableIfNeeded(error)
+      if (!fallbackAllowed()) {
+        throw error
+      }
+      if (!dbUnavailable) {
+        db.logWarningOnce('getUserProviderConfigCount', 'provider config', error)
+      }
+    }
+  }
+
+  const fallbackCount = fallbackAllowed()
+    ? Array.from(peekFallbackUserStore(userId)?.values() ?? []).filter(record => record.isActive)
+        .length
+    : 0
+
+  return Math.max(dbCount, fallbackCount)
+}
+
 /**
  * Delete a provider configuration
  */

@@ -67,6 +67,7 @@ export type PrismaModelDelegate<T> = {
   findMany: (...args: any[]) => Promise<T[]>
   findFirst: (...args: any[]) => Promise<T | null>
   findUnique: (...args: any[]) => Promise<T | null>
+  count: (...args: any[]) => Promise<number>
   create: (...args: any[]) => Promise<T>
   update: (...args: any[]) => Promise<T>
   delete: (...args: any[]) => Promise<T>

@@ -39,6 +39,7 @@ const createStubDelegate = <T>(label: string): PrismaModelDelegate<T> => {
     findMany: error,
     findFirst: error,
     findUnique: error,
+    count: error,
     create: error,
     update: error,
     delete: error,
