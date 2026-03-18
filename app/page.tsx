@@ -60,7 +60,7 @@ const coreWorkflowCards = [
 
 export default function Home() {
   return (
-    <main className="relative flex min-h-[calc(100vh-64px)] flex-col items-center justify-center py-8">
+    <div className="relative flex min-h-[calc(100vh-64px)] flex-col items-center justify-center py-8">
       {/* Enhanced ambient accents */}
       <div className="ambient-orb ambient-orb--left" aria-hidden="true" />
       <div className="ambient-orb ambient-orb--right" aria-hidden="true" />
@@ -144,6 +144,6 @@ export default function Home() {
           <Link href="/settings">Configure Providers and Settings</Link>
         </Button>
       </div>
-    </main>
+    </div>
   )
 }

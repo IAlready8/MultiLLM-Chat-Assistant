@@ -109,14 +109,22 @@ export function ActivationChecklist() {
 
   const completedSteps = steps.filter(step => step.complete).length
   const nextStep = steps.find(step => !step.complete)
-  const statusLabel = loading ? 'Loading progress' : `${completedSteps}/${steps.length} complete`
+  const statusLabel = loading
+    ? 'Loading progress'
+    : loadError
+      ? 'Progress unavailable'
+      : `${completedSteps}/${steps.length} complete`
   const summaryTitle = loading
     ? 'Checking your current setup'
+    : loadError
+      ? 'Could not load activation status'
     : nextStep
       ? `Next best action: ${nextStep.label}`
       : 'Activation baseline complete'
   const summaryDescription = loading
     ? 'We are checking providers, personas, and saved comparison-ready conversations now.'
+    : loadError
+      ? 'Your progress could not be loaded. Review your setup manually and continue from there.'
     : nextStep
       ? nextStep.description
       : 'Move into comparison and analytics to deepen repeatable usage.'
