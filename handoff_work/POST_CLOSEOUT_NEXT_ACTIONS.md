@@ -10,6 +10,53 @@ This is the only authoritative forward plan file in `handoff_work/`.
 - do not cut scope by calling partial proof "done"
 - do not treat code quality alone as product or business maturity
 
+## Locked Decisions
+### Step 2: Exact ICP And Use Case
+- Exact ICP:
+  - independent AI consultants and boutique agencies producing repeatable client deliverables with multiple LLM providers
+- Exact use case:
+  - run the same client brief through multiple providers and reusable personas, compare outputs side by side, preserve the conversation history, and use analytics/admin diagnostics to improve repeatability over time
+- Why this exists instead of generic ChatGPT / Claude use:
+  - the product's value is the combination of multi-provider comparison, persona reuse, saved workflow history, and operator-level diagnostics in one controlled workspace
+
+### Step 3: Primary Value Metric
+- Primary KPI:
+  - Weekly Saved Brief Comparisons (`WSBC`)
+- Definition:
+  - the count per calendar week of qualifying saved comparison sessions
+  - a qualifying session is one in which a user:
+    - runs one client brief through at least two different providers
+    - may use one or more reusable personas during that comparison
+    - preserves the result in the application's conversation history or comparison flow
+- Why this is the primary metric:
+  - it measures the exact core workflow end to end instead of rewarding empty volume such as raw prompts, token count, or passive logins
+- Does not count:
+  - multi-persona runs on only one provider
+  - single-provider ad hoc chat
+  - unsaved test prompts
+  - billing events without completed workflow use
+- Secondary metrics stay secondary until later steps:
+  - activation
+  - retention
+  - paid conversion
+  - latency
+
+### Step 4: Scope Cut To Core Workflow
+- Highest-value path to keep prominent:
+  - settings -> personas -> multi-chat/comparison -> saved conversation history -> analytics
+- Primary navigation should emphasize:
+  - `Multi-Chat`
+  - `Comparison`
+  - `Personas`
+  - `Analytics`
+  - `Settings`
+- De-emphasize from primary navigation and home-page promotion:
+  - `Goal Hub`
+  - `Pipeline`
+  - `AI Roundtable`
+- Rule:
+  - non-core surfaces may remain reachable, but they must not compete visually with the main workflow until later steps justify them
+
 ## Exact Execution Order
 1. freeze baseline
    - preserve `main` as the stable release line
