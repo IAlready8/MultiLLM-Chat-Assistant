@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
 
 const mockGetAuthenticatedUser = vi.fn()
-const mockGetUserProviderConfigs = vi.fn()
+const mockGetUserProviderConfigCount = vi.fn()
 const mockPersonaService = {
-  getPersonasByUserId: vi.fn(),
+  getPersonaCountByUserId: vi.fn(),
 }
 const mockConversationService = {
-  getConversationsByUserId: vi.fn(),
+  getComparisonReadyConversationCountByUserId: vi.fn(),
 }
 
 vi.mock('@/lib/api-auth', () => ({
@@ -15,20 +15,32 @@ vi.mock('@/lib/api-auth', () => ({
 }))
 
 vi.mock('@/lib/api-key-service', () => ({
-  getUserProviderConfigs: (userId: string) => mockGetUserProviderConfigs(userId),
+  getUserProviderConfigCount: (userId: string) =>
+    mockGetUserProviderConfigCount(userId),
+}))
+
+vi.mock('@/lib/demo-account', () => ({
+  createGuestUserRecord: () => ({
+    id: 'guest-local-user',
+    email: 'guest@local.dev',
+  }),
+  getDemoAccountContext: () => ({
+    id: 'demo-user',
+    email: 'demo@local.dev',
+  }),
 }))
 
 vi.mock('@/services/persona-service.db', () => ({
   PersonaService: {
-    getPersonasByUserId: (...args: unknown[]) =>
-      mockPersonaService.getPersonasByUserId(...args),
+    getPersonaCountByUserId: (...args: unknown[]) =>
+      mockPersonaService.getPersonaCountByUserId(...args),
   },
 }))
 
 vi.mock('@/services/conversation-service.db', () => ({
   ConversationService: {
-    getConversationsByUserId: (...args: unknown[]) =>
-      mockConversationService.getConversationsByUserId(...args),
+    getComparisonReadyConversationCountByUserId: (...args: unknown[]) =>
+      mockConversationService.getComparisonReadyConversationCountByUserId(...args),
   },
 }))
 
@@ -52,12 +64,9 @@ describe('/api/activation-state route', () => {
   })
 
   it('returns activation counts and disables caching', async () => {
-    mockGetUserProviderConfigs.mockResolvedValue([{ provider: 'openai' }, { provider: 'anthropic' }])
-    mockPersonaService.getPersonasByUserId.mockResolvedValue([{ id: 'persona-1' }])
-    mockConversationService.getConversationsByUserId.mockResolvedValue([
-      { id: 'conv-1' },
-      { id: 'conv-2' },
-    ])
+    mockGetUserProviderConfigCount.mockResolvedValue(2)
+    mockPersonaService.getPersonaCountByUserId.mockResolvedValue(1)
+    mockConversationService.getComparisonReadyConversationCountByUserId.mockResolvedValue(2)
 
     const response = await GET()
 
@@ -65,14 +74,34 @@ describe('/api/activation-state route', () => {
     await expect(response.json()).resolves.toEqual({
       configuredProviders: 2,
       personas: 1,
-      conversations: 2,
+      comparisonReadyConversations: 2,
     })
     expect(response.headers.get('Cache-Control')).toBe('no-store')
     expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
   })
 
+  it('returns zero progress for shared guest users without hitting data stores', async () => {
+    mockGetAuthenticatedUser.mockResolvedValue({
+      user: { id: 'guest-local-user', email: 'guest@local.dev' },
+    })
+
+    const response = await GET()
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      configuredProviders: 0,
+      personas: 0,
+      comparisonReadyConversations: 0,
+    })
+    expect(mockGetUserProviderConfigCount).not.toHaveBeenCalled()
+    expect(mockPersonaService.getPersonaCountByUserId).not.toHaveBeenCalled()
+    expect(
+      mockConversationService.getComparisonReadyConversationCountByUserId
+    ).not.toHaveBeenCalled()
+  })
+
   it('returns 500 when activation state lookup fails', async () => {
-    mockGetUserProviderConfigs.mockRejectedValue(new Error('db unavailable'))
+    mockGetUserProviderConfigCount.mockRejectedValue(new Error('db unavailable'))
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const response = await GET()

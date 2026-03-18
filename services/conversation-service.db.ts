@@ -44,11 +44,61 @@ const toConversation = (conversation: ConversationWithMessages): Conversation =>
   return metadata
 }
 
+const countComparisonReadyFallbackConversations = (userId: string) =>
+  Array.from(getFallbackUserStore(userId).values()).filter(conversation =>
+    conversation.messages.some(message => Boolean(message.provider))
+  ).length
+
 /**
  * This service provides all database operations for Conversations,
  * replacing the old client-side IndexedDB logic.
  */
 export const ConversationService = {
+  async getComparisonReadyConversationCountByUserId(
+    userId: string
+  ): Promise<number> {
+    const fallbackCount = countComparisonReadyFallbackConversations(userId)
+
+    if (db.isKnownUnavailable()) {
+      return fallbackCount
+    }
+
+    try {
+      const dbConversationIds = await prisma.message.findMany({
+        where: {
+          provider: {
+            not: null,
+          },
+          conversation: {
+            userId,
+          },
+        },
+        distinct: ['conversationId'],
+        select: {
+          conversationId: true,
+        },
+      })
+
+      if (!db.isFallbackAllowed()) {
+        return dbConversationIds.length
+      }
+
+      return Math.max(dbConversationIds.length, fallbackCount)
+    } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce(
+          'getComparisonReadyConversationCountByUserId',
+          'conversation',
+          error
+        )
+      }
+      return fallbackCount
+    }
+  },
+
   /**
    * Get all conversations (metadata only) for a user.
    */

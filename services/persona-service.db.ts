@@ -67,6 +67,36 @@ const mergePersonasById = (
 }
 
 export const PersonaService = {
+  async getPersonaCountByUserId(userId: string): Promise<number> {
+    const fallbackCount = listFallbackPersonas(userId).length
+
+    if (db.isKnownUnavailable()) {
+      return fallbackCount
+    }
+
+    try {
+      const count = await prisma.persona.count({
+        where: {
+          userId,
+        },
+      })
+
+      if (!db.isFallbackAllowed()) {
+        return count
+      }
+
+      return Math.max(count, fallbackCount)
+    } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce('getPersonaCountByUserId', 'persona', error)
+      }
+      return fallbackCount
+    }
+  },
+
   async getPersonasByUserId(userId: string): Promise<Persona[]> {
     if (db.isKnownUnavailable()) {
       return listFallbackPersonas(userId)

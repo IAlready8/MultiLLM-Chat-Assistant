@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 type ChecklistState = {
   configuredProviders: number
   personas: number
-  conversations: number
+  comparisonReadyConversations: number
 }
 
 type Step = {
@@ -24,7 +24,7 @@ type Step = {
 const defaultState: ChecklistState = {
   configuredProviders: 0,
   personas: 0,
-  conversations: 0,
+  comparisonReadyConversations: 0,
 }
 
 export function ActivationChecklist() {
@@ -53,7 +53,10 @@ export function ActivationChecklist() {
         setState({
           configuredProviders: typeof data.configuredProviders === 'number' ? data.configuredProviders : 0,
           personas: typeof data.personas === 'number' ? data.personas : 0,
-          conversations: typeof data.conversations === 'number' ? data.conversations : 0,
+          comparisonReadyConversations:
+            typeof data.comparisonReadyConversations === 'number'
+              ? data.comparisonReadyConversations
+              : 0,
         })
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
@@ -95,9 +98,10 @@ export function ActivationChecklist() {
       {
         id: 'conversation',
         label: 'Save the first conversation',
-        description: 'Save one real conversation so comparison and analytics have something to build on.',
+        description:
+          'Save one conversation with at least one real provider response so comparison and analytics have something to build on.',
         href: '/multi-chat',
-        complete: state.conversations > 0,
+        complete: state.comparisonReadyConversations > 0,
       },
     ],
     [state]
@@ -158,12 +162,26 @@ export function ActivationChecklist() {
               <p className="mt-1 text-sm text-destructive">{loadError}</p>
             ) : null}
           </div>
-          <Button asChild>
-            <Link href={nextStep?.href ?? '/comparison'}>
-              {nextStep ? 'Continue activation' : 'Open comparison'}
+          {loading ? (
+            <Button disabled>
+              Checking progress
               <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
+            </Button>
+          ) : loadError ? (
+            <Button asChild variant="outline">
+              <Link href="/settings">
+                Review setup
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild>
+              <Link href={nextStep?.href ?? '/comparison'}>
+                {nextStep ? 'Continue activation' : 'Open comparison'}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
