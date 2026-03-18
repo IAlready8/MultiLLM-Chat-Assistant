@@ -58,10 +58,11 @@ This is the only authoritative forward plan file in `handoff_work/`.
   - non-core surfaces may remain reachable, but they must not compete visually with the main workflow until later steps justify them
 
 ### Step 5: Onboarding And Activation
-- Activation sequence to optimize:
+- Activation baseline to optimize:
   - configure one provider
   - create one persona
-  - run and save one brief in `Multi-Chat`
+- save one conversation that can later be compared
+- Immediate next actions after baseline:
   - continue into `Comparison`
   - review `Analytics` after real usage exists
 - First-run UX rule:

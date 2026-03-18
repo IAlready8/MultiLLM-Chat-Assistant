@@ -30,35 +30,40 @@ const defaultState: ChecklistState = {
 export function ActivationChecklist() {
   const [state, setState] = useState<ChecklistState>(defaultState)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    const abortController = new AbortController()
+    const { signal } = abortController
 
     const load = async () => {
       try {
-        const [configResponse, personasResponse, conversationsResponse] = await Promise.all([
-          fetch('/api/config', { cache: 'no-store' }),
-          fetch('/api/personas', { cache: 'no-store' }),
-          fetch('/api/conversations', { cache: 'no-store' }),
-        ])
+        setLoadError(null)
+        const response = await fetch('/api/activation-state', {
+          cache: 'no-store',
+          signal,
+        })
 
-        const [configData, personasData, conversationsData] = await Promise.all([
-          configResponse.ok ? configResponse.json() : { configuredProviders: [] },
-          personasResponse.ok ? personasResponse.json() : [],
-          conversationsResponse.ok ? conversationsResponse.json() : [],
-        ])
+        if (!response.ok) {
+          throw new Error(`Failed to load activation state (${response.status})`)
+        }
 
-        if (cancelled) return
+        const data = (await response.json()) as ChecklistState
 
         setState({
-          configuredProviders: Array.isArray(configData?.configuredProviders)
-            ? configData.configuredProviders.length
-            : 0,
-          personas: Array.isArray(personasData) ? personasData.length : 0,
-          conversations: Array.isArray(conversationsData) ? conversationsData.length : 0,
+          configuredProviders: typeof data.configuredProviders === 'number' ? data.configuredProviders : 0,
+          personas: typeof data.personas === 'number' ? data.personas : 0,
+          conversations: typeof data.conversations === 'number' ? data.conversations : 0,
         })
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return
+        }
+
+        console.error('Failed to load activation checklist:', error)
+        setLoadError('Unable to load activation progress right now.')
       } finally {
-        if (!cancelled) {
+        if (!signal.aborted) {
           setLoading(false)
         }
       }
@@ -67,7 +72,7 @@ export function ActivationChecklist() {
     void load()
 
     return () => {
-      cancelled = true
+      abortController.abort()
     }
   }, [])
 
@@ -89,8 +94,8 @@ export function ActivationChecklist() {
       },
       {
         id: 'conversation',
-        label: 'Save the first brief run',
-        description: 'Run a brief in Multi-Chat and preserve the conversation for later comparison.',
+        label: 'Save the first conversation',
+        description: 'Save one real conversation so comparison and analytics have something to build on.',
         href: '/multi-chat',
         complete: state.conversations > 0,
       },
@@ -149,6 +154,9 @@ export function ActivationChecklist() {
                 ? nextStep.description
                 : 'Move into comparison and analytics to deepen repeatable usage.'}
             </p>
+            {loadError ? (
+              <p className="mt-1 text-sm text-destructive">{loadError}</p>
+            ) : null}
           </div>
           <Button asChild>
             <Link href={nextStep?.href ?? '/comparison'}>
