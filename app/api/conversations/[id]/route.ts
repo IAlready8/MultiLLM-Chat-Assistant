@@ -99,21 +99,28 @@ export async function POST(
     )
 
     if (comparisonReadyMessages.length > 0) {
-      await recordAnalyticsEvent({
-        event: 'comparison_ready_conversation_saved',
-        userId: user.id,
-        payload: {
-          conversationId: id,
-          responseCount: comparisonReadyMessages.length,
-          providers: Array.from(
-            new Set(
-              comparisonReadyMessages
-                .map(message => message.provider)
-                .filter((provider): provider is string => Boolean(provider))
-            )
-          ),
-        },
-      })
+      try {
+        await recordAnalyticsEvent({
+          event: 'comparison_ready_conversation_saved',
+          userId: user.id,
+          payload: {
+            conversationId: id,
+            responseCount: comparisonReadyMessages.length,
+            providers: Array.from(
+              new Set(
+                comparisonReadyMessages
+                  .map(message => message.provider)
+                  .filter((provider): provider is string => Boolean(provider))
+              )
+            ),
+          },
+        })
+      } catch (analyticsError) {
+        console.warn(
+          'Failed to record analytics event for comparison-ready conversation save:',
+          analyticsError
+        )
+      }
     }
 
     return NextResponse.json(updatedConversation)

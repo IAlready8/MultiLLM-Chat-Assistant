@@ -10,6 +10,17 @@ vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
 }))
 
+vi.mock('@/lib/demo-account', () => ({
+  createGuestUserRecord: () => ({
+    id: 'guest-local-user',
+    email: 'guest@local.dev',
+  }),
+  getDemoAccountContext: () => ({
+    id: 'demo-user',
+    email: 'demo@local.dev',
+  }),
+}))
+
 vi.mock('@/services/analytics-service', () => ({
   getParsedAnalyticsEvents: (userId?: string, days?: number) =>
     mockGetParsedAnalyticsEvents(userId, days),
@@ -42,7 +53,7 @@ describe('/api/analytics route', () => {
       weeklySavedBriefComparisons: 1,
       conversationsCreated: 1,
       comparisonViews: 0,
-      analyticsViews: 0,
+      analyticsViews: 2,
     })
   })
 
@@ -113,6 +124,7 @@ describe('/api/analytics route', () => {
     expect(body.workflowMetrics).toMatchObject({
       configuredProviders: 1,
       weeklySavedBriefComparisons: 1,
+      analyticsViews: 3,
     })
     expect(body.activationFunnel).toHaveLength(4)
     expect(body.meta).toMatchObject({ source: 'live', eventCount: 2 })
@@ -171,6 +183,29 @@ describe('/api/analytics route', () => {
       userId: 'user-1',
       payload: { source: 'comparison', timeframe: '30d' },
     })
+  })
+
+  it('returns empty guest telemetry without recording view events', async () => {
+    mockGetAuthenticatedUser.mockResolvedValue({
+      user: { id: 'guest-local-user', email: 'guest@local.dev' },
+    })
+
+    const response = await GET(
+      new Request('http://localhost/api/analytics?timeframe=7d&source=analytics'),
+      routeContext
+    )
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.workflowMetrics).toMatchObject({
+      configuredProviders: 0,
+      personas: 0,
+      comparisonReadyConversations: 0,
+      weeklySavedBriefComparisons: 0,
+    })
+    expect(body.meta).toEqual({ source: 'empty', eventCount: 0 })
+    expect(mockGetParsedAnalyticsEvents).not.toHaveBeenCalled()
+    expect(mockRecordAnalyticsEvent).not.toHaveBeenCalled()
   })
 
   it('returns 500 when analytics service throws', async () => {

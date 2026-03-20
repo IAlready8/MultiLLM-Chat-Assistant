@@ -55,8 +55,9 @@ const countWeeklySavedBriefComparisonFallbackConversations = (
 ) =>
   Array.from(getFallbackUserStore(userId).values()).filter(
     conversation =>
-      conversation.updatedAt >= updatedSince &&
-      conversation.messages.some(message => Boolean(message.provider))
+      conversation.messages.some(
+        message => Boolean(message.provider) && message.createdAt >= updatedSince
+      )
   ).length
 
 /**
@@ -123,27 +124,29 @@ export const ConversationService = {
     }
 
     try {
-      const count = await prisma.conversation.count({
+      const dbConversationIds = await prisma.message.findMany({
         where: {
-          userId,
-          updatedAt: {
+          createdAt: {
             gte: updatedSince,
           },
-          messages: {
-            some: {
-              provider: {
-                not: null,
-              },
-            },
+          provider: {
+            not: null,
           },
+          conversation: {
+            userId,
+          },
+        },
+        distinct: ['conversationId'],
+        select: {
+          conversationId: true,
         },
       })
 
       if (!db.isFallbackAllowed()) {
-        return count
+        return dbConversationIds.length
       }
 
-      return Math.max(count, fallbackCount)
+      return Math.max(dbConversationIds.length, fallbackCount)
     } catch (error) {
       if (!db.isFallbackAllowed()) {
         throw error

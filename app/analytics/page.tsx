@@ -139,11 +139,25 @@ export default function AnalyticsPage() {
       )
       setActivationFunnel(data.activationFunnel || [])
       const source = data.meta?.source
+      const hasWorkflowProgress =
+        (data.activationFunnel || []).some(step => step.current > 0) ||
+        Object.values(
+          data.workflowMetrics || {
+            configuredProviders: 0,
+            personas: 0,
+            comparisonReadyConversations: 0,
+            weeklySavedBriefComparisons: 0,
+            conversationsCreated: 0,
+            comparisonViews: 0,
+            analyticsViews: 0,
+          }
+        ).some(value => value > 0)
       const inferredEmpty =
         (data.providerData?.length ?? 0) === 0 &&
         (data.modelComparisonData?.length ?? 0) === 0 &&
-        (data.totalStats?.totalRequests ?? 0) === 0
-      setIsTelemetryEmpty(source === 'empty' || (source !== 'live' && inferredEmpty))
+        (data.totalStats?.totalRequests ?? 0) === 0 &&
+        !hasWorkflowProgress
+      setIsTelemetryEmpty(source === 'empty' && inferredEmpty)
       setSourceLabel(data.meta?.source === 'empty' ? 'No telemetry yet' : 'Live data')
     } catch (err) {
       console.error('Failed to load analytics data:', err)
@@ -193,7 +207,8 @@ export default function AnalyticsPage() {
     modelComparisonData.length > 0 ||
     totalStats.totalRequests > 0 ||
     hasUsageTrendData ||
-    workflowMetrics.weeklySavedBriefComparisons > 0
+    activationFunnel.some(step => step.current > 0) ||
+    Object.values(workflowMetrics).some(value => value > 0)
 
   if (loadError && !hasData) {
     return (

@@ -76,14 +76,21 @@ export const POST = withApiMetrics(async (req: Request) => {
       title,
       prismaMessages
     )
-    await recordAnalyticsEvent({
-      event: 'conversation_created',
-      userId: user.id,
-      payload: {
-        messageCount: prismaMessages.length,
-        hasProviderTaggedMessage: prismaMessages.some(message => Boolean(message.provider)),
-      },
-    })
+    try {
+      await recordAnalyticsEvent({
+        event: 'conversation_created',
+        userId: user.id,
+        payload: {
+          messageCount: prismaMessages.length,
+          hasProviderTaggedMessage: prismaMessages.some(message => Boolean(message.provider)),
+        },
+      })
+    } catch (analyticsError) {
+      console.warn(
+        'Failed to record analytics event for conversation creation:',
+        analyticsError
+      )
+    }
     return NextResponse.json(newConversation, { status: 201 })
   } catch (error) {
     console.error('Error creating conversation:', error)

@@ -81,11 +81,18 @@ export const POST = withApiMetrics(async (req: Request) => {
       description: description ?? null,
     }
     const newPersona = await PersonaService.createPersona(personaData, user.id)
-    await recordAnalyticsEvent({
-      event: 'persona_created',
-      userId: user.id,
-      payload: { title },
-    })
+    try {
+      await recordAnalyticsEvent({
+        event: 'persona_created',
+        userId: user.id,
+        payload: { title },
+      })
+    } catch (analyticsError) {
+      console.warn(
+        'Failed to record analytics event for persona creation:',
+        analyticsError
+      )
+    }
     return NextResponse.json(newPersona, { status: 201 })
   } catch (error) {
     console.error('Error creating persona:', error)

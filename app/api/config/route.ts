@@ -76,11 +76,18 @@ export async function POST(request: NextRequest) {
 
   try {
     await storeUserApiKey(user.id, provider, apiKey, settings)
-    await recordAnalyticsEvent({
-      event: 'provider_configured',
-      userId: user.id,
-      payload: { provider },
-    })
+    try {
+      await recordAnalyticsEvent({
+        event: 'provider_configured',
+        userId: user.id,
+        payload: { provider },
+      })
+    } catch (analyticsError) {
+      console.warn(
+        'Failed to record analytics event for provider configuration.',
+        analyticsError
+      )
+    }
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Failed to store API key.')

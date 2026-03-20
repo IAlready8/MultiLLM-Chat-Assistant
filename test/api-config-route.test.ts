@@ -40,6 +40,7 @@ describe('/api/config route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
+    mockRecordAnalyticsEvent.mockResolvedValue(undefined)
   })
 
   it('GET forwards auth response when authentication fails', async () => {
@@ -157,6 +158,21 @@ describe('/api/config route', () => {
       userId: 'user-1',
       payload: { provider: 'openai' },
     })
+  })
+
+  it('POST still succeeds when provider telemetry recording fails', async () => {
+    mockRecordAnalyticsEvent.mockRejectedValue(new Error('analytics down'))
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const response = await POST(
+      makePostRequest({ provider: 'OpenAI', apiKey: 'sk-test-1234567890' })
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ success: true })
+    expect(mockStoreUserApiKey).toHaveBeenCalled()
+
+    consoleSpy.mockRestore()
   })
 
   it('POST returns 500 when secure storage fails', async () => {
