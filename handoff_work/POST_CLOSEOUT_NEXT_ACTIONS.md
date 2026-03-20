@@ -61,14 +61,26 @@ This is the only authoritative forward plan file in `handoff_work/`.
 - Activation baseline to optimize:
   - configure one provider
   - create one persona
-- save one conversation that can later be compared
+  - save one conversation with at least one provider response that can later be compared
 - Immediate next actions after baseline:
   - continue into `Comparison`
   - review `Analytics` after real usage exists
 - First-run UX rule:
   - home page must expose the next best activation step clearly instead of treating every surface as equally important
 - Interim activation tracking rule:
-  - until Step 7 telemetry work lands, derive activation progress from configured providers, saved personas, and saved conversations
+  - until Step 7 telemetry work lands, derive activation progress from configured providers, saved personas, and comparison-ready conversations
+
+### Step 6: Core UX Hardening
+- Home-page structure rule:
+  - use semantic landmarks and clear section headings for the hero, activation block, and core workflow surfaces
+- Activation state rule:
+  - do not expose live navigation CTAs based on placeholder zero-state data while activation progress is still loading
+  - if activation state fails to load, fall back to a safe recovery action instead of pretending the next step is known
+- Copy consistency rule:
+  - use `comparison-ready conversation` language consistently when the completion signal depends on at least one provider response
+- Accessibility rule:
+  - active primary navigation links must expose `aria-current="page"`
+  - loading and recovery text on the activation surface must be announced safely without introducing noisy or misleading controls
 
 ## Exact Execution Order
 1. freeze baseline

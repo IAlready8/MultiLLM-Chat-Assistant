@@ -4,11 +4,11 @@ This file exists only to anchor Step 1 of the locked plan.
 
 ## Baseline Freeze
 - Stable release branch: `main`
-- Stable release head at branch start: `4be26397e3fdcaf10affa6fa4f9a08dbc8ef8dd7`
-- Current active roadmap branch: `codex/redesign-onboarding-step5-20260317`
+- Stable release head at branch start: `709cc78a403e7dc64c8406724588ec5b6534963b`
+- Current active roadmap branch: `codex/harden-core-ux-step6-20260318`
 
 ## Current Step Lock
-- Step 2, Step 3, Step 4, and Step 5 decisions are locked in:
+- Step 2, Step 3, Step 4, Step 5, and Step 6 decisions are locked in:
   - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
 - Use that file for the exact ICP, exact use case, positioning rationale, primary KPI definition, scope-cut rules, and activation sequence.
 

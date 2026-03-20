@@ -109,9 +109,28 @@ export function ActivationChecklist() {
 
   const completedSteps = steps.filter(step => step.complete).length
   const nextStep = steps.find(step => !step.complete)
+  const statusLabel = loading
+    ? 'Loading progress'
+    : loadError
+      ? 'Progress unavailable'
+      : `${completedSteps}/${steps.length} complete`
+  const summaryTitle = loading
+    ? 'Checking your current setup'
+    : loadError
+      ? 'Could not load activation status'
+    : nextStep
+      ? `Next best action: ${nextStep.label}`
+      : 'Activation baseline complete'
+  const summaryDescription = loading
+    ? 'We are checking providers, personas, and saved comparison-ready conversations now.'
+    : loadError
+      ? 'Your progress could not be loaded. Review your setup manually and continue from there.'
+    : nextStep
+      ? nextStep.description
+      : 'Move into comparison and analytics to deepen repeatable usage.'
 
   return (
-    <Card className="mb-8 w-full max-w-5xl glass-card">
+    <Card className="mb-8 w-full max-w-5xl glass-card" aria-busy={loading}>
       <CardHeader className="gap-3">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -120,8 +139,8 @@ export function ActivationChecklist() {
               Reach the first real outcome fast: connect a provider, create a persona, and save one comparison-ready thread.
             </CardDescription>
           </div>
-          <Badge variant="secondary">
-            {loading ? 'Loading progress' : `${completedSteps}/${steps.length} complete`}
+          <Badge variant="secondary" aria-live="polite">
+            {statusLabel}
           </Badge>
         </div>
       </CardHeader>
@@ -141,25 +160,29 @@ export function ActivationChecklist() {
                 <h3 className="font-medium">{step.label}</h3>
               </div>
               <p className="mb-4 text-sm text-muted-foreground">{step.description}</p>
-              <Button variant={step.complete ? 'outline' : 'default'} className="w-full" asChild>
-                <Link href={step.href}>{step.complete ? 'Review' : 'Do this now'}</Link>
-              </Button>
+              {loading || loadError ? (
+                <Button variant="outline" className="w-full" disabled>
+                  {loading ? 'Checking setup' : 'Status unavailable'}
+                </Button>
+              ) : (
+                <Button variant={step.complete ? 'outline' : 'default'} className="w-full" asChild>
+                  <Link href={step.href}>{step.complete ? 'Review' : 'Do this now'}</Link>
+                </Button>
+              )}
             </div>
           ))}
         </div>
 
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-card/40 p-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="font-medium">
-              {nextStep ? `Next best action: ${nextStep.label}` : 'Activation baseline complete'}
+            <p className="font-medium" aria-live="polite">
+              {summaryTitle}
             </p>
-            <p className="text-sm text-muted-foreground">
-              {nextStep
-                ? nextStep.description
-                : 'Move into comparison and analytics to deepen repeatable usage.'}
-            </p>
+            <p className="text-sm text-muted-foreground">{summaryDescription}</p>
             {loadError ? (
-              <p className="mt-1 text-sm text-destructive">{loadError}</p>
+              <p className="mt-1 text-sm text-destructive" role="status">
+                {loadError}
+              </p>
             ) : null}
           </div>
           {loading ? (
