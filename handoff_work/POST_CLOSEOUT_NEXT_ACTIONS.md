@@ -82,6 +82,29 @@ This is the only authoritative forward plan file in `handoff_work/`.
   - active primary navigation links must expose `aria-current="page"`
   - loading and recovery text on the activation surface must be announced safely without introducing noisy or misleading controls
 
+### Step 7: Analytics And Decision Telemetry
+- Use the existing first-party analytics store only:
+  - do not add a second telemetry backend
+  - do not add third-party product analytics as part of this step
+- Lock the primary workflow instrumentation to:
+  - `provider_configured`
+  - `persona_created`
+  - `conversation_created`
+  - `comparison_ready_conversation_saved`
+  - `analytics_viewed`
+  - `comparison_viewed`
+- `WSBC` measurement rule:
+  - derive `Weekly Saved Brief Comparisons` from saved comparison-ready conversations within the selected window
+  - do not rely on synthetic counters as the source of truth for the KPI
+- Activation funnel rule:
+  - measure the current state of configured providers, personas, comparison-ready conversations, and weekly saved brief comparisons
+  - surface that funnel directly in analytics
+- Analytics surface rule:
+  - analytics must show workflow metrics alongside provider/token/error telemetry
+  - comparison page fetches must identify themselves as comparison traffic
+- Failure correlation rule:
+  - keep error totals in the same payload so workflow progress and failure rate can be read together
+
 ## Exact Execution Order
 1. freeze baseline
    - preserve `main` as the stable release line

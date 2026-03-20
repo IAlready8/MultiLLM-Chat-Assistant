@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
-import { getParsedAnalyticsEvents, ParsedAnalyticsEvent } from '@/services/analytics-service'
+import {
+  getParsedAnalyticsEvents,
+  getWorkflowMetrics,
+  ParsedAnalyticsEvent,
+  recordAnalyticsEvent,
+} from '@/services/analytics-service'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 
 type Timeframe = '24h' | '7d' | '30d'
@@ -26,6 +31,16 @@ type ModelComparison = {
   helpfulness: number
   coherence: number
   conciseness: number
+}
+
+type AnalyticsSource = 'analytics' | 'comparison'
+
+type ActivationStep = {
+  key: 'configuredProviders' | 'personas' | 'comparisonReadyConversations' | 'weeklySavedBriefComparisons'
+  label: string
+  current: number
+  target: number
+  complete: boolean
 }
 
 const TIMEFRAME_DAYS: Record<Timeframe, number> = {
@@ -101,6 +116,13 @@ const getTimeframe = (request: Request): Timeframe => {
     return value
   }
   return '7d'
+}
+
+const getSource = (request: Request): AnalyticsSource => {
+  const url = new URL(request.url)
+  return url.searchParams.get('source') === 'comparison'
+    ? 'comparison'
+    : 'analytics'
 }
 
 const buildProviderUsage = (events: ParsedAnalyticsEvent[]): ProviderUsage[] => {
@@ -304,6 +326,39 @@ const buildModelComparison = (
     })
 }
 
+const buildActivationFunnel = (
+  workflowMetrics: Awaited<ReturnType<typeof getWorkflowMetrics>>
+): ActivationStep[] => [
+  {
+    key: 'configuredProviders',
+    label: 'Configured providers',
+    current: workflowMetrics.configuredProviders,
+    target: 1,
+    complete: workflowMetrics.configuredProviders >= 1,
+  },
+  {
+    key: 'personas',
+    label: 'Saved personas',
+    current: workflowMetrics.personas,
+    target: 1,
+    complete: workflowMetrics.personas >= 1,
+  },
+  {
+    key: 'comparisonReadyConversations',
+    label: 'Comparison-ready conversations',
+    current: workflowMetrics.comparisonReadyConversations,
+    target: 1,
+    complete: workflowMetrics.comparisonReadyConversations >= 1,
+  },
+  {
+    key: 'weeklySavedBriefComparisons',
+    label: 'Weekly saved brief comparisons',
+    current: workflowMetrics.weeklySavedBriefComparisons,
+    target: 1,
+    complete: workflowMetrics.weeklySavedBriefComparisons >= 1,
+  },
+]
+
 export const GET = withApiMetrics(async (request: Request) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) {
@@ -312,14 +367,17 @@ export const GET = withApiMetrics(async (request: Request) => {
 
   const { user } = authCheck
   const timeframe = getTimeframe(request)
+  const source = getSource(request)
   const days = TIMEFRAME_DAYS[timeframe]
 
   try {
     const events = await getParsedAnalyticsEvents(user.id, days)
+    const workflowMetrics = await getWorkflowMetrics(user.id, days, events)
     const providerData = buildProviderUsage(events)
     const usageTrends =
       timeframe === '24h' ? buildHourlyTrends(events) : buildDailyTrends(events, days)
     const modelComparisonData = buildModelComparison(events, providerData)
+    const activationFunnel = buildActivationFunnel(workflowMetrics)
 
     const totalStats = providerData.reduce(
       (acc, provider) => {
@@ -342,11 +400,23 @@ export const GET = withApiMetrics(async (request: Request) => {
         ? Math.round(totalStats.avgResponseTime / providerData.length)
         : 0
 
+    try {
+      await recordAnalyticsEvent({
+        event: source === 'comparison' ? 'comparison_viewed' : 'analytics_viewed',
+        userId: user.id,
+        payload: { source, timeframe },
+      })
+    } catch (error) {
+      console.warn('Failed to record analytics view event:', error)
+    }
+
     return NextResponse.json({
       timeframe,
       providerData,
       usageTrends,
       modelComparisonData,
+      workflowMetrics,
+      activationFunnel,
       totalStats,
       meta: {
         source: events.length > 0 ? 'live' : 'empty',

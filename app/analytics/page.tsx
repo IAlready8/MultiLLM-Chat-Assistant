@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { RotateCcw, TrendingUp, Activity, Bot, Globe } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
@@ -33,6 +34,24 @@ type UsageTrend = {
   tokens: number
 }
 
+type WorkflowMetrics = {
+  configuredProviders: number
+  personas: number
+  comparisonReadyConversations: number
+  weeklySavedBriefComparisons: number
+  conversationsCreated: number
+  comparisonViews: number
+  analyticsViews: number
+}
+
+type ActivationStep = {
+  key: string
+  label: string
+  current: number
+  target: number
+  complete: boolean
+}
+
 type AnalyticsApiResponse = {
   timeframe: '24h' | '7d' | '30d'
   providerData: ProviderUsage[]
@@ -44,6 +63,8 @@ type AnalyticsApiResponse = {
     totalErrors: number
     avgResponseTime: number
   }
+  workflowMetrics: WorkflowMetrics
+  activationFunnel: ActivationStep[]
   meta?: {
     source?: 'live' | 'empty'
     eventCount?: number
@@ -62,6 +83,16 @@ export default function AnalyticsPage() {
     totalErrors: 0,
     avgResponseTime: 0
   })
+  const [workflowMetrics, setWorkflowMetrics] = useState<WorkflowMetrics>({
+    configuredProviders: 0,
+    personas: 0,
+    comparisonReadyConversations: 0,
+    weeklySavedBriefComparisons: 0,
+    conversationsCreated: 0,
+    comparisonViews: 0,
+    analyticsViews: 0,
+  })
+  const [activationFunnel, setActivationFunnel] = useState<ActivationStep[]>([])
   const [isTelemetryEmpty, setIsTelemetryEmpty] = useState(false)
   const [sourceLabel, setSourceLabel] = useState<'Live data' | 'No telemetry yet'>('Live data')
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -71,10 +102,13 @@ export default function AnalyticsPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      const response = await fetch(`/api/analytics?timeframe=${timeframe}`, {
+      const response = await fetch(
+        `/api/analytics?timeframe=${timeframe}&source=analytics`,
+        {
         method: 'GET',
         cache: 'no-store',
-      })
+        }
+      )
 
       if (!response.ok) {
         throw new Error(`Failed to load analytics (${response.status})`)
@@ -92,6 +126,18 @@ export default function AnalyticsPage() {
           avgResponseTime: 0,
         }
       )
+      setWorkflowMetrics(
+        data.workflowMetrics || {
+          configuredProviders: 0,
+          personas: 0,
+          comparisonReadyConversations: 0,
+          weeklySavedBriefComparisons: 0,
+          conversationsCreated: 0,
+          comparisonViews: 0,
+          analyticsViews: 0,
+        }
+      )
+      setActivationFunnel(data.activationFunnel || [])
       const source = data.meta?.source
       const inferredEmpty =
         (data.providerData?.length ?? 0) === 0 &&
@@ -135,11 +181,19 @@ export default function AnalyticsPage() {
   const hasUsageTrendData = usageTrends.some(
     point => point.requests > 0 || point.tokens > 0
   )
+  const activationCompletionRate =
+    activationFunnel.length > 0
+      ? Math.round(
+          (activationFunnel.filter(step => step.complete).length / activationFunnel.length) *
+            100
+        )
+      : 0
   const hasData =
     providerData.length > 0 ||
     modelComparisonData.length > 0 ||
     totalStats.totalRequests > 0 ||
-    hasUsageTrendData
+    hasUsageTrendData ||
+    workflowMetrics.weeklySavedBriefComparisons > 0
 
   if (loadError && !hasData) {
     return (
@@ -265,6 +319,82 @@ export default function AnalyticsPage() {
           <CardContent>
             <div className="text-2xl font-bold">{totalStats.avgResponseTime}ms</div>
             <p className="text-xs text-muted-foreground mt-1">Across all providers</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Core Workflow</CardTitle>
+            <CardDescription>
+              Track the locked KPI and the actions that lead to repeat comparisons.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm text-muted-foreground">
+                Weekly Saved Brief Comparisons
+              </div>
+              <div className="text-2xl font-bold">
+                {workflowMetrics.weeklySavedBriefComparisons}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">
+                Comparison-ready conversations
+              </div>
+              <div className="text-2xl font-bold">
+                {workflowMetrics.comparisonReadyConversations}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Conversations created</div>
+              <div className="text-2xl font-bold">
+                {workflowMetrics.conversationsCreated}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Comparison views</div>
+              <div className="text-2xl font-bold">{workflowMetrics.comparisonViews}</div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Activation Funnel</CardTitle>
+            <CardDescription>
+              Progress toward the first repeatable comparison workflow.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span>Completion</span>
+                <span>{activationCompletionRate}%</span>
+              </div>
+              <Progress value={activationCompletionRate} />
+            </div>
+            <div className="space-y-3">
+              {activationFunnel.map((step) => {
+                const percent = Math.min(
+                  100,
+                  Math.round((step.current / Math.max(step.target, 1)) * 100)
+                )
+                return (
+                  <div key={step.key} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span>{step.label}</span>
+                      <span className="text-muted-foreground">
+                        {step.current}/{step.target}
+                      </span>
+                    </div>
+                    <Progress value={percent} />
+                  </div>
+                )
+              })}
+            </div>
           </CardContent>
         </Card>
       </div>

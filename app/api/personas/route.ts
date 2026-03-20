@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { PersonaService } from '@/services/persona-service.db'
+import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 import { z } from 'zod'
 
@@ -80,6 +81,11 @@ export const POST = withApiMetrics(async (req: Request) => {
       description: description ?? null,
     }
     const newPersona = await PersonaService.createPersona(personaData, user.id)
+    await recordAnalyticsEvent({
+      event: 'persona_created',
+      userId: user.id,
+      payload: { title },
+    })
     return NextResponse.json(newPersona, { status: 201 })
   } catch (error) {
     console.error('Error creating persona:', error)

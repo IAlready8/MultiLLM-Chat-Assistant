@@ -49,6 +49,16 @@ const countComparisonReadyFallbackConversations = (userId: string) =>
     conversation.messages.some(message => Boolean(message.provider))
   ).length
 
+const countWeeklySavedBriefComparisonFallbackConversations = (
+  userId: string,
+  updatedSince: Date
+) =>
+  Array.from(getFallbackUserStore(userId).values()).filter(
+    conversation =>
+      conversation.updatedAt >= updatedSince &&
+      conversation.messages.some(message => Boolean(message.provider))
+  ).length
+
 /**
  * This service provides all database operations for Conversations,
  * replacing the old client-side IndexedDB logic.
@@ -91,6 +101,56 @@ export const ConversationService = {
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce(
           'getComparisonReadyConversationCountByUserId',
+          'conversation',
+          error
+        )
+      }
+      return fallbackCount
+    }
+  },
+
+  async getWeeklySavedBriefComparisonCountByUserId(
+    userId: string,
+    updatedSince: Date
+  ): Promise<number> {
+    const fallbackCount = countWeeklySavedBriefComparisonFallbackConversations(
+      userId,
+      updatedSince
+    )
+
+    if (db.isKnownUnavailable()) {
+      return fallbackCount
+    }
+
+    try {
+      const count = await prisma.conversation.count({
+        where: {
+          userId,
+          updatedAt: {
+            gte: updatedSince,
+          },
+          messages: {
+            some: {
+              provider: {
+                not: null,
+              },
+            },
+          },
+        },
+      })
+
+      if (!db.isFallbackAllowed()) {
+        return count
+      }
+
+      return Math.max(count, fallbackCount)
+    } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce(
+          'getWeeklySavedBriefComparisonCountByUserId',
           'conversation',
           error
         )

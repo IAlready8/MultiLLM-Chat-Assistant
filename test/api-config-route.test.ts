@@ -5,6 +5,7 @@ const mockGetAuthenticatedUser = vi.fn()
 const mockStoreUserApiKey = vi.fn()
 const mockGetUserProviderConfigs = vi.fn()
 const mockDeleteUserProviderConfig = vi.fn()
+const mockRecordAnalyticsEvent = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
@@ -20,6 +21,10 @@ vi.mock('@/lib/api-key-service', () => ({
   getUserProviderConfigs: (userId: string) => mockGetUserProviderConfigs(userId),
   deleteUserProviderConfig: (userId: string, provider: string) =>
     mockDeleteUserProviderConfig(userId, provider),
+}))
+
+vi.mock('@/services/analytics-service', () => ({
+  recordAnalyticsEvent: (event: unknown) => mockRecordAnalyticsEvent(event),
 }))
 
 import { GET, POST } from '@/app/api/config/route'
@@ -147,6 +152,11 @@ describe('/api/config route', () => {
         rateLimits: { requests: 60, window: 60000 },
       })
     )
+    expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
+      event: 'provider_configured',
+      userId: 'user-1',
+      payload: { provider: 'openai' },
+    })
   })
 
   it('POST returns 500 when secure storage fails', async () => {

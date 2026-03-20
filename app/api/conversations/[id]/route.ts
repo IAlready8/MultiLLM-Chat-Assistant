@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { ConversationService } from '@/services/conversation-service.db'
+import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { z } from 'zod'
 
 // Zod schema for adding messages
@@ -91,6 +92,28 @@ export async function POST(
 
     if (!updatedConversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+    }
+
+    const comparisonReadyMessages = prismaMessages.filter(
+      message => message.role === 'assistant' && Boolean(message.provider)
+    )
+
+    if (comparisonReadyMessages.length > 0) {
+      await recordAnalyticsEvent({
+        event: 'comparison_ready_conversation_saved',
+        userId: user.id,
+        payload: {
+          conversationId: id,
+          responseCount: comparisonReadyMessages.length,
+          providers: Array.from(
+            new Set(
+              comparisonReadyMessages
+                .map(message => message.provider)
+                .filter((provider): provider is string => Boolean(provider))
+            )
+          ),
+        },
+      })
     }
 
     return NextResponse.json(updatedConversation)

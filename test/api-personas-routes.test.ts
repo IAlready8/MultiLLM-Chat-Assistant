@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
 
 const mockGetAuthenticatedUser = vi.fn()
+const mockRecordAnalyticsEvent = vi.fn()
 const mockPersonaService = {
   getPersonasByUserId: vi.fn(),
   getPersonaById: vi.fn(),
@@ -27,6 +28,10 @@ vi.mock('@/services/persona-service.db', () => ({
     deletePersona: (...args: unknown[]) =>
       mockPersonaService.deletePersona(...args),
   },
+}))
+
+vi.mock('@/services/analytics-service', () => ({
+  recordAnalyticsEvent: (event: unknown) => mockRecordAnalyticsEvent(event),
 }))
 
 vi.mock('@/lib/api-metrics-wrapper', () => ({
@@ -131,6 +136,11 @@ describe('/api/personas routes', () => {
       },
       'user-1'
     )
+    expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
+      event: 'persona_created',
+      userId: 'user-1',
+      payload: { title: 'Architect' },
+    })
   })
 
   it('id GET returns 404 when persona does not exist', async () => {
