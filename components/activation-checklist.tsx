@@ -160,9 +160,9 @@ export function ActivationChecklist() {
                 <h3 className="font-medium">{step.label}</h3>
               </div>
               <p className="mb-4 text-sm text-muted-foreground">{step.description}</p>
-              {loading ? (
+              {loading || loadError ? (
                 <Button variant="outline" className="w-full" disabled>
-                  Checking setup
+                  {loading ? 'Checking setup' : 'Status unavailable'}
                 </Button>
               ) : (
                 <Button variant={step.complete ? 'outline' : 'default'} className="w-full" asChild>

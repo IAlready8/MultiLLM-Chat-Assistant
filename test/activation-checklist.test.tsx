@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@/test/test-utils'
 import { ActivationChecklist } from '@/components/activation-checklist'
 
@@ -8,6 +8,10 @@ describe('ActivationChecklist', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('shows a neutral loading state before activation data resolves', () => {
@@ -58,6 +62,7 @@ describe('ActivationChecklist', () => {
       ).toBeInTheDocument()
     })
 
+    expect(screen.getAllByRole('button', { name: 'Status unavailable' })).toHaveLength(3)
     expect(screen.getByRole('link', { name: 'Review setup' })).toHaveAttribute(
       'href',
       '/settings'

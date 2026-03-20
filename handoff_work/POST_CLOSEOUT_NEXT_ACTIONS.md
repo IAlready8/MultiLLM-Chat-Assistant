@@ -61,7 +61,7 @@ This is the only authoritative forward plan file in `handoff_work/`.
 - Activation baseline to optimize:
   - configure one provider
   - create one persona
-- save one conversation with at least one provider response that can later be compared
+  - save one conversation with at least one provider response that can later be compared
 - Immediate next actions after baseline:
   - continue into `Comparison`
   - review `Analytics` after real usage exists
