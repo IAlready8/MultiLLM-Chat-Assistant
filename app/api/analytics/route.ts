@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
-import { getParsedAnalyticsEvents, ParsedAnalyticsEvent } from '@/services/analytics-service'
+import { createGuestUserRecord, getDemoAccountContext } from '@/lib/demo-account'
+import {
+  getParsedAnalyticsEvents,
+  getWorkflowMetrics,
+  ParsedAnalyticsEvent,
+  recordAnalyticsEvent,
+} from '@/services/analytics-service'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 
 type Timeframe = '24h' | '7d' | '30d'
@@ -26,6 +32,16 @@ type ModelComparison = {
   helpfulness: number
   coherence: number
   conciseness: number
+}
+
+type AnalyticsSource = 'analytics' | 'comparison'
+
+type ActivationStep = {
+  key: 'configuredProviders' | 'personas' | 'comparisonReadyConversations' | 'weeklySavedBriefComparisons'
+  label: string
+  current: number
+  target: number
+  complete: boolean
 }
 
 const TIMEFRAME_DAYS: Record<Timeframe, number> = {
@@ -103,6 +119,13 @@ const getTimeframe = (request: Request): Timeframe => {
   return '7d'
 }
 
+const getSource = (request: Request): AnalyticsSource => {
+  const url = new URL(request.url)
+  return url.searchParams.get('source') === 'comparison'
+    ? 'comparison'
+    : 'analytics'
+}
+
 const buildProviderUsage = (events: ParsedAnalyticsEvent[]): ProviderUsage[] => {
   const usage = new Map<
     string,
@@ -110,6 +133,10 @@ const buildProviderUsage = (events: ParsedAnalyticsEvent[]): ProviderUsage[] => 
   >()
 
   for (const event of events) {
+    if (event.event !== 'llm_request' && event.event !== 'llm_error') {
+      continue
+    }
+
     const provider = String(event.payload.provider || 'unknown').toLowerCase()
     const existing = usage.get(provider) || {
       provider: providerLabel(provider),
@@ -220,6 +247,10 @@ const buildModelComparison = (
   >()
 
   for (const event of events) {
+    if (event.event !== 'llm_request' && event.event !== 'llm_error') {
+      continue
+    }
+
     const provider = String(event.payload.provider || 'unknown').toLowerCase()
     const modelRaw = String(event.payload.model || provider || 'unknown').trim()
     const modelName = modelRaw || 'unknown'
@@ -304,6 +335,49 @@ const buildModelComparison = (
     })
 }
 
+const buildActivationFunnel = (
+  workflowMetrics: Awaited<ReturnType<typeof getWorkflowMetrics>>
+): ActivationStep[] => [
+  {
+    key: 'configuredProviders',
+    label: 'Configured providers',
+    current: workflowMetrics.configuredProviders,
+    target: 1,
+    complete: workflowMetrics.configuredProviders >= 1,
+  },
+  {
+    key: 'personas',
+    label: 'Saved personas',
+    current: workflowMetrics.personas,
+    target: 1,
+    complete: workflowMetrics.personas >= 1,
+  },
+  {
+    key: 'comparisonReadyConversations',
+    label: 'Comparison-ready conversations',
+    current: workflowMetrics.comparisonReadyConversations,
+    target: 1,
+    complete: workflowMetrics.comparisonReadyConversations >= 1,
+  },
+  {
+    key: 'weeklySavedBriefComparisons',
+    label: 'Weekly saved brief comparisons',
+    current: workflowMetrics.weeklySavedBriefComparisons,
+    target: 1,
+    complete: workflowMetrics.weeklySavedBriefComparisons >= 1,
+  },
+]
+
+const buildEmptyWorkflowMetrics = () => ({
+  configuredProviders: 0,
+  personas: 0,
+  comparisonReadyConversations: 0,
+  weeklySavedBriefComparisons: 0,
+  conversationsCreated: 0,
+  comparisonViews: 0,
+  analyticsViews: 0,
+})
+
 export const GET = withApiMetrics(async (request: Request) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
   if (authCheck instanceof NextResponse) {
@@ -312,10 +386,42 @@ export const GET = withApiMetrics(async (request: Request) => {
 
   const { user } = authCheck
   const timeframe = getTimeframe(request)
+  const source = getSource(request)
   const days = TIMEFRAME_DAYS[timeframe]
+  const demoAccount = getDemoAccountContext()
+  const guestUser = createGuestUserRecord()
+  const isSharedGuestOrDemoUser =
+    user.id === guestUser.id ||
+    user.id === demoAccount.id ||
+    user.email === guestUser.email ||
+    user.email === demoAccount.email
+
+  if (isSharedGuestOrDemoUser) {
+    const emptyWorkflowMetrics = buildEmptyWorkflowMetrics()
+
+    return NextResponse.json({
+      timeframe,
+      providerData: [],
+      usageTrends: timeframe === '24h' ? buildHourlyTrends([]) : buildDailyTrends([], days),
+      modelComparisonData: [],
+      workflowMetrics: emptyWorkflowMetrics,
+      activationFunnel: buildActivationFunnel(emptyWorkflowMetrics),
+      totalStats: {
+        totalRequests: 0,
+        totalTokens: 0,
+        totalErrors: 0,
+        avgResponseTime: 0,
+      },
+      meta: {
+        source: 'empty',
+        eventCount: 0,
+      },
+    })
+  }
 
   try {
     const events = await getParsedAnalyticsEvents(user.id, days)
+    const workflowMetrics = await getWorkflowMetrics(user.id, days, events)
     const providerData = buildProviderUsage(events)
     const usageTrends =
       timeframe === '24h' ? buildHourlyTrends(events) : buildDailyTrends(events, days)
@@ -342,11 +448,36 @@ export const GET = withApiMetrics(async (request: Request) => {
         ? Math.round(totalStats.avgResponseTime / providerData.length)
         : 0
 
+    let workflowMetricsWithCurrentView = workflowMetrics
+
+    try {
+      await recordAnalyticsEvent({
+        event: source === 'comparison' ? 'comparison_viewed' : 'analytics_viewed',
+        userId: user.id,
+        payload: { source, timeframe },
+      })
+      workflowMetricsWithCurrentView = {
+        ...workflowMetrics,
+        comparisonViews:
+          source === 'comparison'
+            ? workflowMetrics.comparisonViews + 1
+            : workflowMetrics.comparisonViews,
+        analyticsViews:
+          source === 'analytics'
+            ? workflowMetrics.analyticsViews + 1
+            : workflowMetrics.analyticsViews,
+      }
+    } catch (error) {
+      console.warn('Failed to record analytics view event:', error)
+    }
+
     return NextResponse.json({
       timeframe,
       providerData,
       usageTrends,
       modelComparisonData,
+      workflowMetrics: workflowMetricsWithCurrentView,
+      activationFunnel: buildActivationFunnel(workflowMetricsWithCurrentView),
       totalStats,
       meta: {
         source: events.length > 0 ? 'live' : 'empty',

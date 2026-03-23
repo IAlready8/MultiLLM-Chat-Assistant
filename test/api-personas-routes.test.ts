@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
 
 const mockGetAuthenticatedUser = vi.fn()
+const mockRecordAnalyticsEvent = vi.fn()
 const mockPersonaService = {
   getPersonasByUserId: vi.fn(),
   getPersonaById: vi.fn(),
@@ -27,6 +28,10 @@ vi.mock('@/services/persona-service.db', () => ({
     deletePersona: (...args: unknown[]) =>
       mockPersonaService.deletePersona(...args),
   },
+}))
+
+vi.mock('@/services/analytics-service', () => ({
+  recordAnalyticsEvent: (event: unknown) => mockRecordAnalyticsEvent(event),
 }))
 
 vi.mock('@/lib/api-metrics-wrapper', () => ({
@@ -55,6 +60,7 @@ describe('/api/personas routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
+    mockRecordAnalyticsEvent.mockResolvedValue(undefined)
   })
 
   it('root GET returns personas for authenticated user', async () => {
@@ -131,6 +137,43 @@ describe('/api/personas routes', () => {
       },
       'user-1'
     )
+    expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
+      event: 'persona_created',
+      userId: 'user-1',
+      payload: { title: 'Architect' },
+    })
+  })
+
+  it('root POST still succeeds when persona telemetry recording fails', async () => {
+    mockPersonaService.createPersona.mockResolvedValue({
+      id: 'persona-1',
+      userId: 'user-1',
+      title: 'Architect',
+      description: 'Designs systems',
+      prompt: 'Think in trade-offs',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    })
+    mockRecordAnalyticsEvent.mockRejectedValue(new Error('analytics down'))
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const response = await createPersona(
+      new Request('http://localhost/api/personas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Architect',
+          systemPrompt: 'Think in trade-offs',
+          description: 'Designs systems',
+        }),
+      }),
+      rootRouteContext
+    )
+
+    expect(response.status).toBe(201)
+    expect(mockPersonaService.createPersona).toHaveBeenCalled()
+
+    consoleSpy.mockRestore()
   })
 
   it('id GET returns 404 when persona does not exist', async () => {

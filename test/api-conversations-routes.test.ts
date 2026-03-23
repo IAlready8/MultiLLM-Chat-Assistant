@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
 
 const mockGetAuthenticatedUser = vi.fn()
+const mockRecordAnalyticsEvent = vi.fn()
 const mockConversationService = {
   getConversationsByUserId: vi.fn(),
   createConversation: vi.fn(),
@@ -31,6 +32,10 @@ vi.mock('@/services/conversation-service.db', () => ({
   },
 }))
 
+vi.mock('@/services/analytics-service', () => ({
+  recordAnalyticsEvent: (event: unknown) => mockRecordAnalyticsEvent(event),
+}))
+
 vi.mock('@/lib/api-metrics-wrapper', () => ({
   withApiMetrics: (
     handler: (
@@ -58,6 +63,7 @@ describe('/api/conversations routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
+    mockRecordAnalyticsEvent.mockResolvedValue(undefined)
   })
 
   it('root GET returns conversations for authenticated user', async () => {
@@ -142,6 +148,51 @@ describe('/api/conversations routes', () => {
         },
       ]
     )
+    expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
+      event: 'conversation_created',
+      userId: 'user-1',
+      payload: {
+        messageCount: 1,
+        hasProviderTaggedMessage: true,
+      },
+    })
+  })
+
+  it('root POST still succeeds when conversation telemetry recording fails', async () => {
+    mockConversationService.createConversation.mockResolvedValue({
+      id: 'conv-1',
+      title: 'Weekly planning',
+      userId: 'user-1',
+      messages: [],
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    })
+    mockRecordAnalyticsEvent.mockRejectedValue(new Error('analytics down'))
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const response = await createConversation(
+      new Request('http://localhost/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Weekly planning',
+          messages: [
+            {
+              role: 'user',
+              content: 'Summarize this',
+              provider: 'openai',
+              model: 'gpt-4',
+            },
+          ],
+        }),
+      }),
+      rootRouteContext
+    )
+
+    expect(response.status).toBe(201)
+    expect(mockConversationService.createConversation).toHaveBeenCalled()
+
+    consoleSpy.mockRestore()
   })
 
   it('id GET returns 404 when conversation is missing', async () => {
@@ -214,6 +265,85 @@ describe('/api/conversations routes', () => {
         },
       ]
     )
+    expect(mockRecordAnalyticsEvent).not.toHaveBeenCalled()
+  })
+
+  it('id POST records comparison-ready saves when provider-tagged assistant messages are added', async () => {
+    mockConversationService.addMessages.mockResolvedValue({
+      id: 'conv-1',
+      title: 'Weekly planning',
+      userId: 'user-1',
+      messages: [],
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    })
+
+    const response = await addMessages(
+      new Request('http://localhost/api/conversations/conv-1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([
+          {
+            role: 'assistant',
+            content: 'OpenAI draft',
+            provider: 'openai',
+            model: 'gpt-4o',
+          },
+          {
+            role: 'assistant',
+            content: 'Claude draft',
+            provider: 'anthropic',
+            model: 'claude-3-7-sonnet',
+          },
+        ]),
+      }),
+      idRouteContext('conv-1')
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
+      event: 'comparison_ready_conversation_saved',
+      userId: 'user-1',
+      payload: {
+        conversationId: 'conv-1',
+        responseCount: 2,
+        providers: ['openai', 'anthropic'],
+      },
+    })
+  })
+
+  it('id POST still succeeds when comparison-save telemetry recording fails', async () => {
+    mockConversationService.addMessages.mockResolvedValue({
+      id: 'conv-1',
+      title: 'Weekly planning',
+      userId: 'user-1',
+      messages: [],
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    })
+    mockRecordAnalyticsEvent.mockRejectedValue(new Error('analytics down'))
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const response = await addMessages(
+      new Request('http://localhost/api/conversations/conv-1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([
+          {
+            role: 'assistant',
+            content: 'OpenAI draft',
+            provider: 'openai',
+            model: 'gpt-4o',
+          },
+        ]),
+      }),
+      idRouteContext('conv-1')
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockConversationService.addMessages).toHaveBeenCalled()
+
+    consoleSpy.mockRestore()
   })
 
   it('id PUT validates title payload', async () => {

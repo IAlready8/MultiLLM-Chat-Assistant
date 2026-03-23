@@ -1,9 +1,12 @@
 import prisma from '@/lib/prisma'
 import type { Analytics as AnalyticsRecord } from '@/types/prisma'
+import { getUserProviderConfigCount } from '@/lib/api-key-service'
 import {
   assertInMemoryFallbackAllowed,
   createDbAvailabilityTracker,
 } from '@/lib/db-fallback'
+import { PersonaService } from '@/services/persona-service.db'
+import { ConversationService } from '@/services/conversation-service.db'
 
 export interface AnalyticsEvent {
   event: string
@@ -26,6 +29,16 @@ export interface ParsedAnalyticsEvent {
   userId: string
   createdAt: Date
   payload: Record<string, unknown>
+}
+
+export interface WorkflowMetrics {
+  configuredProviders: number
+  personas: number
+  comparisonReadyConversations: number
+  weeklySavedBriefComparisons: number
+  conversationsCreated: number
+  comparisonViews: number
+  analyticsViews: number
 }
 
 type StoredAnalyticsEvent = {
@@ -249,6 +262,11 @@ const toParsedEvents = (events: StoredAnalyticsEvent[]): ParsedAnalyticsEvent[] 
     payload: parsePayload(event.payload),
   }))
 
+const countEvents = (
+  events: ParsedAnalyticsEvent[],
+  eventName: string
+): number => events.filter((event) => event.event === eventName).length
+
 export async function recordAnalyticsEvent(event: AnalyticsEvent): Promise<void> {
   const createdAt = event.createdAt ?? new Date()
 
@@ -301,4 +319,38 @@ export async function getParsedAnalyticsEvents(
       : undefined
   const events = await loadStoredEvents(userId, startDate)
   return toParsedEvents(events)
+}
+
+export async function getWorkflowMetrics(
+  userId: string,
+  days: number,
+  events?: ParsedAnalyticsEvent[]
+): Promise<WorkflowMetrics> {
+  const parsedEvents = events ?? (await getParsedAnalyticsEvents(userId, days))
+  const updatedSince = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+  const [
+    configuredProviders,
+    personas,
+    comparisonReadyConversations,
+    weeklySavedBriefComparisons,
+  ] = await Promise.all([
+    getUserProviderConfigCount(userId),
+    PersonaService.getPersonaCountByUserId(userId),
+    ConversationService.getComparisonReadyConversationCountByUserId(userId),
+    ConversationService.getWeeklySavedBriefComparisonCountByUserId(
+      userId,
+      updatedSince
+    ),
+  ])
+
+  return {
+    configuredProviders,
+    personas,
+    comparisonReadyConversations,
+    weeklySavedBriefComparisons,
+    conversationsCreated: countEvents(parsedEvents, 'conversation_created'),
+    comparisonViews: countEvents(parsedEvents, 'comparison_viewed'),
+    analyticsViews: countEvents(parsedEvents, 'analytics_viewed'),
+  }
 }

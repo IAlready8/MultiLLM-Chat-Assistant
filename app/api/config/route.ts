@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { storeUserApiKey, getUserProviderConfigs, deleteUserProviderConfig } from '@/lib/api-key-service'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
+import { recordAnalyticsEvent } from '@/services/analytics-service'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
@@ -75,6 +76,18 @@ export async function POST(request: NextRequest) {
 
   try {
     await storeUserApiKey(user.id, provider, apiKey, settings)
+    try {
+      await recordAnalyticsEvent({
+        event: 'provider_configured',
+        userId: user.id,
+        payload: { provider },
+      })
+    } catch (analyticsError) {
+      console.warn(
+        'Failed to record analytics event for provider configuration.',
+        analyticsError
+      )
+    }
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Failed to store API key.')

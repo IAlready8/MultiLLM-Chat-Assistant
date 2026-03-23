@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { ConversationService } from '@/services/conversation-service.db'
+import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 import { z } from 'zod'
 
@@ -75,6 +76,21 @@ export const POST = withApiMetrics(async (req: Request) => {
       title,
       prismaMessages
     )
+    try {
+      await recordAnalyticsEvent({
+        event: 'conversation_created',
+        userId: user.id,
+        payload: {
+          messageCount: prismaMessages.length,
+          hasProviderTaggedMessage: prismaMessages.some(message => Boolean(message.provider)),
+        },
+      })
+    } catch (analyticsError) {
+      console.warn(
+        'Failed to record analytics event for conversation creation:',
+        analyticsError
+      )
+    }
     return NextResponse.json(newConversation, { status: 201 })
   } catch (error) {
     console.error('Error creating conversation:', error)

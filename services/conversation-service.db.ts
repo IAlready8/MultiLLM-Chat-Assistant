@@ -49,6 +49,17 @@ const countComparisonReadyFallbackConversations = (userId: string) =>
     conversation.messages.some(message => Boolean(message.provider))
   ).length
 
+const countWeeklySavedBriefComparisonFallbackConversations = (
+  userId: string,
+  updatedSince: Date
+) =>
+  Array.from(getFallbackUserStore(userId).values()).filter(
+    conversation =>
+      conversation.messages.some(
+        message => Boolean(message.provider) && message.createdAt >= updatedSince
+      )
+  ).length
+
 /**
  * This service provides all database operations for Conversations,
  * replacing the old client-side IndexedDB logic.
@@ -91,6 +102,58 @@ export const ConversationService = {
       if (!db.markUnavailableIfNeeded(error)) {
         db.logWarningOnce(
           'getComparisonReadyConversationCountByUserId',
+          'conversation',
+          error
+        )
+      }
+      return fallbackCount
+    }
+  },
+
+  async getWeeklySavedBriefComparisonCountByUserId(
+    userId: string,
+    updatedSince: Date
+  ): Promise<number> {
+    const fallbackCount = countWeeklySavedBriefComparisonFallbackConversations(
+      userId,
+      updatedSince
+    )
+
+    if (db.isKnownUnavailable()) {
+      return fallbackCount
+    }
+
+    try {
+      const dbConversationIds = await prisma.message.findMany({
+        where: {
+          createdAt: {
+            gte: updatedSince,
+          },
+          provider: {
+            not: null,
+          },
+          conversation: {
+            userId,
+          },
+        },
+        distinct: ['conversationId'],
+        select: {
+          conversationId: true,
+        },
+      })
+
+      if (!db.isFallbackAllowed()) {
+        return dbConversationIds.length
+      }
+
+      return Math.max(dbConversationIds.length, fallbackCount)
+    } catch (error) {
+      if (!db.isFallbackAllowed()) {
+        throw error
+      }
+      if (!db.markUnavailableIfNeeded(error)) {
+        db.logWarningOnce(
+          'getWeeklySavedBriefComparisonCountByUserId',
           'conversation',
           error
         )

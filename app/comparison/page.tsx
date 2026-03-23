@@ -207,7 +207,7 @@ export default function ComparisonPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/analytics?timeframe=30d', {
+      const response = await fetch('/api/analytics?timeframe=30d&source=comparison', {
         method: 'GET',
         cache: 'no-store',
       })
