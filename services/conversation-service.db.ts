@@ -58,7 +58,10 @@ const countWeeklySavedBriefComparisonFallbackConversations = (
   Array.from(getFallbackUserStore(userId).values()).filter(
     conversation =>
       conversation.messages.some(
-        message => Boolean(message.provider) && message.createdAt >= updatedSince
+        message =>
+          message.role === 'assistant' &&
+          Boolean(message.provider) &&
+          message.createdAt >= updatedSince
       )
   ).length
 

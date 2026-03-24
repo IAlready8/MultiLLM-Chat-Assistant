@@ -504,4 +504,40 @@ describe('ConversationService DB fallback', () => {
       env.NODE_ENV = previousNodeEnv
     }
   })
+
+  it('counts weekly saved brief comparisons from assistant fallback messages only', async () => {
+    const { ConversationService } = await loadService()
+    const now = new Date()
+    const since = new Date(now.getTime() - 60 * 60 * 1000)
+
+    const created = await ConversationService.createConversation(
+      'user-1',
+      'Weekly metric check',
+      [
+        {
+          role: 'user',
+          content: 'user prompt with provider metadata',
+          provider: 'openai',
+          model: 'gpt-4.1',
+        },
+      ]
+    )
+
+    await ConversationService.addMessages(created.id, 'user-1', [
+      {
+        role: 'assistant',
+        content: 'assistant answer',
+        provider: 'openai',
+        model: 'gpt-4.1',
+      },
+    ])
+
+    const count =
+      await ConversationService.getWeeklySavedBriefComparisonCountByUserId(
+        'user-1',
+        since
+      )
+
+    expect(count).toBe(1)
+  })
 })
