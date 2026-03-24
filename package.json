@@ -25,6 +25,7 @@
     "test:ci": "vitest run --coverage",
     "smoke": "bash scripts/smoke-test.sh",
     "verify:prod": "bash scripts/verify-production.sh",
+    "reliability:check": "bash scripts/reliability-check.sh",
     "protect:main": "bash scripts/enforce-branch-protection.sh",
     "upgrade:next:prep": "bash scripts/next-upgrade-readiness.sh"
   },

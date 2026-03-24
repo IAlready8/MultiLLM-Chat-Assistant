@@ -50,6 +50,22 @@ export async function GET(request: NextRequest) {
       ? 'healthy'
       : 'degraded'
 
+  const degradedChecks = [
+    databaseStatus !== 'connected' ? 'database' : null,
+    cacheDiagnostics.status === 'degraded' ? 'cache' : null,
+    rateLimitDiagnostics.status === 'degraded' ? 'rateLimit' : null,
+    sidecarDiagnostics.status === 'degraded' ? 'sidecar' : null,
+  ].filter((value): value is 'database' | 'cache' | 'rateLimit' | 'sidecar' =>
+    value !== null
+  )
+
+  const alertLevel =
+    databaseStatus !== 'connected'
+      ? 'critical'
+      : degradedChecks.length > 0
+        ? 'warning'
+        : 'none'
+
   const healthChecks = {
     source: 'health',
     status,
@@ -61,6 +77,12 @@ export async function GET(request: NextRequest) {
     version: release.version,
     release,
     environment: process.env.NODE_ENV || 'development',
+    summary: {
+      coreAvailability: databaseStatus === 'connected' ? 'available' : 'degraded',
+      degradedChecks,
+      alertLevel,
+      shouldPage: alertLevel === 'critical',
+    },
     checks: {
       database: {
         status: databaseStatus,

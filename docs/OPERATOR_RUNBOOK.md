@@ -117,6 +117,25 @@ Stop on:
 Use section 4 as well when the change affects runtime, deployment, auth,
 health, billing, migrations, or persistence behavior.
 
+## 5A. Reliability Gate (Step 8)
+
+Use when the change affects:
+- health/status semantics
+- degraded dependency handling
+- cache / rate limiting / sidecar diagnostics
+- operator alertability
+
+Execution:
+1. `bash scripts/reliability-check.sh --base-url http://localhost:3000 --start-server`
+
+Source of truth:
+- `docs/RELIABILITY_SLOS.md`
+
+Pass conditions:
+- degraded dependency verification slice passes
+- bounded health load probe passes
+- no unexpected page condition on the healthy baseline
+
 ## 6. Preview Deploy Runbook (Verified Live)
 
 Prerequisites:
