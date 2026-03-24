@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma'
 import type { Analytics as AnalyticsRecord } from '@/types/prisma'
 import { getUserProviderConfigCount } from '@/lib/api-key-service'
+import { logger } from '@/lib/logger'
 import {
   assertInMemoryFallbackAllowed,
   createDbAvailabilityTracker,
@@ -164,6 +165,10 @@ const aggregateUsage = (
   >()
 
   for (const event of events) {
+    if (event.event !== 'llm_request' && event.event !== 'llm_error') {
+      continue
+    }
+
     const provider = String(event.payload.provider || 'unknown')
     const date = bucketByDate ? event.createdAt.toISOString().split('T')[0] : undefined
     const key = bucketByDate ? `${date}:${provider}` : provider
@@ -330,11 +335,11 @@ export async function getWorkflowMetrics(
   const updatedSince = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
   const [
-    configuredProviders,
-    personas,
-    comparisonReadyConversations,
-    weeklySavedBriefComparisons,
-  ] = await Promise.all([
+    configuredProvidersResult,
+    personasResult,
+    comparisonReadyResult,
+    weeklySavedResult,
+  ] = await Promise.allSettled([
     getUserProviderConfigCount(userId),
     PersonaService.getPersonaCountByUserId(userId),
     ConversationService.getComparisonReadyConversationCountByUserId(userId),
@@ -344,11 +349,35 @@ export async function getWorkflowMetrics(
     ),
   ])
 
+  const readSettledCount = (
+    label: string,
+    result: PromiseSettledResult<number>
+  ): number => {
+    if (result.status === 'fulfilled') {
+      return result.value
+    }
+
+    logger.warn('analytics_workflow_metric_degraded', {
+      metric: label,
+      error: result.reason,
+    })
+    return 0
+  }
+
   return {
-    configuredProviders,
-    personas,
-    comparisonReadyConversations,
-    weeklySavedBriefComparisons,
+    configuredProviders: readSettledCount(
+      'configuredProviders',
+      configuredProvidersResult
+    ),
+    personas: readSettledCount('personas', personasResult),
+    comparisonReadyConversations: readSettledCount(
+      'comparisonReadyConversations',
+      comparisonReadyResult
+    ),
+    weeklySavedBriefComparisons: readSettledCount(
+      'weeklySavedBriefComparisons',
+      weeklySavedResult
+    ),
     conversationsCreated: countEvents(parsedEvents, 'conversation_created'),
     comparisonViews: countEvents(parsedEvents, 'comparison_viewed'),
     analyticsViews: countEvents(parsedEvents, 'analytics_viewed'),
