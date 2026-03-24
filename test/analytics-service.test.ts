@@ -31,6 +31,39 @@ const loadServiceWithPrismaMock = async (prismaMock: PrismaMock) => {
   return { ...mod, prismaMock }
 }
 
+const loadServiceWithWorkflowDependencyMocks = async ({
+  providerCount,
+  personas,
+  comparisonReadyConversations,
+  weeklySavedBriefComparisons,
+}: {
+  providerCount: () => Promise<number>
+  personas: () => Promise<number>
+  comparisonReadyConversations: () => Promise<number>
+  weeklySavedBriefComparisons: () => Promise<number>
+}) => {
+  const prismaMock = makePrismaMock()
+  vi.doMock('@/lib/prisma', () => ({ default: prismaMock, prisma: prismaMock }))
+  vi.doMock('@/lib/api-key-service', () => ({
+    getUserProviderConfigCount: () => providerCount(),
+  }))
+  vi.doMock('@/services/persona-service.db', () => ({
+    PersonaService: {
+      getPersonaCountByUserId: () => personas(),
+    },
+  }))
+  vi.doMock('@/services/conversation-service.db', () => ({
+    ConversationService: {
+      getComparisonReadyConversationCountByUserId: () =>
+        comparisonReadyConversations(),
+      getWeeklySavedBriefComparisonCountByUserId: () =>
+        weeklySavedBriefComparisons(),
+    },
+  }))
+  const mod = await import('@/services/analytics-service')
+  return { ...mod, prismaMock }
+}
+
 describe('analytics-service DB fallback', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -138,6 +171,35 @@ describe('analytics-service DB fallback', () => {
       ).rejects.toThrow(DB_UNAVAILABLE_ERROR.message)
     } finally {
       env.NODE_ENV = previousNodeEnv
+    }
+  })
+
+  it('falls back to zero for workflow metrics when a side-table lookup fails', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const { getWorkflowMetrics } = await loadServiceWithWorkflowDependencyMocks({
+        providerCount: async () => {
+          throw new Error('provider config unavailable')
+        },
+        personas: async () => 2,
+        comparisonReadyConversations: async () => 3,
+        weeklySavedBriefComparisons: async () => 1,
+      })
+
+      const metrics = await getWorkflowMetrics('user-1', 7, [])
+
+      expect(metrics).toMatchObject({
+        configuredProviders: 0,
+        personas: 2,
+        comparisonReadyConversations: 3,
+        weeklySavedBriefComparisons: 1,
+        conversationsCreated: 0,
+        comparisonViews: 0,
+        analyticsViews: 0,
+      })
+      expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
     }
   })
 })

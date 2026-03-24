@@ -52,6 +52,13 @@ type ActivationStep = {
   complete: boolean
 }
 
+const hasMeaningfulWorkflowProgress = (metrics: WorkflowMetrics) =>
+  metrics.configuredProviders > 0 ||
+  metrics.personas > 0 ||
+  metrics.comparisonReadyConversations > 0 ||
+  metrics.weeklySavedBriefComparisons > 0 ||
+  metrics.conversationsCreated > 0
+
 type AnalyticsApiResponse = {
   timeframe: '24h' | '7d' | '30d'
   providerData: ProviderUsage[]
@@ -141,7 +148,7 @@ export default function AnalyticsPage() {
       const source = data.meta?.source
       const hasWorkflowProgress =
         (data.activationFunnel || []).some(step => step.current > 0) ||
-        Object.values(
+        hasMeaningfulWorkflowProgress(
           data.workflowMetrics || {
             configuredProviders: 0,
             personas: 0,
@@ -151,7 +158,7 @@ export default function AnalyticsPage() {
             comparisonViews: 0,
             analyticsViews: 0,
           }
-        ).some(value => value > 0)
+        )
       const inferredEmpty =
         (data.providerData?.length ?? 0) === 0 &&
         (data.modelComparisonData?.length ?? 0) === 0 &&
@@ -208,7 +215,7 @@ export default function AnalyticsPage() {
     totalStats.totalRequests > 0 ||
     hasUsageTrendData ||
     activationFunnel.some(step => step.current > 0) ||
-    Object.values(workflowMetrics).some(value => value > 0)
+    hasMeaningfulWorkflowProgress(workflowMetrics)
 
   if (loadError && !hasData) {
     return (

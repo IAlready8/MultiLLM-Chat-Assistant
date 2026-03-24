@@ -46,7 +46,9 @@ const toConversation = (conversation: ConversationWithMessages): Conversation =>
 
 const countComparisonReadyFallbackConversations = (userId: string) =>
   Array.from(getFallbackUserStore(userId).values()).filter(conversation =>
-    conversation.messages.some(message => Boolean(message.provider))
+    conversation.messages.some(
+      message => message.role === 'assistant' && Boolean(message.provider)
+    )
   ).length
 
 const countWeeklySavedBriefComparisonFallbackConversations = (
@@ -77,6 +79,7 @@ export const ConversationService = {
     try {
       const dbConversationIds = await prisma.message.findMany({
         where: {
+          role: 'assistant',
           provider: {
             not: null,
           },
@@ -129,6 +132,7 @@ export const ConversationService = {
           createdAt: {
             gte: updatedSince,
           },
+          role: 'assistant',
           provider: {
             not: null,
           },
