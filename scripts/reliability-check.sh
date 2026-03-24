@@ -24,6 +24,25 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "$REQUESTS" in
+  ''|*[!0-9]*)
+    echo "REQUESTS must be a positive integer"
+    exit 1
+    ;;
+esac
+
+case "$CONCURRENCY" in
+  ''|*[!0-9]*)
+    echo "CONCURRENCY must be a positive integer"
+    exit 1
+    ;;
+esac
+
+if [ "$REQUESTS" -le 0 ] || [ "$CONCURRENCY" -le 0 ]; then
+  echo "REQUESTS and CONCURRENCY must both be greater than 0"
+  exit 1
+fi
+
 if [[ "$BASE_URL" =~ ^https?://[^/:]+:([0-9]+) ]]; then
   SERVER_PORT="${BASH_REMATCH[1]}"
 elif [[ "$BASE_URL" =~ ^https:// ]]; then
@@ -134,17 +153,22 @@ const runProbe = async (path) => {
           continue
         }
 
-        if (
-          !payload.summary ||
-          !['none', 'warning', 'critical'].includes(payload.summary.alertLevel)
-        ) {
+        if (!payload.summary) {
           failures.push(`missing alert summary at ${path}`)
           continue
         }
 
-        if (path === '/api/health' && payload.summary.alertLevel !== 'none') {
+        if (
+          !['none', 'warning', 'critical'].includes(payload.summary.alertLevel) ||
+          typeof payload.summary.shouldPage !== 'boolean'
+        ) {
+          failures.push(`invalid alert summary contract at ${path}`)
+          continue
+        }
+
+        if (path === '/api/health' && payload.summary.shouldPage !== false) {
           failures.push(
-            `healthy baseline unexpectedly alertable: ${payload.summary.alertLevel}`
+            `healthy baseline unexpectedly pageable: ${payload.summary.alertLevel}`
           )
         }
       } catch (error) {
