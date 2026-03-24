@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma'
 import type { Analytics as AnalyticsRecord } from '@/types/prisma'
 import { getUserProviderConfigCount } from '@/lib/api-key-service'
+import { logger } from '@/lib/logger'
 import {
   assertInMemoryFallbackAllowed,
   createDbAvailabilityTracker,
@@ -356,7 +357,10 @@ export async function getWorkflowMetrics(
       return result.value
     }
 
-    console.warn(`Failed to load ${label} workflow metric:`, result.reason)
+    logger.warn('analytics_workflow_metric_degraded', {
+      metric: label,
+      error: result.reason,
+    })
     return 0
   }
 
