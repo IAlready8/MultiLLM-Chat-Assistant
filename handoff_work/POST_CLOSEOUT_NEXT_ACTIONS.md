@@ -195,10 +195,11 @@ This is the only authoritative forward plan file in `handoff_work/`.
   - explicit auth/session review summary
   - explicit threat model
   - explicit secrets rotation procedure
-  - explicit backup/restore procedure and evidence boundary
-- Step 9 still required before pass:
-  - execute and record database backup/restore proof with PostgreSQL client
-    tooling in a controlled environment
+  - explicit backup/restore procedure and recorded local proof
+- Step 9 pass state on this branch:
+  - complete
+- Next step remains:
+  - Step 10 only, and not before this Step 9 branch is reviewed and merged
 
 ## What Is Out Of Scope Until The Ordered Plan Requires It
 - random feature work

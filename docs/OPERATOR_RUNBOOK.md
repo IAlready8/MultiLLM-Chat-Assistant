@@ -281,9 +281,23 @@ Minimum review set:
 3. targeted lint on touched auth/security files
 
 Extra rule:
-- do not mark database backup/restore proof complete until `pg_dump` and
-  `pg_restore` evidence is captured as described in
+- database backup/restore proof is now recorded in
   `docs/BACKUP_RESTORE_PROOF.md`
+
+## 9B. Database Backup/Restore Proof
+
+Use when Step 9 backup/restore evidence must be reproduced locally.
+
+Reference:
+- `docs/BACKUP_RESTORE_PROOF.md`
+
+Verified local pattern:
+1. dump the source verification database with `pg_dump`
+2. create a scratch database with `createdb`
+3. restore the artifact with `pg_restore`
+4. run `DATABASE_URL=<scratch-db-url> npx prisma migrate status`
+5. run `bash scripts/verify-production.sh --apply-migrations`
+6. run `bash scripts/smoke-test.sh --base-url http://127.0.0.1:3000 --start-server`
 
 ## 10. Recovery Guidance
 

@@ -8,7 +8,7 @@ This file exists only to anchor Step 1 of the locked plan.
 - Current active roadmap branch: `codex/security-posture-step9-20260325`
 
 ## Current Step Lock
-- Step 2 through Step 8 decisions are locked in:
+- Step 2 through Step 9 decisions are locked in:
   - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
   - `docs/RELIABILITY_SLOS.md`
 - Use that file for the exact ICP, exact use case, positioning rationale, primary KPI definition, scope-cut rules, activation sequence, and workflow telemetry contract.
