@@ -7,6 +7,7 @@ const {
   mockGetOrCreateStripeCustomer,
   mockCreateCheckoutSession,
   mockCreatePortalSession,
+  mockRecordAnalyticsEvent,
   mockLoggerWarn,
   mockLoggerError,
   MockStripeConfigurationError,
@@ -24,6 +25,7 @@ const {
     mockGetOrCreateStripeCustomer: vi.fn(),
     mockCreateCheckoutSession: vi.fn(),
     mockCreatePortalSession: vi.fn(),
+    mockRecordAnalyticsEvent: vi.fn(),
     mockLoggerWarn: vi.fn(),
     mockLoggerError: vi.fn(),
     MockStripeConfigurationError,
@@ -74,6 +76,10 @@ vi.mock('@/lib/logger', () => ({
   },
 }))
 
+vi.mock('@/services/analytics-service', () => ({
+  recordAnalyticsEvent: (payload: unknown) => mockRecordAnalyticsEvent(payload),
+}))
+
 import { POST as createSubscriptionSession } from '@/app/api/subscriptions/route'
 import { POST as createManageSession } from '@/app/api/subscriptions/manage/route'
 
@@ -92,6 +98,7 @@ describe('subscription routes', () => {
     mockGetOrCreateStripeCustomer.mockResolvedValue('cus_123')
     mockCreateCheckoutSession.mockResolvedValue({ url: 'https://stripe.test/checkout' })
     mockCreatePortalSession.mockResolvedValue({ url: 'https://stripe.test/portal' })
+    mockRecordAnalyticsEvent.mockResolvedValue(undefined)
     mockLoggerWarn.mockReset()
     mockLoggerError.mockReset()
   })
@@ -151,6 +158,26 @@ describe('subscription routes', () => {
     expect(payload.cancel_url).toBe('http://localhost:3000/billing?canceled=true')
   })
 
+  it('records checkout analytics with request source', async () => {
+    const response = await createSubscriptionSession(
+      new Request('http://localhost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'billing_page' }),
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
+      event: 'billing_checkout_session_created',
+      userId: 'user-1',
+      payload: {
+        source: 'billing_page',
+        tier: 'PRO',
+      },
+    })
+  })
+
   it('creates a manage session and enforces API stripe config', async () => {
     const response = await createManageSession(new Request('http://localhost'))
 
@@ -205,6 +232,26 @@ describe('subscription routes', () => {
         error: expect.any(Error),
       })
     )
+  })
+
+  it('records portal analytics with request source', async () => {
+    const response = await createManageSession(
+      new Request('http://localhost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'billing_page' }),
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
+      event: 'billing_portal_session_created',
+      userId: 'user-1',
+      payload: {
+        source: 'billing_page',
+        tier: 'PRO',
+      },
+    })
   })
 })
 

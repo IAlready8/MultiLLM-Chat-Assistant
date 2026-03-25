@@ -8,6 +8,8 @@ import {
   getStripeConfigurationUserMessage,
 } from '@/lib/stripe'
 import { logger } from '@/lib/logger'
+import { recordAnalyticsEvent } from '@/services/analytics-service'
+import { readBillingSource } from '@/lib/billing-source'
 
 // Get the absolute URL for Stripe callbacks
 const getBaseUrl = () => {
@@ -30,6 +32,7 @@ export async function POST(req: Request) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const source = await readBillingSource(req)
 
   if (!user.email) {
     return NextResponse.json({ error: 'User email not found' }, { status: 400 })
@@ -48,7 +51,21 @@ export async function POST(req: Request) {
       return_url: `${baseUrl.href}billing`,
     })
 
-    // Return the session URL for client-side redirect
+    try {
+      await recordAnalyticsEvent({
+        event: 'billing_portal_session_created',
+        userId: user.id,
+        payload: { source, tier: 'PRO' },
+      })
+    } catch (analyticsError) {
+      logger.warn('billing_portal_analytics_failed', {
+        route: '/api/subscriptions/manage',
+        userId: user.id,
+        source,
+        error: analyticsError,
+      })
+    }
+
     return NextResponse.json({ url: portalSession.url })
   } catch (error) {
     if (error instanceof StripeConfigurationError) {
