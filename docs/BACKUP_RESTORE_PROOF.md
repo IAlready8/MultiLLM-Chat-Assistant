@@ -44,7 +44,7 @@ Run this only against a controlled non-production verification database first.
 3. restore into the scratch target
    - `pg_restore --clean --if-exists --no-owner --no-privileges --dbname <scratch-db-name> <backup-file>`
 4. run:
-   - `npx prisma migrate status`
+   - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/<scratch-db-name> npx prisma migrate status`
    - targeted app verification against the restored DB
 5. confirm critical tables and app flows are intact
 6. remove the scratch DB only after validation
