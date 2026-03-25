@@ -38,8 +38,15 @@ case "$CONCURRENCY" in
     ;;
 esac
 
-if [ "$REQUESTS" -le 0 ] || [ "$CONCURRENCY" -le 0 ]; then
-  echo "REQUESTS and CONCURRENCY must both be greater than 0"
+case "$P95_THRESHOLD_MS" in
+  ''|*[!0-9]*)
+    echo "P95_THRESHOLD_MS must be a positive integer"
+    exit 1
+    ;;
+esac
+
+if [ "$REQUESTS" -le 0 ] || [ "$CONCURRENCY" -le 0 ] || [ "$P95_THRESHOLD_MS" -le 0 ]; then
+  echo "REQUESTS, CONCURRENCY, and P95_THRESHOLD_MS must all be greater than 0"
   exit 1
 fi
 
