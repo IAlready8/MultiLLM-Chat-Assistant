@@ -101,10 +101,9 @@ Application deployment rollback and forward restore are already proven live.
 
 Database backup and restore status:
 - procedure is now documented in `docs/BACKUP_RESTORE_PROOF.md`
-- local proof is not recorded yet from this branch because PostgreSQL client
-  tools (`psql`, `pg_dump`, `pg_restore`) are not installed in this workspace
-
-That is an evidence gap, not a guessed pass.
+- local proof is recorded from this branch using PostgreSQL client tooling
+- proof included dump, restore into scratch DB, Prisma migration status, and
+  local app verification against the restored target
 
 ## Current Step 9 Status
 
@@ -115,6 +114,6 @@ Completed in this slice:
 - explicit backup/restore procedure and current proof status
 - incident-response linkage
 
-Still required before Step 9 can be called complete:
-- execute and record the database backup/restore proof using PostgreSQL client
-  tooling in a controlled environment
+Step 9 proof state on this branch:
+- security posture baseline: complete
+- database backup/restore proof: complete

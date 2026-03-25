@@ -13,19 +13,53 @@ Already recorded in:
 - `docs/OPERATOR_RUNBOOK.md`
 - `handoff_work/DEPLOYMENT_EVIDENCE.md`
 
-Not yet separately recorded from this branch:
+Separately proven locally on `2026-03-25`:
 - database backup and restore proof using PostgreSQL client tooling
+- source database:
+  - `multillm_verify_20260302`
+- scratch restore target:
+  - `multillm_restore_verify_20260325`
+- backup artifact:
+  - `/tmp/multillm_restore_verify_20260325.dump`
+- operator identity:
+  - `step9-backup-verify`
 
-## Why This Is Not Marked Complete Yet
-
-The current workspace does not have PostgreSQL client tools installed:
+PostgreSQL client tools used in this proof:
 - `psql`
 - `pg_dump`
 - `pg_restore`
 - `createdb`
+- `dropdb`
 
-Because of that, this branch can document the procedure precisely, but it
-cannot honestly claim the database backup/restore proof was executed here.
+## Proof Result
+
+Source and restored targets matched on:
+- table set
+- key row counts for:
+  - `User`
+  - `Conversation`
+  - `Goal`
+  - `Persona`
+
+Count comparison queries used:
+- source:
+  - `psql "$SOURCE_DB_URL" -Atqc "select 'users='||(select count(*) from \"User\") || ',conversations='||(select count(*) from \"Conversation\") || ',goals='||(select count(*) from \"Goal\") || ',personas='||(select count(*) from \"Persona\");"`
+- restored target:
+  - `psql "$SCRATCH_DB_URL" -Atqc "select 'users='||(select count(*) from \"User\") || ',conversations='||(select count(*) from \"Conversation\") || ',goals='||(select count(*) from \"Goal\") || ',personas='||(select count(*) from \"Persona\");"`
+
+Observed results:
+- source:
+  - `users=0,conversations=0,goals=0,personas=0`
+- restored target:
+  - `users=0,conversations=0,goals=0,personas=0`
+
+Restored-target verification passed.
+
+All verification commands below were run with `DATABASE_URL` bound to the
+scratch restore target:
+- `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_restore_verify_20260325 npx prisma migrate status`
+- `NEXTAUTH_URL=http://127.0.0.1:3000 NEXTAUTH_SECRET=step9-restore-secret-32-characters API_KEY_ENCRYPTION_SEED=step9-restore-seed-32-characters DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_restore_verify_20260325 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false bash scripts/verify-production.sh --apply-migrations`
+- `NEXTAUTH_URL=http://127.0.0.1:3000 NEXTAUTH_SECRET=step9-restore-secret-32-characters API_KEY_ENCRYPTION_SEED=step9-restore-seed-32-characters DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_restore_verify_20260325 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false bash scripts/smoke-test.sh --base-url http://127.0.0.1:3000 --start-server`
 
 ## Required Procedure
 
@@ -51,12 +85,13 @@ Run this only against a controlled non-production verification database first.
 
 ## Minimum Acceptance Evidence
 
-To close this item, capture:
+Captured in this proof:
 - backup artifact creation succeeded
 - restore into scratch DB succeeded
 - `npx prisma migrate status` clean on restored target
 - app verification on restored target succeeded
-- timestamp and operator recorded
+- timestamp recorded: `2026-03-25`
+- operator identity recorded: `step9-backup-verify`
 
 ## Relationship To Existing Restore Proof
 
@@ -65,4 +100,4 @@ database backup/restore proof.
 
 Both truths must be kept separate:
 - application rollback/restore: proven
-- database backup/restore: procedure defined here, execution evidence pending
+- database backup/restore: procedure defined here and execution now proven

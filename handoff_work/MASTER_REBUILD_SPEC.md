@@ -319,7 +319,6 @@ Key files:
 - transitive dependency advisories remain open and require a separate coordinated decision, mainly around the Prisma toolchain
 - external preview/deploy integrations still create noisy PR statuses
 - Python sidecar exists but is not part of the locked core production contract
-- database backup/restore proof procedure is now documented, but local execution evidence is still pending because PostgreSQL client tooling is absent in this workspace
 
 ## 18. Exact Rebuild Procedure
 If rebuilding this project to the same stage from scratch, do this in order:
