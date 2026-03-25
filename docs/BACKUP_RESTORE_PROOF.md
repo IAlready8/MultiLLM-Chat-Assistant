@@ -22,6 +22,7 @@ The current workspace does not have PostgreSQL client tools installed:
 - `psql`
 - `pg_dump`
 - `pg_restore`
+- `createdb`
 
 Because of that, this branch can document the procedure precisely, but it
 cannot honestly claim the database backup/restore proof was executed here.
@@ -37,7 +38,7 @@ Run this only against a controlled non-production verification database first.
 
 ### Procedure
 1. create a backup artifact
-   - `pg_dump --format=custom --no-owner --no-privileges --dbname \"$DATABASE_URL\" --file <backup-file>`
+   - `pg_dump --format=custom --no-owner --no-privileges --dbname "$DATABASE_URL" --file <backup-file>`
 2. create a scratch restore target
    - `createdb <scratch-db-name>`
 3. restore into the scratch target
