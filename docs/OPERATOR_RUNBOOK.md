@@ -296,8 +296,8 @@ Verified local pattern:
 2. create a scratch database with `createdb`
 3. restore the artifact with `pg_restore`
 4. run `DATABASE_URL=<scratch-db-url> npx prisma migrate status`
-5. run `bash scripts/verify-production.sh --apply-migrations`
-6. run `bash scripts/smoke-test.sh --base-url http://127.0.0.1:3000 --start-server`
+5. run `DATABASE_URL=<scratch-db-url> bash scripts/verify-production.sh --apply-migrations`
+6. run `DATABASE_URL=<scratch-db-url> bash scripts/smoke-test.sh --base-url http://127.0.0.1:3000 --start-server`
 
 ## 10. Recovery Guidance
 
