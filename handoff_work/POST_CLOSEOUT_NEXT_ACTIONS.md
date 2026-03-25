@@ -184,6 +184,22 @@ This is the only authoritative forward plan file in `handoff_work/`.
   - p95 latency stays within the defined threshold
   - healthy baseline does not emit an unexpected page condition
 
+## Step 9: Security Posture To Buyer-Grade
+- Security posture sources of truth:
+  - `docs/SECURITY_POSTURE.md`
+  - `docs/THREAT_MODEL.md`
+  - `docs/SECRET_ROTATION.md`
+  - `docs/BACKUP_RESTORE_PROOF.md`
+  - `docs/OPERATOR_RUNBOOK.md`
+- Step 9 completed in this slice:
+  - explicit auth/session review summary
+  - explicit threat model
+  - explicit secrets rotation procedure
+  - explicit backup/restore procedure and evidence boundary
+- Step 9 still required before pass:
+  - execute and record database backup/restore proof with PostgreSQL client
+    tooling in a controlled environment
+
 ## What Is Out Of Scope Until The Ordered Plan Requires It
 - random feature work
 - broad dependency churn without a direct step in the sequence above
