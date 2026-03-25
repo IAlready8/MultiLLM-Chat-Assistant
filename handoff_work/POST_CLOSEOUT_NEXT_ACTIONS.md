@@ -166,6 +166,24 @@ This is the only authoritative forward plan file in `handoff_work/`.
 16. add enterprise-specific features only if demanded by the target buyer
    - no premature enterprise theater
 
+## Step 8: Reliability Under Load And Degraded Dependencies
+- Reliability SLO source of truth:
+  - `docs/RELIABILITY_SLOS.md`
+- Monitoring source of truth:
+  - `/api/health`
+- Alertability rule:
+  - consume `summary.coreAvailability`
+  - consume `summary.degradedChecks`
+  - consume `summary.alertLevel`
+  - consume `summary.shouldPage`
+- Step 8 verification rule:
+  - run `bash scripts/reliability-check.sh --base-url http://localhost:3000 --start-server`
+- Step 8 pass criteria:
+  - degraded dependency verification slice passes
+  - bounded `/api/health` and `/api/health?metrics=1` probe passes
+  - p95 latency stays within the defined threshold
+  - healthy baseline does not emit an unexpected page condition
+
 ## What Is Out Of Scope Until The Ordered Plan Requires It
 - random feature work
 - broad dependency churn without a direct step in the sequence above

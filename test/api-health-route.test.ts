@@ -147,6 +147,12 @@ describe('/api/health route', () => {
       commitShort: null,
       branch: null,
     })
+    expect(payload.summary).toEqual({
+      coreAvailability: 'available',
+      degradedChecks: [],
+      alertLevel: 'none',
+      shouldPage: false,
+    })
     expect(payload.metrics).toBeUndefined()
   })
 
@@ -163,6 +169,12 @@ describe('/api/health route', () => {
     expect(payload.status).toBe('degraded')
     expect(payload.checks.database.status).toBe('degraded')
     expect(payload.checks.database.message).toContain('in-memory fallback')
+    expect(payload.summary).toEqual({
+      coreAvailability: 'degraded',
+      degradedChecks: ['database'],
+      alertLevel: 'critical',
+      shouldPage: true,
+    })
   })
 
   it('returns degraded status when configured sidecar is unavailable', async () => {
@@ -178,6 +190,12 @@ describe('/api/health route', () => {
     expect(payload.checks.sidecar.status).toBe('degraded')
     expect(payload.checks.sidecar.url).toBeUndefined()
     expect(payload.checks.sidecar.message).toContain('ECONNREFUSED')
+    expect(payload.summary).toEqual({
+      coreAvailability: 'available',
+      degradedChecks: ['sidecar'],
+      alertLevel: 'warning',
+      shouldPage: false,
+    })
   })
 
   it('returns degraded cache status when Redis is configured but unavailable', async () => {
@@ -200,6 +218,12 @@ describe('/api/health route', () => {
     expect(payload.checks.cache.message).toBe(
       'Redis configured but unavailable; using in-memory cache'
     )
+    expect(payload.summary).toEqual({
+      coreAvailability: 'available',
+      degradedChecks: ['cache'],
+      alertLevel: 'warning',
+      shouldPage: false,
+    })
   })
 
   it('returns degraded rate-limit status when Redis is configured but unavailable', async () => {
@@ -222,6 +246,12 @@ describe('/api/health route', () => {
     expect(payload.checks.rateLimit.message).toBe(
       'Redis configured but unavailable; using in-memory rate limiting'
     )
+    expect(payload.summary).toEqual({
+      coreAvailability: 'available',
+      degradedChecks: ['rateLimit'],
+      alertLevel: 'warning',
+      shouldPage: false,
+    })
   })
 
   it('includes metrics snapshot when metrics=1 query is provided', async () => {
