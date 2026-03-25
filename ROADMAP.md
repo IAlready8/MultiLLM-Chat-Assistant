@@ -4,8 +4,8 @@ This file exists only to anchor Step 1 of the locked plan.
 
 ## Baseline Freeze
 - Stable release branch: `main`
-- Stable release head at branch start: `a604805e05368dd8b709d6895d3fa446f0138683`
-- Current active roadmap branch: `codex/reliability-slo-step8-20260324`
+- Stable release head at branch start: `b1afac3f979956aa99a238d7bf5a73932f0dd366`
+- Current active roadmap branch: `codex/security-posture-step9-20260325`
 
 ## Current Step Lock
 - Step 2 through Step 8 decisions are locked in:
@@ -18,6 +18,11 @@ This file exists only to anchor Step 1 of the locked plan.
   - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
 - Reliability contract:
   - `docs/RELIABILITY_SLOS.md`
+- Security posture:
+  - `docs/SECURITY_POSTURE.md`
+  - `docs/THREAT_MODEL.md`
+  - `docs/SECRET_ROTATION.md`
+  - `docs/BACKUP_RESTORE_PROOF.md`
 - Rebuild and recovery contract:
   - `handoff_work/MASTER_REBUILD_SPEC.md`
 - Current shipped baseline and acceptance posture:

@@ -7,8 +7,8 @@ Use this file if you need to reconstruct the project to the same stage as the cu
 ## 1. Exact Baseline Identity
 - Repository: `MultiLLM-Chat-Assistant`
 - Canonical branch: `main`
-- Current baseline commit: `57fa76861a7790f399586c27d297a0cb7e36951a`
-- Latest promoted PR: `#45`
+- Current baseline commit: `b1afac3f979956aa99a238d7bf5a73932f0dd366`
+- Latest promoted PR: `#60`
 - Release tag: `handoff-baseline-2026-03-09`
 - Production URL: `https://multi-llm-chat-assistant.vercel.app`
 - Fresh immutable production deployment URL verified on `2026-03-14`:
@@ -252,6 +252,18 @@ Key files:
 - optional env families may degrade cleanly
 - no secrets should appear in docs, logs, or examples
 
+## 13A. Security Posture Authority
+- posture summary:
+  - `docs/SECURITY_POSTURE.md`
+- threat model:
+  - `docs/THREAT_MODEL.md`
+- secrets rotation:
+  - `docs/SECRET_ROTATION.md`
+- backup/restore proof status:
+  - `docs/BACKUP_RESTORE_PROOF.md`
+- operator incident flow:
+  - `docs/OPERATOR_RUNBOOK.md`
+
 ## 14. CI and Quality Gates
 ### Required GitHub gates
 - `Quality Checks`
@@ -307,6 +319,7 @@ Key files:
 - transitive dependency advisories remain open and require a separate coordinated decision, mainly around the Prisma toolchain
 - external preview/deploy integrations still create noisy PR statuses
 - Python sidecar exists but is not part of the locked core production contract
+- database backup/restore proof procedure is now documented, but local execution evidence is still pending because PostgreSQL client tooling is absent in this workspace
 
 ## 18. Exact Rebuild Procedure
 If rebuilding this project to the same stage from scratch, do this in order:

@@ -3,6 +3,12 @@
 This is the operator-facing runbook for startup, verification, deployment,
 rollback, incident handling, and release closeout.
 
+Related authority docs:
+- `docs/SECURITY_POSTURE.md`
+- `docs/THREAT_MODEL.md`
+- `docs/SECRET_ROTATION.md`
+- `docs/BACKUP_RESTORE_PROOF.md`
+
 Truth boundary:
 - Verified locally:
   - local bootstrap and dev startup
@@ -253,6 +259,31 @@ Triage map:
 - Smoke fails on conversations/goals/personas/config:
   - treat as release-blocking for preview/prod promotion
   - check DB availability and recent route/service changes
+
+## 9A. Security Posture Checks (Step 9)
+
+Use when the change affects:
+- auth or session behavior
+- admin access control
+- runtime secrets
+- Stripe webhook verification
+- security-sensitive operator procedures
+
+Primary references:
+- `docs/SECURITY_POSTURE.md`
+- `docs/THREAT_MODEL.md`
+- `docs/SECRET_ROTATION.md`
+- `docs/BACKUP_RESTORE_PROOF.md`
+
+Minimum review set:
+1. `npm run test:run -- test/api-auth.test.ts test/auth-session-reader.test.ts test/middleware-auth-routing.test.ts test/api-admin-status-route.test.ts test/api-subscriptions-routes.test.ts test/api-stripe-webhook-route.test.ts test/runtime-secrets.test.ts test/logging-safety.test.ts`
+2. `npm run type-check`
+3. targeted lint on touched auth/security files
+
+Extra rule:
+- do not mark database backup/restore proof complete until `pg_dump` and
+  `pg_restore` evidence is captured as described in
+  `docs/BACKUP_RESTORE_PROOF.md`
 
 ## 10. Recovery Guidance
 
