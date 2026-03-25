@@ -201,6 +201,28 @@ This is the only authoritative forward plan file in `handoff_work/`.
 - Next step remains:
   - Step 10 only, and not before this Step 9 branch is reviewed and merged
 
+## Step 10: Monetization Behavior
+- Pricing model source of truth for the product:
+  - `FREE`: baseline non-subscription usage for validating the core workflow
+  - `PRO`: paid self-serve Stripe subscription tied to `STRIPE_PRO_PRICE_ID`
+  - `ENTERPRISE`: operator-managed or sales-led tier, not self-serve checkout
+- Upgrade-path rule:
+  - `/billing` must expose the current plan, the available plan model, and the next billing action from one screen
+  - `FREE` users upgrade through `/api/subscriptions`
+  - `PRO` users manage billing through `/api/subscriptions/manage`
+- Usage-tie rule:
+  - monetization behavior should reference the primary workflow metric, not generic token volume
+  - the free-plan guidance threshold is `3` weekly saved brief comparisons
+  - hitting that guidance threshold should visibly recommend upgrade without inventing hidden hard limits
+- Measurement rule:
+  - billing-related workflow events must be recorded in the first-party analytics store
+  - required event coverage:
+    - `billing_viewed`
+    - `billing_checkout_session_created`
+    - `billing_portal_session_created`
+- Step 10 pass state on this branch:
+  - in progress on `codex/monetization-behavior-step10-20260325`
+
 ## What Is Out Of Scope Until The Ordered Plan Requires It
 - random feature work
 - broad dependency churn without a direct step in the sequence above

@@ -8,6 +8,27 @@ import {
   getStripeConfigurationUserMessage,
 } from '@/lib/stripe'
 import { logger } from '@/lib/logger'
+import { recordAnalyticsEvent } from '@/services/analytics-service'
+
+type BillingRequestBody = { source?: unknown }
+
+const readSource = async (req: Request) => {
+  const contentType = req.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    return 'unknown'
+  }
+
+  try {
+    const body = (await req.json()) as BillingRequestBody
+    if (typeof body.source === 'string' && body.source.trim()) {
+      return body.source.trim().slice(0, 64)
+    }
+  } catch {
+    return 'unknown'
+  }
+
+  return 'unknown'
+}
 
 // Get the absolute URL for Stripe callbacks
 const getBaseUrl = () => {
@@ -27,6 +48,7 @@ const getBaseUrl = () => {
  * Creates a Stripe Customer Portal session for a user to manage their subscription.
  */
 export async function POST(req: Request) {
+  const source = await readSource(req)
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
@@ -48,7 +70,21 @@ export async function POST(req: Request) {
       return_url: `${baseUrl.href}billing`,
     })
 
-    // Return the session URL for client-side redirect
+    try {
+      await recordAnalyticsEvent({
+        event: 'billing_portal_session_created',
+        userId: user.id,
+        payload: { source, tier: 'PRO' },
+      })
+    } catch (analyticsError) {
+      logger.warn('billing_portal_analytics_failed', {
+        route: '/api/subscriptions/manage',
+        userId: user.id,
+        source,
+        error: analyticsError,
+      })
+    }
+
     return NextResponse.json({ url: portalSession.url })
   } catch (error) {
     if (error instanceof StripeConfigurationError) {
