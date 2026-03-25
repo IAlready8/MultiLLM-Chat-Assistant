@@ -51,4 +51,4 @@ export const BILLING_PLANS: BillingPlan[] = [
 export const FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE = 3
 
 export const getBillingPlan = (id: BillingPlanId): BillingPlan =>
-  BILLING_PLANS.find(plan => plan.id == id) ?? BILLING_PLANS[0]
+  BILLING_PLANS.find(plan => plan.id === id) ?? BILLING_PLANS[0]

@@ -10,26 +10,7 @@ import {
 } from '@/lib/stripe'
 import { logger } from '@/lib/logger'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
-
-type BillingRequestBody = { source?: unknown }
-
-const readSource = async (req: Request) => {
-  const contentType = req.headers.get('content-type') || ''
-  if (!contentType.includes('application/json')) {
-    return 'unknown'
-  }
-
-  try {
-    const body = (await req.json()) as BillingRequestBody
-    if (typeof body.source === 'string' && body.source.trim()) {
-      return body.source.trim().slice(0, 64)
-    }
-  } catch {
-    return 'unknown'
-  }
-
-  return 'unknown'
-}
+import { readBillingSource } from '@/lib/billing-source'
 
 // Get the absolute URL for Stripe callbacks
 const getBaseUrl = () => {
@@ -49,10 +30,10 @@ const getBaseUrl = () => {
  * Creates a new Stripe Checkout session for a user to subscribe.
  */
 export async function POST(req: Request) {
-  const source = await readSource(req)
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const source = await readBillingSource(req)
 
   if (!user.email) {
     return NextResponse.json({ error: 'User email not found' }, { status: 400 })

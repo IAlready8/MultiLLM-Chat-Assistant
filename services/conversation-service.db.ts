@@ -169,6 +169,14 @@ export const ConversationService = {
     }
   },
 
+  async getWeeklySavedBriefComparisonCountForRollingDays(
+    userId: string,
+    days: number
+  ): Promise<number> {
+    const updatedSince = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    return this.getWeeklySavedBriefComparisonCountByUserId(userId, updatedSince)
+  },
+
   /**
    * Get all conversations (metadata only) for a user.
    */
