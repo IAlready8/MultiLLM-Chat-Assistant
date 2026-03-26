@@ -12,6 +12,7 @@ This file exists only to anchor Step 1 of the locked plan.
   - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
   - `docs/RELIABILITY_SLOS.md`
 - Use that file for the exact ICP, exact use case, positioning rationale, primary KPI definition, scope-cut rules, activation sequence, and workflow telemetry contract.
+- `AI Roundtable` is part of the promoted core workflow and must remain visible in primary navigation and home-page workflow surfaces.
 
 ## Authoritative Surfaces
 - Forward plan:

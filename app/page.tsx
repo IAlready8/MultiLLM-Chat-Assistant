@@ -31,6 +31,22 @@ const coreWorkflowCards = [
     ),
   },
   {
+    title: 'Run AI Roundtable',
+    description:
+      'Stage a multi-agent discussion around one goal and capture how different providers debate and refine the answer.',
+    href: '/ai-roundtable',
+    cta: 'Open AI Roundtable',
+    icon: (
+      <>
+        <circle cx="7" cy="12" r="3" />
+        <circle cx="17" cy="7" r="3" />
+        <circle cx="17" cy="17" r="3" />
+        <path d="M9.5 10.5 14.5 8.5" />
+        <path d="M9.5 13.5 14.5 15.5" />
+      </>
+    ),
+  },
+  {
     title: 'Build Personas',
     description:
       'Create reusable instructions for common client workflows and apply them consistently.',
@@ -99,11 +115,11 @@ export default function Home() {
             Core Workflow
           </h2>
           <p className="text-sm text-muted-foreground">
-            Follow the checklist first, then move through the four core surfaces below.
+            Follow the checklist first, then move through the five core surfaces below.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5">
           {coreWorkflowCards.map(card => (
             <Card
               key={card.href}
