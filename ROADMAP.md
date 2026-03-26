@@ -12,7 +12,7 @@ This file exists only to anchor Step 1 of the locked plan.
   - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
   - `docs/RELIABILITY_SLOS.md`
 - Use that file for the exact ICP, exact use case, positioning rationale, primary KPI definition, scope-cut rules, activation sequence, and workflow telemetry contract.
-- Product/scope rules for specific workflows (including surfaces such as `AI Roundtable`) are governed by `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`, not this file.
+- Product/scope rules for specific workflows (including `AI Roundtable`, `Goal Hub`, and `Pipeline`) are governed by `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`, not this file.
 
 ## Authoritative Surfaces
 - Forward plan:

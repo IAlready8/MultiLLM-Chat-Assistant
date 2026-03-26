@@ -74,6 +74,50 @@ const coreWorkflowCards = [
   },
 ]
 
+const workspaceCards = [
+  {
+    title: 'Plan Goals',
+    description:
+      'Break a client objective into tracked milestones and keep execution anchored to one target outcome.',
+    href: '/goal-hub',
+    cta: 'Open Goal Hub',
+    icon: (
+      <>
+        <path d="M12 20V10" />
+        <path d="M18 20V4" />
+        <path d="M6 20v-4" />
+      </>
+    ),
+  },
+  {
+    title: 'Run Pipeline',
+    description:
+      'Move saved work through staged review steps when a deliverable needs a more formal handoff path.',
+    href: '/pipeline',
+    cta: 'Open Pipeline',
+    icon: (
+      <>
+        <rect x="3" y="5" width="6" height="14" rx="1" />
+        <rect x="15" y="5" width="6" height="14" rx="1" />
+        <path d="M9 12h6" />
+      </>
+    ),
+  },
+  {
+    title: 'Configure Settings',
+    description:
+      'Manage provider connections, account defaults, and environment behavior without leaving the workspace.',
+    href: '/settings',
+    cta: 'Open Settings',
+    icon: (
+      <>
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+  },
+]
+
 export default function Home() {
   return (
     <div className="relative flex min-h-[calc(100vh-64px)] flex-col items-center justify-center py-8">
@@ -155,11 +199,54 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="mt-8 px-4">
-        <Button variant="outline" asChild>
-          <Link href="/settings">Configure Providers and Settings</Link>
-        </Button>
-      </div>
+      <section
+        className="mt-10 w-full max-w-7xl px-4"
+        aria-labelledby="home-workspace-surfaces-title"
+      >
+        <div className="mb-5 flex flex-col gap-2 text-center md:text-left">
+          <h2 id="home-workspace-surfaces-title" className="text-2xl font-semibold">
+            Full Workspace
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Keep the broader planning and handoff surfaces visible when the job needs more than the core comparison loop.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {workspaceCards.map(card => (
+            <Card
+              key={card.href}
+              className="flex flex-col glass-card rainbow-outline-hover smooth-transition hover:-translate-y-1"
+            >
+              <CardHeader>
+                <div className="feature-icon-chip p-3 rounded-lg w-fit mb-4">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    {card.icon}
+                  </svg>
+                </div>
+                <CardTitle>{card.title}</CardTitle>
+                <CardDescription>{card.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-grow items-end">
+                <Button className="w-full glass-button" asChild>
+                  <Link href={card.href}>{card.cta}</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
