@@ -43,17 +43,17 @@ This is the only authoritative forward plan file in `handoff_work/`.
 
 ### Step 4: Scope Cut To Core Workflow
 - Highest-value path to keep prominent:
-  - settings -> personas -> multi-chat/comparison -> saved conversation history -> analytics
+  - settings -> personas -> multi-chat/comparison/ai-roundtable -> saved conversation history -> analytics
 - Primary navigation should emphasize:
   - `Multi-Chat`
   - `Comparison`
+  - `AI Roundtable`
   - `Personas`
   - `Analytics`
   - `Settings`
 - De-emphasize from primary navigation and home-page promotion:
   - `Goal Hub`
   - `Pipeline`
-  - `AI Roundtable`
 - Rule:
   - non-core surfaces may remain reachable, but they must not compete visually with the main workflow until later steps justify them
 
