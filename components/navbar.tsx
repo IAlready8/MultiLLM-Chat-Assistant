@@ -12,6 +12,8 @@ export default function Navbar() {
     { name: 'Multi-Chat', path: '/multi-chat' },
     { name: 'Comparison', path: '/comparison' },
     { name: 'AI Roundtable', path: '/ai-roundtable' },
+    { name: 'Goal Hub', path: '/goal-hub' },
+    { name: 'Pipeline', path: '/pipeline' },
     { name: 'Personas', path: '/personas' },
     { name: 'Analytics', path: '/analytics' },
     { name: 'Settings', path: '/settings' },

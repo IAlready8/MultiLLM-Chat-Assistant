@@ -48,14 +48,13 @@ This is the only authoritative forward plan file in `handoff_work/`.
   - `Multi-Chat`
   - `Comparison`
   - `AI Roundtable`
+  - `Goal Hub`
+  - `Pipeline`
   - `Personas`
   - `Analytics`
   - `Settings`
-- De-emphasize from primary navigation and home-page promotion:
-  - `Goal Hub`
-  - `Pipeline`
 - Rule:
-  - non-core surfaces may remain reachable, but they must not compete visually with the main workflow until later steps justify them
+  - keep the full workspace reachable and visually present, while still making the comparison loop the clearest default path
 
 ### Step 5: Onboarding And Activation
 - Activation baseline to optimize:
