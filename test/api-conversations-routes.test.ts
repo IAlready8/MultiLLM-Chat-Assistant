@@ -117,7 +117,11 @@ describe('/api/conversations routes', () => {
     const response = await createConversation(
       new Request('http://localhost/api/conversations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          cookie:
+            'multillm_acquisition=%7B%22source%22%3A%22founder-outbound%22%2C%22campaign%22%3A%22agency-sprint%22%2C%22cohort%22%3A%22wave-1%22%7D',
+        },
         body: JSON.stringify({
           title: 'Weekly planning',
           messages: [
@@ -154,6 +158,9 @@ describe('/api/conversations routes', () => {
       payload: {
         messageCount: 1,
         hasProviderTaggedMessage: true,
+        acquisitionSource: 'founder-outbound',
+        acquisitionCampaign: 'agency-sprint',
+        acquisitionCohort: 'wave-1',
       },
     })
   })
@@ -237,7 +244,11 @@ describe('/api/conversations routes', () => {
     const response = await addMessages(
       new Request('http://localhost/api/conversations/conv-1', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          cookie:
+            'multillm_acquisition=%7B%22source%22%3A%22founder-outbound%22%2C%22campaign%22%3A%22agency-sprint%22%2C%22cohort%22%3A%22wave-1%22%7D',
+        },
         body: JSON.stringify([
           {
             role: 'assistant',
@@ -281,7 +292,11 @@ describe('/api/conversations routes', () => {
     const response = await addMessages(
       new Request('http://localhost/api/conversations/conv-1', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          cookie:
+            'multillm_acquisition=%7B%22source%22%3A%22founder-outbound%22%2C%22campaign%22%3A%22agency-sprint%22%2C%22cohort%22%3A%22wave-1%22%7D',
+        },
         body: JSON.stringify([
           {
             role: 'assistant',
@@ -308,6 +323,9 @@ describe('/api/conversations routes', () => {
         conversationId: 'conv-1',
         responseCount: 2,
         providers: ['openai', 'anthropic'],
+        acquisitionSource: 'founder-outbound',
+        acquisitionCampaign: 'agency-sprint',
+        acquisitionCohort: 'wave-1',
       },
     })
   })

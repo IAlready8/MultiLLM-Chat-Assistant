@@ -127,7 +127,15 @@ describe('/api/analytics route', () => {
       analyticsViews: 3,
     })
     expect(body.activationFunnel).toHaveLength(4)
-    expect(body.meta).toMatchObject({ source: 'live', eventCount: 2 })
+    expect(body.meta).toMatchObject({
+      source: 'live',
+      eventCount: 2,
+      attribution: {
+        source: null,
+        campaign: null,
+        cohort: null,
+      },
+    })
 
     expect(mockGetParsedAnalyticsEvents).toHaveBeenCalledWith('user-1', 7)
     expect(mockGetWorkflowMetrics).toHaveBeenCalledWith(
@@ -165,7 +173,15 @@ describe('/api/analytics route', () => {
       totalErrors: 0,
       avgResponseTime: 0,
     })
-    expect(body.meta).toEqual({ source: 'empty', eventCount: 0 })
+    expect(body.meta).toEqual({
+      source: 'empty',
+      eventCount: 0,
+      attribution: {
+        source: null,
+        campaign: null,
+        cohort: null,
+      },
+    })
     expect(mockGetParsedAnalyticsEvents).toHaveBeenCalledWith('user-1', 1)
   })
 
@@ -182,6 +198,39 @@ describe('/api/analytics route', () => {
       event: 'comparison_viewed',
       userId: 'user-1',
       payload: { source: 'comparison', timeframe: '30d' },
+    })
+  })
+
+  it('includes attribution metadata and attaches it to analytics view events', async () => {
+    mockGetParsedAnalyticsEvents.mockResolvedValue([])
+
+    const response = await GET(
+      new Request('http://localhost/api/analytics?timeframe=7d&source=analytics', {
+        headers: {
+          cookie:
+            'multillm_acquisition=%7B%22source%22%3A%22founder-outbound%22%2C%22campaign%22%3A%22agency-sprint%22%2C%22cohort%22%3A%22wave-1%22%7D',
+        },
+      }),
+      routeContext
+    )
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.meta.attribution).toEqual({
+      source: 'founder-outbound',
+      campaign: 'agency-sprint',
+      cohort: 'wave-1',
+    })
+    expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
+      event: 'analytics_viewed',
+      userId: 'user-1',
+      payload: {
+        source: 'analytics',
+        timeframe: '7d',
+        acquisitionSource: 'founder-outbound',
+        acquisitionCampaign: 'agency-sprint',
+        acquisitionCohort: 'wave-1',
+      },
     })
   })
 
@@ -203,7 +252,15 @@ describe('/api/analytics route', () => {
       comparisonReadyConversations: 0,
       weeklySavedBriefComparisons: 0,
     })
-    expect(body.meta).toEqual({ source: 'empty', eventCount: 0 })
+    expect(body.meta).toEqual({
+      source: 'empty',
+      eventCount: 0,
+      attribution: {
+        source: null,
+        campaign: null,
+        cohort: null,
+      },
+    })
     expect(mockGetParsedAnalyticsEvents).not.toHaveBeenCalled()
     expect(mockRecordAnalyticsEvent).not.toHaveBeenCalled()
   })

@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
+import {
+  mergeAttributionIntoPayload,
+  readAttributionFromCookieHeader,
+} from '@/lib/acquisition-attribution'
 import { ConversationService } from '@/services/conversation-service.db'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { z } from 'zod'
@@ -100,20 +104,24 @@ export async function POST(
 
     if (comparisonReadyMessages.length > 0) {
       try {
+        const attribution = readAttributionFromCookieHeader(req.headers.get('cookie'))
         await recordAnalyticsEvent({
           event: 'comparison_ready_conversation_saved',
           userId: user.id,
-          payload: {
-            conversationId: id,
-            responseCount: comparisonReadyMessages.length,
-            providers: Array.from(
-              new Set(
-                comparisonReadyMessages
-                  .map(message => message.provider)
-                  .filter((provider): provider is string => Boolean(provider))
-              )
-            ),
-          },
+          payload: mergeAttributionIntoPayload(
+            {
+              conversationId: id,
+              responseCount: comparisonReadyMessages.length,
+              providers: Array.from(
+                new Set(
+                  comparisonReadyMessages
+                    .map(message => message.provider)
+                    .filter((provider): provider is string => Boolean(provider))
+                )
+              ),
+            },
+            attribution
+          ),
         })
       } catch (analyticsError) {
         console.warn(

@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import type { Metadata } from "next";
 import type { Session } from 'next-auth'
 import "./globals.css";
@@ -5,6 +6,7 @@ import Navbar from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
 import { AuthGuard } from "@/components/auth-guard";
+import { AcquisitionAttributionCapture } from '@/components/acquisition-attribution-capture'
 import { auth } from "@/lib/auth";
 import { getDemoAccountContext, isStrictAuthRequired } from '@/lib/demo-account'
 import { Toaster } from "@/components/ui/toaster";
@@ -69,6 +71,9 @@ export default async function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
+            <Suspense fallback={null}>
+              <AcquisitionAttributionCapture />
+            </Suspense>
             <AuthGuard>
               <div className="min-h-screen flex flex-col">
                 <Navbar />

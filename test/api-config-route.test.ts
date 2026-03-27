@@ -29,10 +29,13 @@ vi.mock('@/services/analytics-service', () => ({
 
 import { GET, POST } from '@/app/api/config/route'
 
-const makePostRequest = (body: Record<string, unknown>) =>
+const makePostRequest = (
+  body: Record<string, unknown>,
+  extraHeaders: Record<string, string> = {}
+) =>
   new NextRequest('http://localhost/api/config', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
     body: JSON.stringify(body),
   })
 
@@ -139,7 +142,10 @@ describe('/api/config route', () => {
 
   it('POST stores normalized provider key with default models and rate limits', async () => {
     const response = await POST(
-      makePostRequest({ provider: 'OpenAI', apiKey: 'sk-test-1234567890' })
+      makePostRequest(
+        { provider: 'OpenAI', apiKey: 'sk-test-1234567890' },
+        { cookie: 'multillm_acquisition=%7B%22source%22%3A%22founder-outbound%22%2C%22campaign%22%3A%22agency-sprint%22%2C%22cohort%22%3A%22wave-1%22%7D' }
+      )
     )
 
     expect(response.status).toBe(200)
@@ -156,7 +162,12 @@ describe('/api/config route', () => {
     expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
       event: 'provider_configured',
       userId: 'user-1',
-      payload: { provider: 'openai' },
+      payload: {
+        provider: 'openai',
+        acquisitionSource: 'founder-outbound',
+        acquisitionCampaign: 'agency-sprint',
+        acquisitionCohort: 'wave-1',
+      },
     })
   })
 
