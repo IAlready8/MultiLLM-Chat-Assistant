@@ -75,8 +75,25 @@ type AnalyticsApiResponse = {
   meta?: {
     source?: 'live' | 'empty'
     eventCount?: number
+    attribution?: {
+      source: string | null
+      campaign: string | null
+      cohort: string | null
+    }
   }
 }
+
+type AnalyticsAttribution =
+  NonNullable<AnalyticsApiResponse['meta']>['attribution']
+
+const attributionBadges: Array<{
+  key: keyof NonNullable<AnalyticsAttribution>
+  label: string
+}> = [
+  { key: 'source', label: 'Source' },
+  { key: 'campaign', label: 'Campaign' },
+  { key: 'cohort', label: 'Cohort' },
+]
 
 export default function AnalyticsPage() {
   const [timeframe, setTimeframe] = useState<'24h' | '7d' | '30d'>('7d')
@@ -103,6 +120,7 @@ export default function AnalyticsPage() {
   const [isTelemetryEmpty, setIsTelemetryEmpty] = useState(false)
   const [sourceLabel, setSourceLabel] = useState<'Live data' | 'No telemetry yet'>('Live data')
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [attribution, setAttribution] = useState<AnalyticsAttribution | null>(null)
   const { toast } = useToast()
 
   const loadAnalyticsData = useCallback(async () => {
@@ -166,6 +184,7 @@ export default function AnalyticsPage() {
         !hasWorkflowProgress
       setIsTelemetryEmpty(source === 'empty' && inferredEmpty)
       setSourceLabel(data.meta?.source === 'empty' ? 'No telemetry yet' : 'Live data')
+      setAttribution(data.meta?.attribution ?? null)
     } catch (err) {
       console.error('Failed to load analytics data:', err)
       setLoadError(err instanceof Error ? err.message : 'Failed to load analytics data')
@@ -262,6 +281,13 @@ export default function AnalyticsPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
             <Badge variant="secondary">{sourceLabel}</Badge>
+            {attributionBadges.map(({ key, label }) =>
+              attribution?.[key] ? (
+                <Badge key={key} variant="outline">
+                  {label}: {attribution[key]}
+                </Badge>
+              ) : null
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
             Monitor usage, latency, and quality trends across providers.

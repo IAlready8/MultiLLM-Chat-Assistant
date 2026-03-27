@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
+import {
+  buildAttributionMeta,
+  mergeAttributionFromCookieHeader,
+  readAttributionFromCookieHeader,
+} from '@/lib/acquisition-attribution'
 import { createGuestUserRecord, getDemoAccountContext } from '@/lib/demo-account'
 import {
   getParsedAnalyticsEvents,
@@ -35,6 +40,11 @@ type ModelComparison = {
 }
 
 type AnalyticsSource = 'analytics' | 'comparison'
+type AttributionMeta = {
+  source: string | null
+  campaign: string | null
+  cohort: string | null
+}
 
 type ActivationStep = {
   key: 'configuredProviders' | 'personas' | 'comparisonReadyConversations' | 'weeklySavedBriefComparisons'
@@ -388,6 +398,10 @@ export const GET = withApiMetrics(async (request: Request) => {
   const timeframe = getTimeframe(request)
   const source = getSource(request)
   const days = TIMEFRAME_DAYS[timeframe]
+  const attribution = readAttributionFromCookieHeader(
+    request.headers.get('cookie')
+  )
+  const attributionMeta: AttributionMeta = buildAttributionMeta(attribution)
   const demoAccount = getDemoAccountContext()
   const guestUser = createGuestUserRecord()
   const isSharedGuestOrDemoUser =
@@ -415,6 +429,7 @@ export const GET = withApiMetrics(async (request: Request) => {
       meta: {
         source: 'empty',
         eventCount: 0,
+        attribution: attributionMeta,
       },
     })
   }
@@ -454,7 +469,10 @@ export const GET = withApiMetrics(async (request: Request) => {
       await recordAnalyticsEvent({
         event: source === 'comparison' ? 'comparison_viewed' : 'analytics_viewed',
         userId: user.id,
-        payload: { source, timeframe },
+        payload: mergeAttributionFromCookieHeader(
+          { source, timeframe },
+          request.headers.get('cookie')
+        ),
       })
       workflowMetricsWithCurrentView = {
         ...workflowMetrics,
@@ -482,6 +500,7 @@ export const GET = withApiMetrics(async (request: Request) => {
       meta: {
         source: events.length > 0 ? 'live' : 'empty',
         eventCount: events.length,
+        attribution: attributionMeta,
       },
     })
   } catch (error) {

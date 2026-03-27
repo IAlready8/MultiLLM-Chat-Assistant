@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { storeUserApiKey, getUserProviderConfigs, deleteUserProviderConfig } from '@/lib/api-key-service'
+import {
+  mergeAttributionFromCookieHeader,
+} from '@/lib/acquisition-attribution'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 
@@ -80,7 +83,10 @@ export async function POST(request: NextRequest) {
       await recordAnalyticsEvent({
         event: 'provider_configured',
         userId: user.id,
-        payload: { provider },
+        payload: mergeAttributionFromCookieHeader(
+          { provider },
+          request.headers.get('cookie')
+        ),
       })
     } catch (analyticsError) {
       console.warn(

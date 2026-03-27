@@ -118,7 +118,11 @@ describe('/api/personas routes', () => {
     const response = await createPersona(
       new Request('http://localhost/api/personas', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          cookie:
+            'multillm_acquisition=%7B%22source%22%3A%22founder-outbound%22%2C%22campaign%22%3A%22agency-sprint%22%2C%22cohort%22%3A%22wave-1%22%7D',
+        },
         body: JSON.stringify({
           name: 'Architect',
           systemPrompt: 'Think in trade-offs',
@@ -140,7 +144,12 @@ describe('/api/personas routes', () => {
     expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
       event: 'persona_created',
       userId: 'user-1',
-      payload: { title: 'Architect' },
+      payload: {
+        title: 'Architect',
+        acquisitionSource: 'founder-outbound',
+        acquisitionCampaign: 'agency-sprint',
+        acquisitionCohort: 'wave-1',
+      },
     })
   })
 
