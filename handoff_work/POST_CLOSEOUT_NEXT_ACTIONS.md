@@ -222,6 +222,23 @@ This is the only authoritative forward plan file in `handoff_work/`.
 - Step 10 pass state on this branch:
   - in progress on `codex/monetization-behavior-step10-20260325`
 
+## Step 11: First Real Users In One Niche Channel
+- Step 11 source of truth documents:
+  - `docs/STEP11_USER_ACQUISITION_PLAYBOOK.md`
+  - `docs/STEP11_DEMO_SCRIPT.md`
+  - `docs/STEP11_ONBOARDING_GUIDE.md`
+- Channel lock:
+  - founder-led direct outbound only
+- ICP lock:
+  - independent AI consultants and boutique agencies producing repeatable client deliverables with multiple LLM providers
+- First-run path lock:
+  - `/settings` -> `/personas` -> `/multi-chat` -> `/comparison` -> `/analytics`
+- Step 11 counting rule:
+  - a real Step 11 user must fit the ICP, receive direct demo/onboarding attention, and attempt the real workflow
+- Step 11 prep state on this branch:
+  - documentation prep complete
+  - user acquisition execution not yet started
+
 ## What Is Out Of Scope Until The Ordered Plan Requires It
 - random feature work
 - broad dependency churn without a direct step in the sequence above
