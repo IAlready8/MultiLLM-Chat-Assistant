@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation'
 import {
   ACQUISITION_COOKIE_NAME,
   extractAttributionFromSearchParams,
-  hasAttribution,
   serializeAttribution,
 } from '@/lib/acquisition-attribution'
 
@@ -22,11 +21,17 @@ export function AcquisitionAttributionCapture() {
     const attribution = extractAttributionFromSearchParams(searchParams)
     const serialized = serializeAttribution(attribution)
 
-    if (!serialized || !hasAttribution(attribution)) {
+    if (!serialized) {
       return
     }
 
-    document.cookie = `${ACQUISITION_COOKIE_NAME}=${serialized}; Max-Age=${THIRTY_DAYS_IN_SECONDS}; Path=/; SameSite=Lax`
+    let cookieValue = `${ACQUISITION_COOKIE_NAME}=${serialized}; Max-Age=${THIRTY_DAYS_IN_SECONDS}; Path=/; SameSite=Lax`
+
+    if (window.location.protocol === 'https:') {
+      cookieValue += '; Secure'
+    }
+
+    document.cookie = cookieValue
   }, [searchParams])
 
   return null

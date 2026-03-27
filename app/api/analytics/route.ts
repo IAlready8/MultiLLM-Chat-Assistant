@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
-  mergeAttributionIntoPayload,
+  buildAttributionMeta,
+  mergeAttributionFromCookieHeader,
   readAttributionFromCookieHeader,
 } from '@/lib/acquisition-attribution'
 import { createGuestUserRecord, getDemoAccountContext } from '@/lib/demo-account'
@@ -400,6 +401,7 @@ export const GET = withApiMetrics(async (request: Request) => {
   const attribution = readAttributionFromCookieHeader(
     request.headers.get('cookie')
   )
+  const attributionMeta: AttributionMeta = buildAttributionMeta(attribution)
   const demoAccount = getDemoAccountContext()
   const guestUser = createGuestUserRecord()
   const isSharedGuestOrDemoUser =
@@ -427,11 +429,7 @@ export const GET = withApiMetrics(async (request: Request) => {
       meta: {
         source: 'empty',
         eventCount: 0,
-        attribution: {
-          source: attribution.source ?? null,
-          campaign: attribution.campaign ?? null,
-          cohort: attribution.cohort ?? null,
-        } satisfies AttributionMeta,
+        attribution: attributionMeta,
       },
     })
   }
@@ -471,7 +469,10 @@ export const GET = withApiMetrics(async (request: Request) => {
       await recordAnalyticsEvent({
         event: source === 'comparison' ? 'comparison_viewed' : 'analytics_viewed',
         userId: user.id,
-        payload: mergeAttributionIntoPayload({ source, timeframe }, attribution),
+        payload: mergeAttributionFromCookieHeader(
+          { source, timeframe },
+          request.headers.get('cookie')
+        ),
       })
       workflowMetricsWithCurrentView = {
         ...workflowMetrics,
@@ -499,11 +500,7 @@ export const GET = withApiMetrics(async (request: Request) => {
       meta: {
         source: events.length > 0 ? 'live' : 'empty',
         eventCount: events.length,
-        attribution: {
-          source: attribution.source ?? null,
-          campaign: attribution.campaign ?? null,
-          cohort: attribution.cohort ?? null,
-        } satisfies AttributionMeta,
+        attribution: attributionMeta,
       },
     })
   } catch (error) {

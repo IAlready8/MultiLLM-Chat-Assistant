@@ -56,6 +56,24 @@ describe('acquisition attribution helpers', () => {
     })
   })
 
+  it('reads attribution cookies even when cookie separators omit spaces', () => {
+    const serialized = serializeAttribution({
+      source: 'demo',
+      campaign: 'consultants',
+      cohort: 'batch-a',
+    })
+
+    expect(
+      readAttributionFromCookieHeader(
+        `theme=dark;multillm_acquisition=${serialized};other=value`
+      )
+    ).toEqual({
+      source: 'demo',
+      campaign: 'consultants',
+      cohort: 'batch-a',
+    })
+  })
+
   it('merges attribution into analytics payloads without dropping existing fields', () => {
     expect(
       mergeAttributionIntoPayload(

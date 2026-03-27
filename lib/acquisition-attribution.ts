@@ -86,12 +86,28 @@ export const readAttributionFromCookieHeader = (
     return {}
   }
 
+  const escapedCookieName = ACQUISITION_COOKIE_NAME.replace(
+    /[-/\\^$*+?.()|[\]{}]/g,
+    '\\$&'
+  )
   const match = cookieHeader.match(
-    new RegExp(`(?:^|; )${ACQUISITION_COOKIE_NAME}=([^;]+)`)
+    new RegExp(`(?:^|;\\s*)${escapedCookieName}=([^;]+)`)
   )
 
   return parseSerializedAttribution(match?.[1])
 }
+
+export const buildAttributionMeta = (attribution: AcquisitionAttribution) => ({
+  source: attribution.source ?? null,
+  campaign: attribution.campaign ?? null,
+  cohort: attribution.cohort ?? null,
+})
+
+export const mergeAttributionFromCookieHeader = (
+  payload: Record<string, unknown>,
+  cookieHeader: string | null | undefined
+): Record<string, unknown> =>
+  mergeAttributionIntoPayload(payload, readAttributionFromCookieHeader(cookieHeader))
 
 export const mergeAttributionIntoPayload = (
   payload: Record<string, unknown>,

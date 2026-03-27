@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
-  mergeAttributionIntoPayload,
-  readAttributionFromCookieHeader,
+  mergeAttributionFromCookieHeader,
 } from '@/lib/acquisition-attribution'
 import { ConversationService } from '@/services/conversation-service.db'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
@@ -81,18 +80,17 @@ export const POST = withApiMetrics(async (req: Request) => {
       prismaMessages
     )
     try {
-      const attribution = readAttributionFromCookieHeader(req.headers.get('cookie'))
       await recordAnalyticsEvent({
         event: 'conversation_created',
         userId: user.id,
-        payload: mergeAttributionIntoPayload(
+        payload: mergeAttributionFromCookieHeader(
           {
             messageCount: prismaMessages.length,
             hasProviderTaggedMessage: prismaMessages.some(message =>
               Boolean(message.provider)
             ),
           },
-          attribution
+          req.headers.get('cookie')
         ),
       })
     } catch (analyticsError) {

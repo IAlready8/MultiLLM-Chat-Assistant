@@ -86,6 +86,15 @@ type AnalyticsApiResponse = {
 type AnalyticsAttribution =
   NonNullable<AnalyticsApiResponse['meta']>['attribution']
 
+const attributionBadges: Array<{
+  key: keyof NonNullable<AnalyticsAttribution>
+  label: string
+}> = [
+  { key: 'source', label: 'Source' },
+  { key: 'campaign', label: 'Campaign' },
+  { key: 'cohort', label: 'Cohort' },
+]
+
 export default function AnalyticsPage() {
   const [timeframe, setTimeframe] = useState<'24h' | '7d' | '30d'>('7d')
   const [loading, setLoading] = useState(true)
@@ -272,15 +281,13 @@ export default function AnalyticsPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
             <Badge variant="secondary">{sourceLabel}</Badge>
-            {attribution?.source ? (
-              <Badge variant="outline">Source: {attribution.source}</Badge>
-            ) : null}
-            {attribution?.campaign ? (
-              <Badge variant="outline">Campaign: {attribution.campaign}</Badge>
-            ) : null}
-            {attribution?.cohort ? (
-              <Badge variant="outline">Cohort: {attribution.cohort}</Badge>
-            ) : null}
+            {attributionBadges.map(({ key, label }) =>
+              attribution?.[key] ? (
+                <Badge key={key} variant="outline">
+                  {label}: {attribution[key]}
+                </Badge>
+              ) : null
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
             Monitor usage, latency, and quality trends across providers.

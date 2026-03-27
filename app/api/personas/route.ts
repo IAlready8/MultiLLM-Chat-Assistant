@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
-  mergeAttributionIntoPayload,
-  readAttributionFromCookieHeader,
+  mergeAttributionFromCookieHeader,
 } from '@/lib/acquisition-attribution'
 import { PersonaService } from '@/services/persona-service.db'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
@@ -86,11 +85,13 @@ export const POST = withApiMetrics(async (req: Request) => {
     }
     const newPersona = await PersonaService.createPersona(personaData, user.id)
     try {
-      const attribution = readAttributionFromCookieHeader(req.headers.get('cookie'))
       await recordAnalyticsEvent({
         event: 'persona_created',
         userId: user.id,
-        payload: mergeAttributionIntoPayload({ title }, attribution),
+        payload: mergeAttributionFromCookieHeader(
+          { title },
+          req.headers.get('cookie')
+        ),
       })
     } catch (analyticsError) {
       console.warn(
