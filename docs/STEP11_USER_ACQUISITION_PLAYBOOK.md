@@ -116,7 +116,7 @@ Day 5:
 
 ## Success Threshold For Step 11
 Step 11 is only complete when all of the following are true:
-- 10 real ICP users were reached, onboarded, or meaningfully tested
+- 10 real ICP users were onboarded or meaningfully tested through an actual workflow attempt
 - at least 3 completed the core workflow
 - top 5 objections are ranked
 - top 5 friction points are ranked
