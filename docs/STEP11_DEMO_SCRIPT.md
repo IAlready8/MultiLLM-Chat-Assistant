@@ -43,7 +43,8 @@ By the end of the demo, the prospect should understand:
 - open `/comparison`
 - show the saved work side by side
 - explain how the user can review differences and decide what to reuse
-- this is the core value moment and should get the most attention
+- this is the intended core value moment and should get the most attention
+- if `/comparison` is slow or unavailable, explain the comparison concept verbally and reinforce it using the saved thread in `/multi-chat` or workflow visibility in `/analytics`
 
 6. Analytics
 - open `/analytics`

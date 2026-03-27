@@ -38,6 +38,7 @@ These do not count:
 Build an initial list of 30 to 50 prospects.
 
 Each prospect must have:
+- prospect id
 - name
 - company or solo practice name
 - ICP fit reason
@@ -84,7 +85,7 @@ Every outreach entry must record:
 - name
 - company
 - role
-- icp fit reason
+- ICP fit reason
 - source
 - first contact date
 - reply status

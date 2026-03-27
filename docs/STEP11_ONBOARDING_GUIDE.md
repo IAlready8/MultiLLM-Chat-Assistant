@@ -10,6 +10,11 @@ A user is successfully onboarded when they have:
 - saved one conversation with at least one provider response in `/multi-chat`
 - confirmed they can review saved work in `/comparison`
 
+If `/comparison` is temporarily unavailable during Step 11:
+- confirm the conversation is still saved in `/multi-chat`
+- explain that comparison is part of the intended workflow
+- continue the session using the saved thread and `/analytics` instead of blocking the user
+
 ## Required Preconditions
 The user needs:
 - an account that can sign in
