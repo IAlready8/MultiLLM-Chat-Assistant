@@ -209,7 +209,11 @@ export const GET = withApiMetrics(async () => {
   const rateLimitStart = Date.now()
   const rateLimitDiagnostics = getRateLimitDiagnostics()
   const rateLimitStatus: CheckStatus =
-    rateLimitDiagnostics.status === 'connected' ? 'ok' : 'warning'
+    rateLimitDiagnostics.status === 'connected'
+      ? 'ok'
+      : rateLimitDiagnostics.status === 'error'
+        ? 'error'
+        : 'warning'
   const rateLimitMessage = rateLimitDiagnostics.message
 
   checks.push(

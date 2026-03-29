@@ -45,6 +45,8 @@ contract for the current product stage.
 ## 2. Alertability Contract
 
 Monitoring should consume `/api/health`.
+Detailed diagnostics should come from `/api/admin/status` or authenticated admin
+health access, not the public health payload.
 
 Machine-readable summary fields:
 - `summary.coreAvailability`

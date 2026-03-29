@@ -138,7 +138,15 @@ export async function POST(req: NextRequest) {
       : providerModels[0]
     analyticsModel = resolvedModel || analyticsModel
 
-    if (!checkProviderRateLimit(userId, provider, providerRateLimits)) {
+    const rateLimitResult = await checkProviderRateLimit(userId, provider, providerRateLimits)
+    if (!rateLimitResult.allowed) {
+      if (rateLimitResult.reason === 'backend_unavailable') {
+        return jsonErrorResponse(
+          503,
+          'Rate limiting backend is unavailable',
+          'RATE_LIMIT_BACKEND_UNAVAILABLE',
+        )
+      }
       return jsonErrorResponse(429, 'Rate limit exceeded', 'RATE_LIMITED')
     }
 

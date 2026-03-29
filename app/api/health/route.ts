@@ -2,12 +2,21 @@
 
 import { NextRequest } from 'next/server'
 import { metrics } from '@/lib/api-logger'
+import { getAuthenticatedAdmin } from '@/lib/api-auth'
 import { getCacheDiagnostics } from '@/lib/cache'
 import prisma from '@/lib/prisma'
 import { getErrorMessage, isDatabaseUnavailableError } from '@/lib/db-fallback'
 import { getRateLimitDiagnostics } from '@/lib/rate-limit'
 import { getReleaseMetadata } from '@/lib/release-metadata'
 import { getSidecarDiagnostics } from '@/lib/sidecar-health'
+
+type CheckPayload = {
+  status: string
+  responseTime: number
+  responseTimeMs: number
+  message?: string
+  mode?: string
+}
 
 // Health check API route — includes request metrics snapshot
 export async function GET(request: NextRequest) {
@@ -17,6 +26,8 @@ export async function GET(request: NextRequest) {
   const totalResponseTimeMs = Date.now() - startTime
 
   const includeMetrics = request.nextUrl.searchParams.get('metrics') === '1'
+  const adminAuthCheck = await getAuthenticatedAdmin()
+  const isPrivilegedView = !(adminAuthCheck instanceof Response)
 
   const dbStart = Date.now()
   let databaseStatus: 'connected' | 'degraded' = 'connected'
@@ -44,16 +55,16 @@ export async function GET(request: NextRequest) {
 
   const status =
     databaseStatus === 'connected' &&
-    cacheDiagnostics.status !== 'degraded' &&
-    rateLimitDiagnostics.status !== 'degraded' &&
+    !['degraded', 'error'].includes(cacheDiagnostics.status) &&
+    !['degraded', 'error'].includes(rateLimitDiagnostics.status) &&
     sidecarDiagnostics.status !== 'degraded'
       ? 'healthy'
       : 'degraded'
 
   const degradedChecks = [
     databaseStatus !== 'connected' ? 'database' : null,
-    cacheDiagnostics.status === 'degraded' ? 'cache' : null,
-    rateLimitDiagnostics.status === 'degraded' ? 'rateLimit' : null,
+    ['degraded', 'error'].includes(cacheDiagnostics.status) ? 'cache' : null,
+    ['degraded', 'error'].includes(rateLimitDiagnostics.status) ? 'rateLimit' : null,
     sidecarDiagnostics.status === 'degraded' ? 'sidecar' : null,
   ].filter((value): value is 'database' | 'cache' | 'rateLimit' | 'sidecar' =>
     value !== null
@@ -66,57 +77,80 @@ export async function GET(request: NextRequest) {
         ? 'warning'
         : 'none'
 
+  const publicChecks = {
+    database: {
+      status: databaseStatus,
+      responseTime: databaseResponseTimeMs,
+      responseTimeMs: databaseResponseTimeMs,
+    },
+    cache: {
+      status: cacheDiagnostics.status,
+      responseTime: cacheResponseTimeMs,
+      responseTimeMs: cacheResponseTimeMs,
+    },
+    rateLimit: {
+      status: rateLimitDiagnostics.status,
+      responseTime: rateLimitResponseTimeMs,
+      responseTimeMs: rateLimitResponseTimeMs,
+    },
+    sidecar: {
+      status: sidecarDiagnostics.status,
+      responseTime: sidecarResponseTimeMs,
+      responseTimeMs: sidecarResponseTimeMs,
+    },
+    api: {
+      status: 'responsive',
+      responseTime: totalResponseTimeMs,
+      responseTimeMs: totalResponseTimeMs,
+    },
+  } satisfies Record<string, CheckPayload>
+
+  const detailedChecks = {
+    ...publicChecks,
+    database: {
+      ...publicChecks.database,
+      ...(databaseMessage ? { message: databaseMessage } : {}),
+    },
+    cache: {
+      ...publicChecks.cache,
+      message: cacheDiagnostics.message,
+      mode: cacheDiagnostics.mode,
+    },
+    rateLimit: {
+      ...publicChecks.rateLimit,
+      message: rateLimitDiagnostics.message,
+      mode: rateLimitDiagnostics.mode,
+    },
+    sidecar: {
+      ...publicChecks.sidecar,
+      message: sidecarDiagnostics.message,
+    },
+  }
+
   const healthChecks = {
     source: 'health',
+    visibility: isPrivilegedView ? 'admin' : 'public',
     status,
     generatedAt,
     timestamp: generatedAt,
     uptime: process.uptime(),
     responseTime: totalResponseTimeMs,
     responseTimeMs: totalResponseTimeMs,
-    version: release.version,
-    release,
-    environment: process.env.NODE_ENV || 'development',
     summary: {
       coreAvailability: databaseStatus === 'connected' ? 'available' : 'degraded',
       degradedChecks,
       alertLevel,
       shouldPage: alertLevel === 'critical',
     },
-    checks: {
-      database: {
-        status: databaseStatus,
-        responseTime: databaseResponseTimeMs,
-        responseTimeMs: databaseResponseTimeMs,
-        ...(databaseMessage ? { message: databaseMessage } : {}),
-      },
-      cache: {
-        status: cacheDiagnostics.status,
-        responseTime: cacheResponseTimeMs,
-        responseTimeMs: cacheResponseTimeMs,
-        message: cacheDiagnostics.message,
-        mode: cacheDiagnostics.mode,
-      },
-      rateLimit: {
-        status: rateLimitDiagnostics.status,
-        responseTime: rateLimitResponseTimeMs,
-        responseTimeMs: rateLimitResponseTimeMs,
-        message: rateLimitDiagnostics.message,
-        mode: rateLimitDiagnostics.mode,
-      },
-      sidecar: {
-        status: sidecarDiagnostics.status,
-        responseTime: sidecarResponseTimeMs,
-        responseTimeMs: sidecarResponseTimeMs,
-        message: sidecarDiagnostics.message,
-      },
-      api: {
-        status: 'responsive',
-        responseTime: totalResponseTimeMs,
-        responseTimeMs: totalResponseTimeMs,
-      },
-    },
-    ...(includeMetrics ? { metrics: metrics.snapshot() } : {}),
+    checks: isPrivilegedView ? detailedChecks : publicChecks,
+    ...(isPrivilegedView
+      ? {
+          version: release.version,
+          release,
+          environment: process.env.NODE_ENV || 'development',
+          ...(includeMetrics ? { metrics: metrics.snapshot() } : {}),
+        }
+      : {}),
   }
 
   return new Response(JSON.stringify(healthChecks, null, 2), {

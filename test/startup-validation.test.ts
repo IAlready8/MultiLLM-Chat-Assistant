@@ -11,6 +11,7 @@ const trackedKeys = [
   'AUTH_SECRET',
   'NEXTAUTH_URL',
   'API_KEY_ENCRYPTION_SEED',
+  'REDIS_URL',
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
   'GITHUB_CLIENT_ID',
@@ -41,6 +42,7 @@ const setProductionBase = () => {
   setEnvVar('AUTH_SECRET', undefined)
   setEnvVar('NEXTAUTH_URL', 'https://example.com')
   setEnvVar('API_KEY_ENCRYPTION_SEED', 'seed-123')
+  setEnvVar('REDIS_URL', 'redis://127.0.0.1:6379')
   setEnvVar('GOOGLE_CLIENT_ID', undefined)
   setEnvVar('GOOGLE_CLIENT_SECRET', undefined)
   setEnvVar('GITHUB_CLIENT_ID', undefined)
@@ -102,6 +104,15 @@ describe('startup environment validation', () => {
 
     expect(() => validateStartupEnvironment()).toThrow(
       'Google OAuth requires both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.'
+    )
+  })
+
+  it('throws when REDIS_URL is missing in production', () => {
+    setProductionBase()
+    setEnvVar('REDIS_URL', undefined)
+
+    expect(() => validateStartupEnvironment()).toThrow(
+      'REDIS_URL is required in production for rate limiting and cache safety.'
     )
   })
 })

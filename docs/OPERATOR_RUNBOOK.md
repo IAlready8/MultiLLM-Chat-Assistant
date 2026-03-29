@@ -53,9 +53,9 @@ Production contract:
 - `NEXTAUTH_SECRET` or `AUTH_SECRET` is required.
 - `NEXTAUTH_URL` is required.
 - `API_KEY_ENCRYPTION_SEED` is required.
+- `REDIS_URL` is required.
 - Stripe is optional for technical handoff readiness.
 - Python sidecar is optional.
-- Redis is optional.
 
 Required release checks on `main`:
 - `Quality Checks`
@@ -63,6 +63,8 @@ Required release checks on `main`:
 
 Health contract:
 - `/api/health` must return `healthy` or `degraded`.
+- unauthenticated `/api/health` responses are intentionally sanitized.
+- detailed health metrics and release metadata require authenticated admin access.
 - `degraded` is acceptable only when the degraded dependency is optional or the
   release decision explicitly accepts the impairment.
 
@@ -93,6 +95,7 @@ export NEXTAUTH_URL=http://localhost:3000
 export NEXTAUTH_SECRET=verify-secret-32chars
 export API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars
 export DATABASE_URL=postgresql://<user>@127.0.0.1:5432/<db_name>
+export REDIS_URL=redis://127.0.0.1:6379
 ```
 
 Optional parity toggles:

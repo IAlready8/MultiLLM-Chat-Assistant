@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const originalRedisUrl = process.env.REDIS_URL
+const originalNodeEnv = process.env.NODE_ENV
+
+const setEnvVar = (key: string, value: string | undefined) => {
+  const env = process.env as Record<string, string | undefined>
+  if (value === undefined) {
+    delete env[key]
+  } else {
+    env[key] = value
+  }
+}
 
 const loadModule = async () => import('@/lib/rate-limit')
 
@@ -11,11 +21,8 @@ describe('rate-limit diagnostics', () => {
   })
 
   afterEach(() => {
-    if (originalRedisUrl === undefined) {
-      delete process.env.REDIS_URL
-    } else {
-      process.env.REDIS_URL = originalRedisUrl
-    }
+    setEnvVar('REDIS_URL', originalRedisUrl)
+    setEnvVar('NODE_ENV', originalNodeEnv)
     vi.doUnmock('redis')
     vi.doUnmock('@/lib/logger')
   })
@@ -74,5 +81,34 @@ describe('rate-limit diagnostics', () => {
     expect(warn).not.toHaveBeenCalledWith('rate_limit_redis_connected')
     expect(info).not.toHaveBeenCalledWith('rate_limit_redis_connected')
     expect(error).not.toHaveBeenCalled()
+  })
+
+  it('fails closed in production when Redis is not configured', async () => {
+    setEnvVar('NODE_ENV', 'production')
+    setEnvVar('REDIS_URL', undefined)
+
+    const { checkAndConsume, getRateLimitDiagnostics } = await loadModule()
+
+    await expect(
+      checkAndConsume('auth:login:test@example.com', {
+        windowMs: 60000,
+        max: 5,
+      })
+    ).resolves.toEqual({
+      allowed: false,
+      remaining: 0,
+      retryAfterMs: 60000,
+      reason: 'backend_unavailable',
+    })
+
+    expect(getRateLimitDiagnostics()).toEqual({
+      mode: 'memory',
+      status: 'error',
+      message:
+        'Redis-backed rate limiting is required in production but REDIS_URL is not configured',
+      redisConfigured: false,
+      redisConnected: false,
+      inMemoryKeys: 0,
+    })
   })
 })

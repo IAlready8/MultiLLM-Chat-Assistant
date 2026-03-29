@@ -288,18 +288,25 @@ else
 fi
 
 health_metrics_body=$(http_request "${BASE_URL}/api/health?metrics=1" -s 2>/dev/null || echo '{}')
-has_metrics_routes=$(echo "$health_metrics_body" | python3 -c "
+health_metrics_state=$(echo "$health_metrics_body" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 metrics = data.get('metrics')
-ok = isinstance(metrics, dict) and isinstance(metrics.get('routes'), dict)
-print('yes' if ok else 'no')
+if isinstance(metrics, dict) and isinstance(metrics.get('routes'), dict):
+    print('admin')
+elif data.get('status') in {'healthy', 'degraded'}:
+    print('public')
+else:
+    print('invalid')
 " 2>/dev/null || echo "error")
-if [ "$has_metrics_routes" = "yes" ]; then
+if [ "$health_metrics_state" = "admin" ]; then
   echo -e "  ${GREEN}PASS${NC} /api/health?metrics=1 includes metrics.routes"
   PASS=$((PASS + 1))
+elif [ "$health_metrics_state" = "public" ]; then
+  echo -e "  ${GREEN}PASS${NC} /api/health?metrics=1 remains sanitized for public access"
+  PASS=$((PASS + 1))
 else
-  echo -e "  ${RED}FAIL${NC} /api/health?metrics=1 missing metrics.routes"
+  echo -e "  ${RED}FAIL${NC} /api/health?metrics=1 returned unexpected payload"
   FAIL=$((FAIL + 1))
 fi
 
