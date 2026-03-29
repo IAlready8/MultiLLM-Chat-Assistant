@@ -19,7 +19,7 @@ const contentSecurityPolicy = [
     ? "connect-src 'self'"
     : "connect-src 'self' ws: wss: http: https:",
   "manifest-src 'self'",
-  'upgrade-insecure-requests',
+  ...(isProduction ? ['upgrade-insecure-requests'] : []),
 ].join('; ');
 
 /** @type {import('next').NextConfig} */
