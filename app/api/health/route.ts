@@ -26,9 +26,14 @@ export async function GET(request: NextRequest) {
   const totalResponseTimeMs = Date.now() - startTime
 
   const includeMetrics = request.nextUrl.searchParams.get('metrics') === '1'
-  const adminAuthCheck = await getAuthenticatedAdmin()
-  const isPrivilegedView = !(adminAuthCheck instanceof Response)
 
+  let adminAuthCheck: Response | undefined
+  let isPrivilegedView = false
+
+  if (includeMetrics) {
+    adminAuthCheck = await getAuthenticatedAdmin()
+    isPrivilegedView = !(adminAuthCheck instanceof Response)
+  }
   const dbStart = Date.now()
   let databaseStatus: 'connected' | 'degraded' = 'connected'
   let databaseMessage: string | undefined
