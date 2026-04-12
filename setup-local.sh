@@ -76,7 +76,7 @@ for cmd in node npm python3 openssl curl; do
 done
 
 NODE_MAJOR="$(node --version | sed 's/v//' | cut -d. -f1)"
-((NODE_MAJOR >= 18)) || fail "Node.js >= 18 required. Current: $(node --version). Use nvm: nvm install 20"
+((NODE_MAJOR >= 18)) || fail "Node.js >= 18 required. Current: $(node --version). Use nvm: nvm install 20 or later"
 ok "Node.js $(node --version)"
 
 PYTHON_VER="$(python3 --version | awk '{print $2}')"
@@ -291,7 +291,7 @@ if [[ "$SKIP_DB" == '0' ]]; then
   # Step 8 - Seed
   # ---------------------------------------------------------------------------
   step 'Seeding database (demo + guest accounts)'
-  [[ -f prisma/seed.ts ]] || fail 'Missing prisma/seed.ts. Add that file at /prisma/seed.ts before running with database setup enabled.'
+  [[ -f prisma/seed.ts ]] || fail 'Missing prisma/seed.ts. Add that file at prisma/seed.ts before running with database setup enabled.'
   DATABASE_URL='file:./prisma/dev.db' npx tsx prisma/seed.ts
   ok 'Database seeded'
 else
@@ -306,6 +306,16 @@ step 'Smoke testing Python sidecar'
 SIDECAR_PORT="${PYTHON_CORE_PORT:-8008}"
 SIDECAR_READY=0
 SIDECAR_PID=''
+
+cleanup_sidecar() {
+  if [[ -n "${SIDECAR_PID:-}" ]]; then
+    kill "$SIDECAR_PID" 2>/dev/null || true
+    wait "$SIDECAR_PID" 2>/dev/null || true
+    SIDECAR_PID=''
+  fi
+}
+
+trap cleanup_sidecar EXIT
 
 if [[ -d .venv ]]; then
   DATABASE_URL='file:./prisma/dev.db' .venv/bin/python3 -m uvicorn src.core.main:app \
@@ -327,8 +337,7 @@ if [[ -d .venv ]]; then
     fi
   done
 
-  kill "$SIDECAR_PID" 2>/dev/null || true
-  wait "$SIDECAR_PID" 2>/dev/null || true
+  cleanup_sidecar
 
   [[ "$SIDECAR_READY" == '1' ]] || warn 'Sidecar did not respond in 12s. App still works via Node.js providers; troubleshoot with npx tsx server.ts.'
 else
