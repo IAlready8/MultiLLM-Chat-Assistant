@@ -106,7 +106,7 @@ kc_write() {
 }
 
 if ! command -v security >/dev/null 2>&1; then
-  warn 'macOS security command not found. Falling back to .env.local-only secrets.'
+  warn 'macOS security command not found. Falling back to .env.local-only secrets (regenerated each run unless kept in .env.local).'
   kc_read() { echo ''; }
   kc_write() { :; }
 fi
@@ -284,6 +284,7 @@ if [[ "$SKIP_DB" == '0' ]]; then
   ok 'prisma generate done'
 
   info 'prisma db push (creates/updates prisma/dev.db)'
+  warn 'Running prisma db push with --accept-data-loss for local bootstrap.'
   DATABASE_URL='file:./prisma/dev.db' npx prisma db push --accept-data-loss
   ok 'prisma db push done -> prisma/dev.db'
 

@@ -3,13 +3,17 @@ import { existsSync } from 'node:fs'
 
 const sidecarPort = process.env.PYTHON_CORE_PORT || '8008'
 const canRunSidecar = existsSync('.venv/bin/python3') && existsSync('src/core/main.py')
+const SHUTDOWN_GRACE_PERIOD_MS = 300
 
 let nextProcess: ChildProcess | null = null
 let sidecarProcess: ChildProcess | null = null
 
 const stopChild = (child: ChildProcess | null): void => {
   if (child && !child.killed) {
-    child.kill('SIGTERM')
+    const stopped = child.kill('SIGTERM')
+    if (!stopped) {
+      console.warn(`Failed to send SIGTERM to process ${child.pid ?? 'unknown'}`)
+    }
   }
 }
 
@@ -17,7 +21,7 @@ const shutdown = (signal: NodeJS.Signals): void => {
   console.log(`Received ${signal}, shutting down...`)
   stopChild(sidecarProcess)
   stopChild(nextProcess)
-  setTimeout(() => process.exit(0), 300)
+  setTimeout(() => process.exit(0), SHUTDOWN_GRACE_PERIOD_MS)
 }
 
 const startNextDev = (): ChildProcess => {

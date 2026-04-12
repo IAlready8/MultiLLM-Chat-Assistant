@@ -4,7 +4,14 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 const getEnv = (key: string, fallback: string): string =>
-  (process.env[key] || fallback).trim()
+  (process.env[key] ?? fallback).trim()
+
+const assertValidEmail = (value: string, fieldName: string): void => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(value)) {
+    throw new Error(`${fieldName} must be a valid email address. Received: ${value}`)
+  }
+}
 
 async function main(): Promise<void> {
   const demoEmail = getEnv('DEMO_ACCOUNT_EMAIL', 'demo@local.dev').toLowerCase()
@@ -13,6 +20,9 @@ async function main(): Promise<void> {
 
   const guestEmail = getEnv('GUEST_USER_EMAIL', 'guest@local.dev').toLowerCase()
   const guestName = getEnv('GUEST_USER_NAME', 'Guest User')
+
+  assertValidEmail(demoEmail, 'DEMO_ACCOUNT_EMAIL')
+  assertValidEmail(guestEmail, 'GUEST_USER_EMAIL')
 
   const demoHash = await bcrypt.hash(demoPassword, 10)
 
