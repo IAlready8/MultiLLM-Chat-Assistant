@@ -215,11 +215,13 @@ inject_env_var() {
   local raw_value="$2"
   local file="$3"
   local esc
+  local os
   esc="$(printf '%s' "$raw_value" | sed 's/[\/&]/\\&/g')"
+  os="$(uname -s)"
 
   if grep -q "^${key}=" "$file" 2>/dev/null; then
-    if sed -i '' "s|^${key}=.*|${key}=${esc}|" "$file" 2>/dev/null; then
-      :
+    if [[ "$os" == 'Darwin' ]]; then
+      sed -i '' "s|^${key}=.*|${key}=${esc}|" "$file"
     else
       sed -i "s|^${key}=.*|${key}=${esc}|" "$file"
     fi
@@ -285,11 +287,11 @@ if [[ "$SKIP_DB" == '0' ]]; then
   [[ -f prisma/schema.sqlite.prisma ]] || fail 'Missing prisma/schema.sqlite.prisma. Add that file at /prisma/schema.sqlite.prisma before running with database setup enabled.'
 
   info 'prisma generate'
-  DATABASE_URL='file:./prisma/dev.db' npx prisma generate 2>&1 | tail -3
+  DATABASE_URL='file:./prisma/dev.db' npx prisma generate
   ok 'prisma generate done'
 
   info 'prisma db push (creates/updates prisma/dev.db)'
-  DATABASE_URL='file:./prisma/dev.db' npx prisma db push --accept-data-loss 2>&1 | tail -5
+  DATABASE_URL='file:./prisma/dev.db' npx prisma db push --accept-data-loss
   ok 'prisma db push done -> prisma/dev.db'
 
   # ---------------------------------------------------------------------------
@@ -297,7 +299,7 @@ if [[ "$SKIP_DB" == '0' ]]; then
   # ---------------------------------------------------------------------------
   step 'Seeding database (demo + guest accounts)'
   [[ -f prisma/seed.ts ]] || fail 'Missing prisma/seed.ts. Add that file at /prisma/seed.ts before running with database setup enabled.'
-  DATABASE_URL='file:./prisma/dev.db' npx tsx prisma/seed.ts 2>&1
+  DATABASE_URL='file:./prisma/dev.db' npx tsx prisma/seed.ts
   ok 'Database seeded'
 else
   info 'Skipping prisma db push + seed (--skip-db)'
