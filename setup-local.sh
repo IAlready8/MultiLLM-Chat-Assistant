@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 
 # =============================================================================
 # setup-local.sh - MultiLLM Chat Assistant local bootstrap
@@ -246,12 +246,12 @@ done
 # -----------------------------------------------------------------------------
 if [[ "$SKIP_INSTALL" == '0' ]]; then
   step 'Installing Node.js dependencies'
-  npm install --prefer-offline 2>&1 | tail -4
+  npm install --prefer-offline
   ok 'npm install done'
 
   if ! npx tsx --version >/dev/null 2>&1; then
     info 'Installing tsx globally (needed for server.ts)'
-    npm install -g tsx 2>&1 | tail -2
+    npm install -g tsx
   fi
   ok "tsx available: $(npx tsx --version)"
 else
@@ -282,7 +282,7 @@ fi
 if [[ "$SKIP_DB" == '0' ]]; then
   step 'Setting up database (SQLite -> prisma/dev.db)'
 
-  [[ -f prisma/schema.sqlite.prisma ]] || fail 'prisma/schema.sqlite.prisma missing. Copy it from the setup outputs into the project.'
+  [[ -f prisma/schema.sqlite.prisma ]] || fail 'Missing prisma/schema.sqlite.prisma. Add that file at /prisma/schema.sqlite.prisma before running with database setup enabled.'
 
   info 'prisma generate'
   DATABASE_URL='file:./prisma/dev.db' npx prisma generate 2>&1 | tail -3
@@ -296,7 +296,7 @@ if [[ "$SKIP_DB" == '0' ]]; then
   # Step 8 - Seed
   # ---------------------------------------------------------------------------
   step 'Seeding database (demo + guest accounts)'
-  [[ -f prisma/seed.ts ]] || fail 'prisma/seed.ts missing. Copy it from the setup outputs.'
+  [[ -f prisma/seed.ts ]] || fail 'Missing prisma/seed.ts. Add that file at /prisma/seed.ts before running with database setup enabled.'
   DATABASE_URL='file:./prisma/dev.db' npx tsx prisma/seed.ts 2>&1
   ok 'Database seeded'
 else
