@@ -143,11 +143,8 @@ if [[ "$INJECT_LLM_KEYS" == '1' ]]; then
     fi
 
     key_input=''
-    if [[ -n "${ZSH_VERSION:-}" ]]; then
-      read -r -s "key_input?  > "
-    else
-      read -r -s -p '  > ' key_input
-    fi
+    printf '  > '
+    read -r -s key_input
     printf '\n'
 
     if [[ -n "$key_input" ]]; then
@@ -251,10 +248,6 @@ if [[ "$SKIP_INSTALL" == '0' ]]; then
   npm install --prefer-offline
   ok 'npm install done'
 
-  if ! npx tsx --version >/dev/null 2>&1; then
-    info 'Installing tsx globally (needed for server.ts)'
-    npm install -g tsx
-  fi
   ok "tsx available: $(npx tsx --version)"
 else
   info 'Skipping npm install (--skip-install)'
@@ -284,7 +277,7 @@ fi
 if [[ "$SKIP_DB" == '0' ]]; then
   step 'Setting up database (SQLite -> prisma/dev.db)'
 
-  [[ -f prisma/schema.sqlite.prisma ]] || fail 'Missing prisma/schema.sqlite.prisma. Add that file at /prisma/schema.sqlite.prisma before running with database setup enabled.'
+  [[ -f prisma/schema.prisma ]] || fail 'Missing prisma/schema.prisma. Ensure Prisma schema exists before running with database setup enabled.'
 
   info 'prisma generate'
   DATABASE_URL='file:./prisma/dev.db' npx prisma generate
@@ -321,6 +314,10 @@ if [[ -d .venv ]]; then
     --log-level error &
   SIDECAR_PID=$!
 
+  if ! kill -0 "$SIDECAR_PID" 2>/dev/null; then
+    warn 'Sidecar failed to start. Check Python dependencies and uvicorn availability.'
+  fi
+
   for i in $(seq 1 24); do
     sleep 0.5
     if curl -sf "http://127.0.0.1:${SIDECAR_PORT}/api/v1/health" >/dev/null 2>&1; then
@@ -333,7 +330,7 @@ if [[ -d .venv ]]; then
   kill "$SIDECAR_PID" 2>/dev/null || true
   wait "$SIDECAR_PID" 2>/dev/null || true
 
-  [[ "$SIDECAR_READY" == '1' ]] || warn 'Sidecar did not respond in 12s. App still works - Node.js providers used as fallback.'
+  [[ "$SIDECAR_READY" == '1' ]] || warn 'Sidecar did not respond in 12s. App still works via Node.js providers; troubleshoot with npx tsx server.ts.'
 else
   warn '.venv not found - skipping sidecar smoke test. Run without --skip-install first.'
 fi
