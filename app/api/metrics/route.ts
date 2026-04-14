@@ -8,7 +8,47 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthenticatedAdmin } from '@/lib/api-auth';
 import { getServerTimestamp } from '@/lib/utils';
+
+// ============================================================================
+// Cardinality & Validation Constants
+// ============================================================================
+
+/** Maximum number of unique metric series per type (counters, gauges, histograms). */
+const MAX_METRICS_PER_TYPE = 100;
+/** Maximum number of label key/value pairs on a single metric. */
+const MAX_LABELS_PER_METRIC = 10;
+/** Maximum length for a metric name. */
+const MAX_METRIC_NAME_LENGTH = 128;
+/** Maximum length for a label key or value. */
+const MAX_LABEL_VALUE_LENGTH = 256;
+/** Valid Prometheus metric name pattern: letters/digits/underscores, starting with letter/underscore. */
+const METRIC_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+/** Valid Prometheus label key pattern: letters/digits/underscores (no leading digits). */
+const LABEL_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+function validateMetricName(name: unknown): name is string {
+  return (
+    typeof name === 'string' &&
+    name.length > 0 &&
+    name.length <= MAX_METRIC_NAME_LENGTH &&
+    METRIC_NAME_RE.test(name)
+  );
+}
+
+function validateLabels(labels: unknown): labels is Record<string, string> | undefined {
+  if (labels === undefined || labels === null) return true;
+  if (typeof labels !== 'object' || Array.isArray(labels)) return false;
+  const entries = Object.entries(labels as Record<string, unknown>);
+  if (entries.length > MAX_LABELS_PER_METRIC) return false;
+  return entries.every(
+    ([k, v]) =>
+      LABEL_KEY_RE.test(k) &&
+      typeof v === 'string' &&
+      v.length <= MAX_LABEL_VALUE_LENGTH
+  );
+}
 
 // ============================================================================
 // Metrics Types & Storage
@@ -143,16 +183,49 @@ export async function GET(): Promise<NextResponse> {
 }
 
 // ============================================================================
-// POST /api/metrics - Internal metrics collection
+// POST /api/metrics - Internal metrics collection (admin only)
 // ============================================================================
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const authCheck = await getAuthenticatedAdmin();
+  if (authCheck instanceof NextResponse) return authCheck;
+
   try {
     const body = await request.json();
-    if (body.type === 'counter') incrementCounter(body.name, body.labels, body.value);
-    else if (body.type === 'gauge') setGauge(body.name, body.value, body.labels);
-    else if (body.type === 'histogram') observeHistogram(body.name, body.value, body.labels);
-    else return NextResponse.json({ error: 'Invalid metric type' }, { status: 400 });
+
+    if (!validateMetricName(body.name)) {
+      return NextResponse.json(
+        { error: 'Invalid metric name: must match [a-zA-Z_][a-zA-Z0-9_]* and be ≤128 chars' },
+        { status: 400 }
+      );
+    }
+
+    if (!validateLabels(body.labels)) {
+      return NextResponse.json(
+        { error: `Invalid labels: must be an object with ≤${MAX_LABELS_PER_METRIC} string entries (keys matching [a-zA-Z_][a-zA-Z0-9_]*, values ≤${MAX_LABEL_VALUE_LENGTH} chars)` },
+        { status: 400 }
+      );
+    }
+
+    if (body.type === 'counter') {
+      if (metricsStorage.counters.size >= MAX_METRICS_PER_TYPE) {
+        return NextResponse.json({ error: 'Counter cardinality limit reached' }, { status: 429 });
+      }
+      incrementCounter(body.name, body.labels, body.value);
+    } else if (body.type === 'gauge') {
+      if (metricsStorage.gauges.size >= MAX_METRICS_PER_TYPE) {
+        return NextResponse.json({ error: 'Gauge cardinality limit reached' }, { status: 429 });
+      }
+      setGauge(body.name, body.value, body.labels);
+    } else if (body.type === 'histogram') {
+      if (metricsStorage.histograms.size >= MAX_METRICS_PER_TYPE) {
+        return NextResponse.json({ error: 'Histogram cardinality limit reached' }, { status: 429 });
+      }
+      observeHistogram(body.name, body.value, body.labels);
+    } else {
+      return NextResponse.json({ error: 'Invalid metric type' }, { status: 400 });
+    }
+
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
