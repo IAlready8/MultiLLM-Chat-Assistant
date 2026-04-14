@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server'
 import { apiLog } from '@/lib/api-logger'
 
-export type MetricsRouteContext = {
-  params: Promise<Record<string, string | string[] | undefined>>
-}
-
 type RouteHandler = (
   req: Request,
-  ctx: MetricsRouteContext
+  ctx: { params: Promise<Record<string, string | string[] | undefined>> }
 ) => Promise<Response | NextResponse>
 
 /**

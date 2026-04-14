@@ -252,10 +252,7 @@ async function callOpenRouter(
             const content = data.choices?.[0]?.delta?.content;
             if (content) options.onChunk(content);
           } catch (e) {
-            console.error('Error parsing OpenRouter streaming response chunk', {
-              error: e instanceof Error ? e.message : String(e),
-              lineLength: line.length,
-            });
+            console.error("Error parsing streaming response chunk:", e, "Raw line:", line);
           }
         }
       }
@@ -330,10 +327,7 @@ async function callOpenAI(
             const content = data.choices?.[0]?.delta?.content;
             if (content) options.onChunk(content);
           } catch (e) {
-            console.error('Error parsing OpenAI streaming response chunk', {
-              error: e instanceof Error ? e.message : String(e),
-              lineLength: line.length,
-            });
+            console.error('Error parsing streaming response chunk:', e, 'Raw line:', line);
           }
         }
       }
@@ -399,10 +393,7 @@ async function callClaude(
             const content = data.delta?.text;
             if (content) options.onChunk(content);
           } catch (e) {
-            console.error('Error parsing Claude streaming response chunk', {
-              error: e instanceof Error ? e.message : String(e),
-              lineLength: line.length,
-            });
+            console.error('Error parsing streaming response chunk:', e, 'Raw line:', line);
           }
         }
       }

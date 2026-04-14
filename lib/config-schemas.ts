@@ -40,6 +40,14 @@ export const grokConfigSchema = providerConfigSchema.extend({
   maxTokens: z.number().min(1).max(100000).default(4096),
 })
 
+export const ollamaConfigSchema = providerConfigSchema.extend({
+  baseUrl: z.string().url().default('http://localhost:11434'),
+}).optional()
+
+export const mistralConfigSchema = providerConfigSchema.extend({
+  maxTokens: z.number().min(1).max(128000).default(4096),
+}).optional()
+
 // System Configuration Schemas
 export const featuresConfigSchema = z.object({
   streaming: z.boolean().default(true),
@@ -74,6 +82,8 @@ export const configSchema = z.object({
     googleai: googleAIConfigSchema.optional(),
     openrouter: openRouterConfigSchema.optional(),
     grok: grokConfigSchema.optional(),
+    ollama: ollamaConfigSchema,
+    mistral: mistralConfigSchema,
   }),
   features: featuresConfigSchema,
   security: securityConfigSchema,
@@ -89,6 +99,8 @@ export type AnthropicConfig = z.infer<typeof anthropicConfigSchema>
 export type GoogleAIConfig = z.infer<typeof googleAIConfigSchema>
 export type OpenRouterConfig = z.infer<typeof openRouterConfigSchema>
 export type GrokConfig = z.infer<typeof grokConfigSchema>
+export type OllamaConfig = z.infer<typeof ollamaConfigSchema>
+export type MistralConfig = z.infer<typeof mistralConfigSchema>
 export type FeaturesConfig = z.infer<typeof featuresConfigSchema>
 export type SecurityConfig = z.infer<typeof securityConfigSchema>
 export type DatabaseConfig = z.infer<typeof databaseConfigSchema>
@@ -118,6 +130,8 @@ export const defaultProviderModels = {
   googleai: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'],
   openrouter: ['openrouter/auto', 'openai/gpt-4', 'anthropic/claude-3-opus', 'google/gemini-pro'],
   grok: ['grok-beta', 'grok-2-1212'],
+  ollama: ['llama3', 'llama3:70b', 'mistral', 'mixtral', 'phi3', 'gemma2', 'codellama', 'qwen2', 'deepseek-coder'],
+  mistral: ['mistral-large-latest', 'mistral-small-latest', 'open-mixtral-8x22b', 'open-mixtral-8x7b', 'open-mistral-7b', 'codestral-latest'],
 }
 
 export const defaultRateLimits = {
@@ -126,4 +140,6 @@ export const defaultRateLimits = {
   googleai: { requests: 60, window: 60000 },
   openrouter: { requests: 200, window: 60000 },
   grok: { requests: 60, window: 60000 },
+  ollama: { requests: 1000, window: 60000 },
+  mistral: { requests: 60, window: 60000 },
 }

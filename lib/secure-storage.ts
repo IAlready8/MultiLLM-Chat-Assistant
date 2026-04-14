@@ -3,32 +3,6 @@ import { encrypt, decrypt } from './crypto';
 
 // In-memory storage for API keys (in a real app, this would be more secure)
 const secureStorage: Record<string, string> = {};
-let storageEncryptionKeyPromise: Promise<string> | null = null;
-
-const generateRuntimeKey = async (): Promise<string> => {
-  // Allow explicit override for deterministic test environments.
-  const configuredKey = process.env.NEXT_PUBLIC_SECURE_STORAGE_KEY?.trim();
-  if (configuredKey) {
-    return configuredKey;
-  }
-
-  // Generate a per-runtime key to avoid a hardcoded global fallback.
-  if (typeof window === 'undefined') {
-    const { randomBytes } = await import('crypto');
-    return randomBytes(32).toString('hex');
-  }
-
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-};
-
-const getStorageEncryptionKey = async (): Promise<string> => {
-  if (!storageEncryptionKeyPromise) {
-    storageEncryptionKeyPromise = generateRuntimeKey();
-  }
-  return storageEncryptionKeyPromise;
-};
 
 /**
  * Store an API key securely
@@ -42,8 +16,7 @@ export async function setStoredApiKey(provider: string, apiKey: string): Promise
   }
   
   try {
-    const encryptionKey = await getStorageEncryptionKey();
-    const encrypted = await encrypt(apiKey, encryptionKey);
+    const encrypted = await encrypt(apiKey, 'secure-storage-key');
     secureStorage[provider] = encrypted;
   } catch (error) {
     console.error('Error encrypting API key:', error);
@@ -63,8 +36,7 @@ export async function getStoredApiKey(provider: string): Promise<string | null> 
   }
   
   try {
-    const encryptionKey = await getStorageEncryptionKey();
-    return await decrypt(encrypted, encryptionKey);
+    return await decrypt(encrypted, 'secure-storage-key');
   } catch (error) {
     console.error('Error decrypting API key:', error);
     return null;
@@ -77,20 +49,20 @@ export async function getStoredApiKey(provider: string): Promise<string | null> 
  * @returns The API key or null if not found
  */
 export async function getLegacyApiKeyIfPresent(provider: string): Promise<string | null> {
-  if (typeof window === 'undefined') {
+  // Only access localStorage in browser context.
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
     return null;
   }
 
-  // Check localStorage for legacy keys
-  const legacyKey = localStorage.getItem(`apiKey_${provider}`);
-  if (legacyKey) {
-    // Remove the legacy key from localStorage
-    localStorage.removeItem(`apiKey_${provider}`);
-    
-    // Migrate to secure storage
-    await setStoredApiKey(provider, legacyKey);
-    
-    return legacyKey;
+  try {
+    const legacyKey = localStorage.getItem(`apiKey_${provider}`);
+    if (legacyKey) {
+      localStorage.removeItem(`apiKey_${provider}`);
+      await setStoredApiKey(provider, legacyKey);
+      return legacyKey;
+    }
+  } catch (error) {
+    console.error('Error accessing localStorage:', error);
   }
   
   return null;

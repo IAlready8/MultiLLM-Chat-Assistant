@@ -1,5 +1,4 @@
 import { logger } from '@/lib/logger'
-import { summarizeErrorForLogs } from '@/lib/log-sanitizer'
 import { v4 as uuidv4 } from 'uuid'
 
 type AnalyticsRow = { payload?: string | null }
@@ -20,9 +19,7 @@ async function getPrismaClient(): Promise<PrismaLike | null> {
     prismaClientPromise = import('@/lib/prisma')
       .then((mod) => (mod.default ?? (mod as unknown as { prisma: PrismaLike }).prisma) as PrismaLike)
       .catch((error) => {
-        logger.warn('error_system_prisma_unavailable', {
-          error: summarizeErrorForLogs(error),
-        })
+        console.warn('Prisma client unavailable in error-system:', error)
         return null
       })
   }
@@ -279,15 +276,8 @@ export class ErrorManager {
           isRetryable: appError.isRetryable,
         })
       } catch (logErr) {
-        console.error(
-          JSON.stringify({
-            ts: new Date().toISOString(),
-            level: 'error',
-            event: 'error_system_log_failure',
-            logError: summarizeErrorForLogs(logErr),
-            originalError: summarizeErrorForLogs(error),
-          })
-        )
+        console.error('Failed to log error:', logErr)
+        console.error('Original error:', error)
       }
 
       // Persist critical errors for analytics/inspection
@@ -317,15 +307,8 @@ export class ErrorManager {
 
     } catch (loggingError) {
       // Fallback logging to console if structured logging fails
-      console.error(
-        JSON.stringify({
-          ts: new Date().toISOString(),
-          level: 'error',
-          event: 'error_system_unhandled_log_failure',
-          logError: summarizeErrorForLogs(loggingError),
-          originalError: summarizeErrorForLogs(error),
-        })
-      )
+      console.error('Failed to log error:', loggingError)
+      console.error('Original error:', error)
     }
   }
 
@@ -357,7 +340,7 @@ export class ErrorManager {
   private async reportToMonitoring(error: AppError): Promise<void> {
     // Implement integration with your monitoring service (e.g., Sentry, DataDog)
     // This is a placeholder implementation
-    logger.info('monitoring_report_queued', {
+    console.log('Reporting to monitoring service:', {
       error: error.message,
       code: error.code,
       category: error.category,
@@ -447,8 +430,8 @@ export class ErrorManager {
         },
       })
 
-      const byCategory = { ...zeroByCategory }
-      const bySeverity = { ...zeroBySeverity }
+      const byCategory = {} as Record<ErrorCategory, number>
+      const bySeverity = {} as Record<ErrorSeverity, number>
       const counts = new Map<string, number>()
       let total = 0
 
