@@ -208,17 +208,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     if (body.type === 'counter') {
-      if (metricsStorage.counters.size >= MAX_METRICS_PER_TYPE) {
+      const counterKey = JSON.stringify({ name: body.name, labels: body.labels });
+      if (!metricsStorage.counters.has(counterKey) && metricsStorage.counters.size >= MAX_METRICS_PER_TYPE) {
         return NextResponse.json({ error: 'Counter cardinality limit reached' }, { status: 429 });
       }
       incrementCounter(body.name, body.labels, body.value);
     } else if (body.type === 'gauge') {
-      if (metricsStorage.gauges.size >= MAX_METRICS_PER_TYPE) {
+      const gaugeKey = JSON.stringify({ name: body.name, labels: body.labels });
+      if (!metricsStorage.gauges.has(gaugeKey) && metricsStorage.gauges.size >= MAX_METRICS_PER_TYPE) {
         return NextResponse.json({ error: 'Gauge cardinality limit reached' }, { status: 429 });
       }
       setGauge(body.name, body.value, body.labels);
     } else if (body.type === 'histogram') {
-      if (metricsStorage.histograms.size >= MAX_METRICS_PER_TYPE) {
+      const histKey = JSON.stringify({ name: body.name, labels: body.labels });
+      if (!metricsStorage.histograms.has(histKey) && metricsStorage.histograms.size >= MAX_METRICS_PER_TYPE) {
         return NextResponse.json({ error: 'Histogram cardinality limit reached' }, { status: 429 });
       }
       observeHistogram(body.name, body.value, body.labels);
