@@ -26,31 +26,32 @@ async function main(): Promise<void> {
 
   const demoHash = await bcrypt.hash(demoPassword, 10)
 
-  await prisma.user.upsert({
-    where: { email: demoEmail },
-    update: {
-      name: demoName,
-      password: demoHash,
-    },
-    create: {
-      name: demoName,
-      email: demoEmail,
-      password: demoHash,
-    },
-  })
-
-  await prisma.user.upsert({
-    where: { email: guestEmail },
-    update: {
-      name: guestName,
-      password: null,
-    },
-    create: {
-      name: guestName,
-      email: guestEmail,
-      password: null,
-    },
-  })
+  await prisma.$transaction([
+    prisma.user.upsert({
+      where: { email: demoEmail },
+      update: {
+        name: demoName,
+        password: demoHash,
+      },
+      create: {
+        name: demoName,
+        email: demoEmail,
+        password: demoHash,
+      },
+    }),
+    prisma.user.upsert({
+      where: { email: guestEmail },
+      update: {
+        name: guestName,
+        password: null,
+      },
+      create: {
+        name: guestName,
+        email: guestEmail,
+        password: null,
+      },
+    }),
+  ])
 
   console.log(`Seeded demo user: ${demoEmail}`)
   console.log(`Seeded guest user: ${guestEmail}`)

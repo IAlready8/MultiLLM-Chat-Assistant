@@ -278,14 +278,16 @@ if [[ "$SKIP_DB" == '0' ]]; then
   step 'Setting up database (SQLite -> prisma/dev.db)'
 
   [[ -f prisma/schema.prisma ]] || fail 'Missing prisma/schema.prisma. Ensure Prisma schema exists before running with database setup enabled.'
+  LOCAL_DATABASE_URL='file:./prisma/dev.db'
+  [[ "$LOCAL_DATABASE_URL" == file:* ]] || fail 'Refusing to run Prisma local bootstrap on non-SQLite DATABASE_URL.'
 
   info 'prisma generate'
-  DATABASE_URL='file:./prisma/dev.db' npx prisma generate
+  DATABASE_URL="$LOCAL_DATABASE_URL" npx prisma generate
   ok 'prisma generate done'
 
   info 'prisma db push (creates/updates prisma/dev.db)'
   warn 'Running prisma db push with --accept-data-loss for local bootstrap.'
-  DATABASE_URL='file:./prisma/dev.db' npx prisma db push --accept-data-loss
+  DATABASE_URL="$LOCAL_DATABASE_URL" npx prisma db push --accept-data-loss
   ok 'prisma db push done -> prisma/dev.db'
 
   # ---------------------------------------------------------------------------
@@ -293,7 +295,7 @@ if [[ "$SKIP_DB" == '0' ]]; then
   # ---------------------------------------------------------------------------
   step 'Seeding database (demo + guest accounts)'
   [[ -f prisma/seed.ts ]] || fail 'Missing prisma/seed.ts. Add that file at prisma/seed.ts before running with database setup enabled.'
-  DATABASE_URL='file:./prisma/dev.db' npx tsx prisma/seed.ts
+  DATABASE_URL="$LOCAL_DATABASE_URL" npx tsx prisma/seed.ts
   ok 'Database seeded'
 else
   info 'Skipping prisma db push + seed (--skip-db)'
