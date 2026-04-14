@@ -1,5 +1,6 @@
 // lib/secure-storage.ts
 import { encrypt, decrypt } from './crypto';
+import { resolveApiKeyEncryptionSeed } from './runtime-secrets';
 
 // In-memory storage for API keys (in a real app, this would be more secure)
 const secureStorage: Record<string, string> = {};
@@ -16,7 +17,7 @@ export async function setStoredApiKey(provider: string, apiKey: string): Promise
   }
   
   try {
-    const encrypted = await encrypt(apiKey, 'secure-storage-key');
+    const encrypted = await encrypt(apiKey, resolveApiKeyEncryptionSeed());
     secureStorage[provider] = encrypted;
   } catch (error) {
     console.error('Error encrypting API key:', error);
@@ -36,7 +37,7 @@ export async function getStoredApiKey(provider: string): Promise<string | null> 
   }
   
   try {
-    return await decrypt(encrypted, 'secure-storage-key');
+    return await decrypt(encrypted, resolveApiKeyEncryptionSeed());
   } catch (error) {
     console.error('Error decrypting API key:', error);
     return null;
