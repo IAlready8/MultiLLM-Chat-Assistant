@@ -133,7 +133,6 @@ export class UsageAnalyticsService {
 
     const [analyticsEvents, conversations, user] = await Promise.all([
       prisma.analytics.findMany({ where: { userId, createdAt: { gte: startDate, lte: endDate } } }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       prisma.conversation.findMany({ where: { userId }, include: { messages: true } }) as Promise<any[]>,
       prisma.user.findUnique({ where: { id: userId } }),
     ]);
@@ -162,7 +161,6 @@ export class UsageAnalyticsService {
     });
 
     const totalRequests = events.length;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allRequests = await (prisma.analytics as any).count?.({
       where: { createdAt: { gte: startDate, lte: endDate }, event: 'message.sent' },
     }) || 0;
@@ -177,7 +175,6 @@ export class UsageAnalyticsService {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     const [requestsLast24h, activeUsersLast24h] = await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (prisma.analytics as any).count?.({ where: { createdAt: { gte: cutoff }, event: { in: ['message.sent', 'message.received'] } } }) || 0,
       prisma.analytics.findMany({ where: { createdAt: { gte: cutoff } }, distinct: ['userId'], select: { userId: true } }).then(users => users.length),
     ]);
@@ -235,7 +232,6 @@ export class UsageAnalyticsService {
 
   private calculateUserUsage(
     userRecords: { userId: string }[],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     conversations: any[],
     dateRange: { startDate: Date; endDate: Date }
   ): UserUsage[] {
@@ -287,22 +283,33 @@ export class UsageAnalyticsService {
     const periodDuration = currentRange.endDate.getTime() - currentRange.startDate.getTime();
     const previousEnd = new Date(currentRange.startDate.getTime() - 1);
     const previousStart = new Date(previousEnd.getTime() - periodDuration);
+    const previousRange = { startDate: previousStart, endDate: previousEnd };
 
-    const previousOptions: AnalyticsQueryOptions = { ...options, startDate: previousStart, endDate: previousEnd };
-    const previousReport = await this.generateReport(previousOptions);
+    // FIX: Compute previous-period summary directly instead of calling generateReport()
+    // which would cause infinite recursion via calculateTrends().
+    const [previousEvents, previousUsers] = await Promise.all([
+      this.fetchAnalyticsEvents(previousRange, options.provider),
+      this.fetchUsers(previousRange),
+    ]);
+    const previousSummary = this.calculateSummary(previousEvents, previousUsers, previousRange);
 
-    // FIX: was `this.summary.totalRequests` - scope bug. Use local summary variable.
     const currentSummary = this.calculateSummary(
       await this.fetchAnalyticsEvents(currentRange, options.provider),
       await this.fetchUsers(currentRange),
       currentRange
     );
 
-    const requestsChange = previousReport.summary.totalRequests > 0
-      ? (currentSummary.totalRequests - previousReport.summary.totalRequests) / previousReport.summary.totalRequests
+    const requestsChange = previousSummary.totalRequests > 0
+      ? (currentSummary.totalRequests - previousSummary.totalRequests) / previousSummary.totalRequests
+      : 0;
+    const usersChange = previousSummary.uniqueUsers > 0
+      ? (currentSummary.uniqueUsers - previousSummary.uniqueUsers) / previousSummary.uniqueUsers
+      : 0;
+    const costChange = previousSummary.estimatedCost && previousSummary.estimatedCost > 0
+      ? ((currentSummary.estimatedCost ?? 0) - previousSummary.estimatedCost) / previousSummary.estimatedCost
       : 0;
 
-    return { requestsChange, usersChange: 0, costChange: 0 };
+    return { requestsChange, usersChange, costChange };
   }
 
   private getDateRange(period: TimePeriod, startDate?: Date, endDate?: Date) {

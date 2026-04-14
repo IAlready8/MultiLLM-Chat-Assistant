@@ -112,79 +112,76 @@ export function useStream(): UseStreamReturn {
     setError(null)
   }, [isStreaming])
 
-  const start = useCallback(
-    async (options: UseStreamStartOptions) => {
-      const {
+  const start = async (options: UseStreamStartOptions) => {
+    const {
+      provider,
+      messages,
+      model,
+      temperature,
+      maxTokens,
+      onChunk,
+      onDone,
+      onError,
+    } = options
+
+    // Abort any existing stream before starting a new one
+    if (handleRef.current) {
+      handleRef.current.abort('superseded')
+      handleRef.current = null
+    }
+
+    // Reset accumulator for this stream
+    accumulatorRef.current = ''
+    setContent('')
+    setError(null)
+    setIsStreaming(true)
+
+    const streamOptions: StreamOptions = { model, temperature, maxTokens }
+
+    try {
+      const handle = await streamChat(
         provider,
         messages,
-        model,
-        temperature,
-        maxTokens,
-        onChunk,
-        onDone,
-        onError,
-      } = options
-
-      // Abort any existing stream before starting a new one
-      if (handleRef.current) {
-        handleRef.current.abort('superseded')
-        handleRef.current = null
-      }
-
-      // Reset accumulator for this stream
-      accumulatorRef.current = ''
-      setContent('')
-      setError(null)
-      setIsStreaming(true)
-
-      const streamOptions: StreamOptions = { model, temperature, maxTokens }
-
-      try {
-        const handle = await streamChat(
-          provider,
-          messages,
-          streamOptions,
-          (event) => {
-            switch (event.type) {
-              case 'chunk': {
-                accumulatorRef.current += event.content
-                setContent(accumulatorRef.current)
-                onChunk?.(event.content)
-                break
-              }
-              case 'done': {
-                setIsStreaming(false)
-                handleRef.current = null
-                onDone?.(accumulatorRef.current)
-                break
-              }
-              case 'error': {
-                setIsStreaming(false)
-                setError(event.error)
-                handleRef.current = null
-                onError?.(event.error)
-                break
-              }
-              case 'aborted': {
-                setIsStreaming(false)
-                handleRef.current = null
-                // Treat user aborts as non-error state (content stays)
-                break
-              }
+        streamOptions,
+        (event) => {
+          switch (event.type) {
+            case 'chunk': {
+              accumulatorRef.current += event.content
+              setContent(accumulatorRef.current)
+              onChunk?.(event.content)
+              break
             }
-          },
-        )
-        handleRef.current = handle
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Failed to start stream'
-        setIsStreaming(false)
-        setError(msg)
-        handleRef.current = null
-        onError?.(msg)
-      }
-    },
-    [],
-  )
+            case 'done': {
+              setIsStreaming(false)
+              handleRef.current = null
+              onDone?.(accumulatorRef.current)
+              break
+            }
+            case 'error': {
+              setIsStreaming(false)
+              setError(event.error)
+              handleRef.current = null
+              onError?.(event.error)
+              break
+            }
+            case 'aborted': {
+              setIsStreaming(false)
+              handleRef.current = null
+              // Treat user aborts as non-error state (content stays)
+              break
+            }
+          }
+        },
+      )
+      handleRef.current = handle
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to start stream'
+      setIsStreaming(false)
+      setError(msg)
+      handleRef.current = null
+      onError?.(msg)
+    }
+  }
 
   return { content, isStreaming, error, start, abort, reset }
 }

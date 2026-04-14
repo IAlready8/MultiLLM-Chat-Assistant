@@ -1,12 +1,17 @@
+import { sanitizeLogValue } from '@/lib/log-sanitizer'
+import { getReleaseMetadata } from '@/lib/release-metadata'
+
 type Level = 'info' | 'warn' | 'error'
 
 function log(level: Level, event: string, data?: Record<string, any>) {
-  const entry = {
+  const sanitizedData = data ? (sanitizeLogValue(data) as Record<string, unknown>) : {}
+  const entry = sanitizeLogValue({
     ts: new Date().toISOString(),
     level,
-    event,
-    ...data,
-  }
+    event: String(sanitizeLogValue(event)),
+    release: getReleaseMetadata(),
+    ...sanitizedData,
+  })
   console[level](JSON.stringify(entry))
 }
 

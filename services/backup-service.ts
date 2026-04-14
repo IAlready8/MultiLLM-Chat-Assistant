@@ -116,14 +116,37 @@ export class BackupService {
       'Team', 'TeamMember', 'Subscription',
     ];
 
+    // Map table names to Prisma model delegates
+    const prismaAny = prisma as any;
+    const modelDelegates: Record<string, { findMany: () => Promise<unknown[]> }> = {
+      account: prismaAny.account,
+      session: prismaAny.session,
+      user: prismaAny.user,
+      verificationtoken: prismaAny.verificationToken,
+      conversation: prismaAny.conversation,
+      message: prismaAny.message,
+      providerconfig: prismaAny.providerConfig,
+      analytics: prismaAny.analytics,
+      goal: prismaAny.goal,
+      persona: prismaAny.persona,
+      team: prismaAny.team,
+      teammember: prismaAny.teamMember,
+      subscription: prismaAny.subscription,
+    };
+
     const data: Record<string, unknown[]> = {};
-    const prismaAny = prisma as unknown as Record<string, () => Promise<unknown[]>>;
 
     for (const table of tables) {
       try {
-        const records = await prismaAny[table.toLowerCase()]?.();
-        if (records) data[table] = records;
-      } catch { /* table might not exist */ }
+        const delegate = modelDelegates[table.toLowerCase()];
+        if (delegate && typeof delegate.findMany === 'function') {
+          const records = await delegate.findMany();
+          data[table] = records;
+        }
+      } catch {
+        // Table might not exist or query failed - skip gracefully
+        console.warn(`[Backup] Skipping table: ${table}`);
+      }
     }
 
     const serialized = JSON.stringify(data);

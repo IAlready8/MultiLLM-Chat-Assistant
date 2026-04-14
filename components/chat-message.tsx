@@ -103,8 +103,8 @@ function CopyButton({ text }: { text: string }) {
       await navigator.clipboard.writeText(text)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Clipboard API may be unavailable in some contexts
+    } catch (err) {
+      console.warn('Failed to copy text to clipboard:', err)
     }
   }, [text])
 

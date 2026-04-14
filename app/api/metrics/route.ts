@@ -23,6 +23,8 @@ const MAX_LABELS_PER_METRIC = 10;
 const MAX_METRIC_NAME_LENGTH = 128;
 /** Maximum length for a label key or value. */
 const MAX_LABEL_VALUE_LENGTH = 256;
+/** Cap latency samples to prevent unbounded memory growth. */
+const MAX_REQUEST_LATENCY_SAMPLES = 10_000;
 /** Valid Prometheus metric name pattern: letters/digits/underscores, starting with letter/underscore. */
 const METRIC_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 /** Valid Prometheus label key pattern: letters/digits/underscores (no leading digits). */
@@ -88,9 +90,17 @@ function formatGauge(g: GaugeMetric): string {
 
 function formatHistogram(h: HistogramMetric): string {
   const lines = [`# HELP ${h.name} ${h.help}`, `# TYPE ${h.name} histogram`];
+  const sortedBuckets = [...h.buckets].sort((a, b) => a.le - b.le);
+  let cumulativeCount = 0;
+  for (const bucket of sortedBuckets) {
+    cumulativeCount += bucket.count;
+    lines.push(
+      `${h.name}_bucket${formatLabels({ ...(h.labels ?? {}), le: String(bucket.le) })} ${cumulativeCount}`
+    );
+  }
+  lines.push(`${h.name}_bucket${formatLabels({ ...(h.labels ?? {}), le: '+Inf' })} ${h.count}`);
   lines.push(`${h.name}_sum${formatLabels(h.labels)} ${h.sum}`);
   lines.push(`${h.name}_count${formatLabels(h.labels)} ${h.count}`);
-  for (const bucket of h.buckets) lines.push(`${h.name}_bucket${formatLabels(h.labels)} ${bucket.count}`);
   return lines.join('\n');
 }
 
@@ -113,11 +123,21 @@ export function setGauge(name: string, value: number, labels?: Record<string, st
 export function observeHistogram(name: string, value: number, labels?: Record<string, string>): void {
   const key = JSON.stringify({ name, labels });
   const existing = metricsStorage.histograms.get(key);
+  // Standard Prometheus bucket boundaries
+  const defaultBuckets = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
+  const bucketIndex = defaultBuckets.findIndex((le) => value <= le);
   if (existing) {
-    existing.sum += value; existing.count++;
-    existing.buckets.push({ le: value, count: 1 });
+    existing.sum += value;
+    existing.count++;
+    if (bucketIndex >= 0) {
+      existing.buckets[bucketIndex].count++;
+    }
   } else {
-    metricsStorage.histograms.set(key, { name, help: '', sum: value, count: 1, buckets: [{ le: value, count: 1 }], labels });
+    const buckets = defaultBuckets.map((le, index) => ({
+      le,
+      count: bucketIndex === index ? 1 : 0,
+    }));
+    metricsStorage.histograms.set(key, { name, help: '', sum: value, count: 1, buckets, labels });
   }
 }
 
@@ -125,6 +145,11 @@ export function recordRequestMetrics(method: string, path: string, statusCode: n
   const labels = { method, path: normalizePath(path), status: String(statusCode) };
   incrementCounter('multillm_http_requests_total', labels);
   observeHistogram('multillm_http_request_duration_seconds', durationMs / 1000, labels);
+  // Track latencies for percentile calculations
+  metricsStorage.requestLatencies.push(durationMs);
+  if (metricsStorage.requestLatencies.length > MAX_REQUEST_LATENCY_SAMPLES) {
+    metricsStorage.requestLatencies.shift();
+  }
   if (statusCode >= 500) incrementCounter('multillm_http_errors_total', labels);
 }
 

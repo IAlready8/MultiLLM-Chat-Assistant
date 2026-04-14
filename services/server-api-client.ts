@@ -198,6 +198,76 @@ function getNetworkDefaults(provider: string): { timeoutMs?: number; retries?: n
 }
 
 // Provider implementations (same as in api-client.ts but server-side only)
+async function callOpenAI(
+  prompt: string | string[] | any[],
+  apiKey: string,
+  options: LLMRequestOptions
+): Promise<LLMResponse> {
+  const messages = normalizeToOpenAIChatMessages(prompt, options.systemPrompt)
+
+  const response = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: options.model || 'gpt-4o',
+      messages,
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.maxTokens ?? 2048,
+      stream: options.stream ?? false,
+    }),
+  }, { timeoutMs: options.timeoutMs, retries: options.retries, abortSignal: options.abortSignal })
+
+  if (options.stream && options.onChunk && response.ok && response.body) {
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+          try {
+            const data = JSON.parse(line.slice(6))
+            const content = data.choices?.[0]?.delta?.content
+            if (content) options.onChunk(content)
+          } catch (e) {
+            console.error('Error parsing OpenAI streaming response chunk', {
+              error: e instanceof Error ? e.message : String(e),
+              lineLength: line.length,
+            })
+          }
+        }
+      }
+    }
+
+    return { text: 'Streaming response complete' }
+  }
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Error calling OpenAI API')
+  }
+
+  return {
+    text: data.choices?.[0]?.message?.content || '',
+    usage: {
+      promptTokens: data.usage?.prompt_tokens || 0,
+      completionTokens: data.usage?.completion_tokens || 0,
+      totalTokens: data.usage?.total_tokens || 0,
+    },
+  }
+}
+
 async function callOpenRouter(
   prompt: string | string[] | any[],
   apiKey: string,
@@ -242,81 +312,10 @@ async function callOpenRouter(
             const content = data.choices?.[0]?.delta?.content
             if (content) options.onChunk(content)
           } catch (e) {
-            console.error('Error parsing streaming response chunk:', e, 'Raw line:', line)
-          }
-        }
-      }
-    }
-
-    return { text: 'Streaming response complete' }
-  }
-
-  const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error?.message || 'Error calling OpenRouter API')
-  }
-
-  const content = data.choices?.[0]?.message?.content ?? data.choices?.[0]?.delta?.content ?? ''
-  const usage = data.usage || {}
-
-  return {
-    text: content,
-    usage: {
-      promptTokens: usage.prompt_tokens ?? 0,
-      completionTokens: usage.completion_tokens ?? 0,
-      totalTokens: usage.total_tokens ?? (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
-    },
-    metadata: {
-      model: data.model,
-      id: data.id,
-    },
-  }
-}
-
-async function callOpenAI(
-  prompt: string | string[] | any[],
-  apiKey: string,
-  options: LLMRequestOptions
-): Promise<LLMResponse> {
-  const messages = normalizeToOpenAIChatMessages(prompt, options.systemPrompt)
-
-  const response = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: options.model || 'gpt-4o',
-      messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 2048,
-      stream: options.stream ?? false,
-    }),
-  }, { timeoutMs: options.timeoutMs, retries: options.retries, abortSignal: options.abortSignal })
-
-  if (options.stream && options.onChunk && response.ok && response.body) {
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-          try {
-            const data = JSON.parse(line.slice(6))
-            const content = data.choices?.[0]?.delta?.content
-            if (content) options.onChunk(content)
-          } catch (e) {
-            console.error('Error parsing streaming response chunk:', e, 'Raw line:', line)
+            console.error('Error parsing OpenRouter streaming response chunk', {
+              error: e instanceof Error ? e.message : String(e),
+              lineLength: line.length,
+            })
           }
         }
       }
@@ -382,7 +381,10 @@ async function callClaude(
             const content = data.delta?.text
             if (content) options.onChunk(content)
           } catch (e) {
-            console.error('Error parsing streaming response chunk:', e, 'Raw line:', line)
+            console.error('Error parsing Claude streaming response chunk', {
+              error: e instanceof Error ? e.message : String(e),
+              lineLength: line.length,
+            })
           }
         }
       }
@@ -414,31 +416,28 @@ async function callGoogleAI(
 ): Promise<LLMResponse> {
   const messages = normalizeToGeminiMessages(prompt, options.systemPrompt)
 
-  const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${options.model || 'gemini-pro'}:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const response = await fetchWithRetry(
+    `https://generativelanguage.googleapis.com/v1beta/models/${options.model || 'gemini-pro'}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: messages,
+        generationConfig: {
+          temperature: options.temperature ?? 0.7,
+          maxOutputTokens: options.maxTokens ?? 2048,
+        },
+      }),
     },
-    body: JSON.stringify({
-      contents: messages,
-      generationConfig: {
-        temperature: options.temperature ?? 0.7,
-        maxOutputTokens: options.maxTokens ?? 2048,
-      },
-    }),
-  }, { timeoutMs: options.timeoutMs, retries: options.retries, abortSignal: options.abortSignal })
+    { timeoutMs: options.timeoutMs, retries: options.retries, abortSignal: options.abortSignal }
+  )
 
   const data = await response.json()
-
-  if (!response.ok) {
-    throw new Error(data.error?.message || 'Error calling Google AI API')
-  }
+  if (!response.ok) throw new Error(data.error?.message || 'Error calling Google AI API')
 
   return {
     text: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
-    metadata: {
-      safetyRatings: data.candidates?.[0]?.safetyRatings,
-    },
+    metadata: { safetyRatings: data.candidates?.[0]?.safetyRatings },
   }
 }
 
@@ -452,23 +451,16 @@ async function callLlama(
   try {
     const response = await fetchWithRetry('http://localhost:11434/api/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: options.model || 'llama2',
         messages,
         stream: false,
-        options: {
-          temperature: options.temperature ?? 0.7,
-          num_predict: options.maxTokens ?? 2048,
-        },
+        options: { temperature: options.temperature ?? 0.7, num_predict: options.maxTokens ?? 2048 },
       }),
     }, { timeoutMs: options.timeoutMs, retries: options.retries, abortSignal: options.abortSignal })
 
     if (!response.ok) throw new Error('Ollama not available')
-
     const data = await response.json()
 
     return {
@@ -478,23 +470,14 @@ async function callLlama(
         completionTokens: data.eval_count || 50,
         totalTokens: (data.prompt_eval_count || 20) + (data.eval_count || 50),
       },
-      metadata: {
-        model: data.model,
-        done: data.done,
-      },
+      metadata: { model: data.model, done: data.done },
     }
   } catch (error) {
-    // Fallback to simulated response if Ollama not available
     console.warn('Ollama not available, using simulated response')
     await new Promise(resolve => setTimeout(resolve, 1000))
-
     return {
       text: `Llama response: ${Array.isArray(prompt) ? prompt[prompt.length - 1] : prompt}`,
-      usage: {
-        promptTokens: 20,
-        completionTokens: 50,
-        totalTokens: 70,
-      },
+      usage: { promptTokens: 20, completionTokens: 50, totalTokens: 70 },
     }
   }
 }
@@ -517,16 +500,13 @@ async function callGitHubCopilot(
         'User-Agent': 'GitHubCopilotChat/0.11.1',
       },
       body: JSON.stringify({
-        messages,
-        model: options.model || 'gpt-4',
-        temperature: options.temperature ?? 0.7,
-        max_tokens: options.maxTokens ?? 2048,
+        messages, model: options.model || 'gpt-4',
+        temperature: options.temperature ?? 0.7, max_tokens: options.maxTokens ?? 2048,
         stream: options.stream ?? false,
       }),
     }, { timeoutMs: options.timeoutMs, retries: options.retries, abortSignal: options.abortSignal })
 
     if (!response.ok) throw new Error('GitHub Copilot not available')
-
     const data = await response.json()
 
     return {
@@ -538,17 +518,11 @@ async function callGitHubCopilot(
       },
     }
   } catch (error) {
-    // Fallback to simulated response if GitHub Copilot not available
     console.warn('GitHub Copilot not available, using simulated response')
     await new Promise(resolve => setTimeout(resolve, 1000))
-
     return {
       text: `GitHub Copilot response: ${Array.isArray(prompt) ? prompt[prompt.length - 1] : prompt}`,
-      usage: {
-        promptTokens: 15,
-        completionTokens: 45,
-        totalTokens: 60,
-      },
+      usage: { promptTokens: 15, completionTokens: 45, totalTokens: 60 },
     }
   }
 }
@@ -563,21 +537,15 @@ async function callGrok(
   try {
     const response = await fetchWithRetry('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: options.model || 'grok-beta',
-        messages,
-        temperature: options.temperature ?? 0.7,
-        max_tokens: options.maxTokens ?? 2048,
+        model: options.model || 'grok-beta', messages,
+        temperature: options.temperature ?? 0.7, max_tokens: options.maxTokens ?? 2048,
         stream: options.stream ?? false,
       }),
     }, { timeoutMs: options.timeoutMs, retries: options.retries })
 
     if (!response.ok) throw new Error('Grok API not available')
-
     const data = await response.json()
 
     return {
@@ -589,17 +557,11 @@ async function callGrok(
       },
     }
   } catch (error) {
-    // Fallback to simulated response if Grok not available
     console.warn('Grok API not available, using simulated response')
     await new Promise(resolve => setTimeout(resolve, 1000))
-
     return {
       text: `Grok response: ${Array.isArray(prompt) ? prompt[prompt.length - 1] : prompt}`,
-      usage: {
-        promptTokens: 18,
-        completionTokens: 55,
-        totalTokens: 73,
-      },
+      usage: { promptTokens: 18, completionTokens: 55, totalTokens: 73 },
     }
   }
 }

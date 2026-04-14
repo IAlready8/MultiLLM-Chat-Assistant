@@ -62,7 +62,6 @@ export interface ExportMetadata {
   userId: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ConversationWithMessages = any;
 
 // ============================================================================
@@ -92,7 +91,6 @@ const DEFAULT_TEMPLATES: Record<ExportFormat, ExportTemplate> = {
 
 export class ConversationExportService {
   async exportConversation(conversationId: string, userId: string, options: ExportOptions): Promise<ConversationExport> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const conversation = await prisma.conversation.findFirst({
       where: { id: conversationId, userId },
       include: { messages: { orderBy: { createdAt: 'asc' } } },
@@ -107,7 +105,6 @@ export class ConversationExportService {
 
   async exportBatch(userId: string, conversationIds?: string[], options: ExportOptions = { format: 'json' }): Promise<BatchExport> {
     const exportId = `export_${Date.now()}_${userId}`;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const whereClause: any = { userId };
     if (conversationIds && conversationIds.length > 0) whereClause.id = { in: conversationIds };
 

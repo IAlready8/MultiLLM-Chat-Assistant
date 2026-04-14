@@ -11,14 +11,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Optional dependencies - gracefully unavailable if not installed
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let RatelimitModule: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let RedisModule: any = null;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   RatelimitModule = require('@upstash/ratelimit').Ratelimit;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   RedisModule = require('@upstash/redis').Redis;
 } catch { /* Upstash not installed - in-memory fallback */ }
 
@@ -104,9 +100,7 @@ class InMemorySlidingWindow {
 // ============================================================================
 
 export class AdvancedRateLimiter {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private redis: any = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private redisRatelimit: any = null;
   private inMemoryFallback: InMemorySlidingWindow;
 

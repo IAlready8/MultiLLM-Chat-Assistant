@@ -105,7 +105,6 @@ async function checkRedis(): Promise<DependencyCheck> {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Redis } = require('@upstash/redis');
     const redis = new Redis({ url: redisUrl, token: process.env.REDIS_TOKEN || '' });
     await redis.ping();

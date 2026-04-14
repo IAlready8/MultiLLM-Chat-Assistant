@@ -76,11 +76,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   // Full catalog - no provider filter
   if (!providerParam) {
-    const catalog: Record<string, typeof MODEL_CATALOG[string]> = {}
-    for (const providerId of getAllProviderIds()) {
-      catalog[providerId] = MODEL_CATALOG[providerId]
-    }
-    return jsonOk({ catalog })
+    return jsonOk({ catalog: MODEL_CATALOG })
   }
 
   // Validate provider
