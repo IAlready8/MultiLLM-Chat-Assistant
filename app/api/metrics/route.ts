@@ -108,19 +108,19 @@ function formatHistogram(h: HistogramMetric): string {
 // Public Metric Functions
 // ============================================================================
 
-export function incrementCounter(name: string, labels?: Record<string, string>, value = 1): void {
+function incrementCounter(name: string, labels?: Record<string, string>, value = 1): void {
   const key = JSON.stringify({ name, labels });
   const existing = metricsStorage.counters.get(key);
   if (existing) existing.value += value;
   else metricsStorage.counters.set(key, { name, help: '', value, labels });
 }
 
-export function setGauge(name: string, value: number, labels?: Record<string, string>): void {
+function setGauge(name: string, value: number, labels?: Record<string, string>): void {
   const key = JSON.stringify({ name, labels });
   metricsStorage.gauges.set(key, { name, help: '', value, labels });
 }
 
-export function observeHistogram(name: string, value: number, labels?: Record<string, string>): void {
+function observeHistogram(name: string, value: number, labels?: Record<string, string>): void {
   const key = JSON.stringify({ name, labels });
   const existing = metricsStorage.histograms.get(key);
   // Standard Prometheus bucket boundaries
@@ -141,7 +141,7 @@ export function observeHistogram(name: string, value: number, labels?: Record<st
   }
 }
 
-export function recordRequestMetrics(method: string, path: string, statusCode: number, durationMs: number): void {
+function recordRequestMetrics(method: string, path: string, statusCode: number, durationMs: number): void {
   const labels = { method, path: normalizePath(path), status: String(statusCode) };
   incrementCounter('multillm_http_requests_total', labels);
   observeHistogram('multillm_http_request_duration_seconds', durationMs / 1000, labels);
@@ -264,7 +264,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 // Exports
 // ============================================================================
 
-export function getMetricsSnapshot() {
+function getMetricsSnapshot() {
   return {
     counters: Object.fromEntries(Array.from(metricsStorage.counters.entries()).map(([k, v]) => [k, v.value])),
     gauges: Object.fromEntries(Array.from(metricsStorage.gauges.entries()).map(([k, v]) => [k, v.value])),
@@ -272,7 +272,7 @@ export function getMetricsSnapshot() {
   };
 }
 
-export function resetMetrics(): void {
+function resetMetrics(): void {
   metricsStorage.counters.clear();
   metricsStorage.gauges.clear();
   metricsStorage.histograms.clear();
