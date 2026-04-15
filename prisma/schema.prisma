@@ -76,10 +76,18 @@ model Message {
   model          String? // e.g., "gpt-4", "claude-2"
   createdAt      DateTime     @default(now())
 
+  // Token usage tracking (populated for assistant messages)
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  costUsd          Float?
+  latencyMs        Int?
+
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
+  @@index([createdAt])
 }
 
 model ProviderConfig {

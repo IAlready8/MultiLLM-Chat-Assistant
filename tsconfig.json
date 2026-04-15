@@ -45,6 +45,7 @@
   "exclude": [
     "node_modules",
     "backup-minimal",
-    "tests"
+    "tests",
+    "CLAUDE_ADDITIONS"
   ]
 }

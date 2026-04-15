@@ -29,12 +29,25 @@ const nextConfig = {
   turbopack: {},
 
   // Optimize bundle
-  webpack: (config, { dev }) => {
+  webpack: (config, { dev, isServer }) => {
     if (!dev) {
       // Tree shake unused code more aggressively
       config.optimization.usedExports = true;
       config.optimization.sideEffects = false;
     }
+    
+    // Handle server-only modules in client bundles
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        net: false,
+        tls: false,
+        fs: false,
+        dns: false,
+        pg: false,
+      };
+    }
+    
     return config;
   },
 };

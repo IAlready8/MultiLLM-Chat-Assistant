@@ -12,6 +12,48 @@ type ConversationUpdate = {
 }
 type NewGoal = Omit<Goal, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
 
+// Usage summary types
+interface UsageSummary {
+  period: { days: number; since: string }
+  summary: {
+    totalPromptTokens: number
+    totalCompletionTokens: number
+    totalTokens: number
+    totalCostUsd: number
+    messageCount: number
+  }
+  byProvider: Array<{
+    provider: string
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    costUsd: number
+    messageCount: number
+  }>
+  byModel: Array<{
+    model: string
+    promptTokens: number
+    completionTokens: number
+    costUsd: number
+    messageCount: number
+  }>
+  byDay: Array<{
+    date: string
+    promptTokens: number
+    completionTokens: number
+    costUsd: number
+    messageCount: number
+  }>
+}
+
+interface ProviderTestResult {
+  success: boolean
+  provider: string
+  latencyMs?: number
+  response?: string
+  error?: string
+}
+
 // Types for Orchestration
 type ProviderRequest = {
   provider: string
@@ -179,5 +221,23 @@ export const apiClient = {
     const results = (await handleResponse(response)) as ProviderResponse[]
     const fallbackMode = response.headers.get('x-orchestration-fallback')
     return { results, fallbackMode }
+  },
+
+  // --- Usage / Analytics ---
+  async getUsageSummary(days: number = 30): Promise<UsageSummary> {
+    return handleResponse(
+      await fetch(`/api/usage?days=${days}`, { cache: 'no-store' })
+    )
+  },
+
+  // --- Provider Connection Test ---
+  async testProvider(provider: string): Promise<ProviderTestResult> {
+    return handleResponse(
+      await fetch('/api/providers/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider }),
+      })
+    )
   },
 }

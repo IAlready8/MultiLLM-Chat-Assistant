@@ -27,6 +27,12 @@ export interface Message {
   model?: string | null
   createdAt: Date
   conversationId: string
+  // Token usage tracking (populated for assistant messages)
+  promptTokens?: number | null
+  completionTokens?: number | null
+  totalTokens?: number | null
+  costUsd?: number | null
+  latencyMs?: number | null
 }
 
 export interface Persona extends BaseModel {
