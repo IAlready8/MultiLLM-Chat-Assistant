@@ -6,6 +6,7 @@
     "dev": "npm run dev:webpack",
     "dev:webpack": "next dev --webpack",
     "dev:turbopack": "next dev --turbopack",
+    "dev:full": "npx tsx server.ts",
     "build": "npm run build:webpack",
     "build:webpack": "prisma generate && next build --webpack",
     "build:turbopack": "prisma generate && next build",
@@ -15,6 +16,9 @@
     "smoke:preview:local:auth": "RUN_WITH_DOTENV_OVERRIDE=NEXTAUTH_URL NEXTAUTH_URL=http://127.0.0.1:3000 SMOKE_AUTH_NAME=PreviewSmoke SMOKE_AUTH_EMAIL=preview-smoke@example.test SMOKE_AUTH_PASSWORD=preview-smoke-pass-1234 bash scripts/vercel-preview-run.sh -- bash scripts/smoke-test.sh --base-url http://127.0.0.1:3000 --start-server",
     "postinstall": "prisma generate",
     "start": "next start",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:push:local": "DATABASE_URL=file:./prisma/dev.db prisma db push --accept-data-loss",
+    "setup:local": "bash setup-local.sh",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest --passWithNoTests",
     "test:ui": "vitest --ui",
@@ -28,6 +32,9 @@
     "reliability:check": "bash scripts/reliability-check.sh",
     "protect:main": "bash scripts/enforce-branch-protection.sh",
     "upgrade:next:prep": "bash scripts/next-upgrade-readiness.sh"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",
@@ -85,6 +92,7 @@
     "postcss": "^8",
     "prisma": "7.7.0",
     "tailwindcss": "^3.3.0",
+    "tsx": "^4.7.0",
     "typescript": "^5",
     "vercel": "^50.9.6",
     "vitest": "^3.2.4"
