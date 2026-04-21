@@ -13,6 +13,7 @@ Options:
   --source <path>   Source env template file (default: .env.example)
   --target <path>   Destination env file (default: .env.local)
   --force           Overwrite destination file if it exists
+  -h, --help        Show this help message
 USAGE
 }
 

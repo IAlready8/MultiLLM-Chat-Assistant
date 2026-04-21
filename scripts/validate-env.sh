@@ -11,6 +11,7 @@ Usage: bash scripts/validate-env.sh [options]
 Options:
   --mode <local|production>  Validation profile (default: local)
   --env-file <path>          Env file to inspect (default: .env.local)
+  -h, --help                 Show this help message
 USAGE
 }
 

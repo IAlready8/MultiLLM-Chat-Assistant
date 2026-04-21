@@ -7,6 +7,11 @@ PROD=false
 print_usage() {
   cat <<USAGE
 Usage: bash scripts/build-vercel.sh [--env-file <path>] [--prod]
+
+Options:
+  --env-file <path>  Env file loaded before invoking vercel build
+  --prod             Pass --prod through to vercel build
+  -h, --help         Show this help message
 USAGE
 }
 
