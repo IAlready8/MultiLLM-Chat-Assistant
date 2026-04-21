@@ -14,6 +14,34 @@ Options:
 USAGE
 }
 
+has_nonempty_env_value() {
+  local key="$1"
+  local line
+  local value
+  local trimmed
+
+  line="$(grep -E "^${key}=" "$ENV_FILE" | tail -n 1 || true)"
+  if [[ -z "$line" ]]; then
+    return 1
+  fi
+
+  value="${line#*=}"
+  trimmed="${value#"${value%%[![:space:]]*}"}"
+  trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+
+  if [[ "$trimmed" == \"*\" && "$trimmed" == *\" && ${#trimmed} -ge 2 ]]; then
+    trimmed="${trimmed:1:${#trimmed}-2}"
+  elif [[ "$trimmed" == \'*\' && "$trimmed" == *\' && ${#trimmed} -ge 2 ]]; then
+    trimmed="${trimmed:1:${#trimmed}-2}"
+  fi
+
+  if [[ -z "${trimmed//[[:space:]]/}" ]]; then
+    return 1
+  fi
+
+  return 0
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode)
@@ -80,14 +108,14 @@ fi
 
 missing=0
 for key in "${required[@]}"; do
-  if ! grep -Eq "^${key}=.+" "$ENV_FILE"; then
+  if ! has_nonempty_env_value "$key"; then
     echo "[env:validate] Missing or empty: $key"
     missing=1
   fi
 done
 
 if [[ "$MODE" == "production" ]]; then
-  if ! grep -Eq "^(NEXTAUTH_SECRET|AUTH_SECRET)=.+" "$ENV_FILE"; then
+  if ! has_nonempty_env_value 'NEXTAUTH_SECRET' && ! has_nonempty_env_value 'AUTH_SECRET'; then
     echo '[env:validate] Missing or empty: NEXTAUTH_SECRET or AUTH_SECRET'
     missing=1
   fi
