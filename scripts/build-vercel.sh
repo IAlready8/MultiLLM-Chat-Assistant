@@ -4,9 +4,20 @@ set -euo pipefail
 ENV_FILE=""
 PROD=false
 
+print_usage() {
+  cat <<USAGE
+Usage: bash scripts/build-vercel.sh [--env-file <path>] [--prod]
+USAGE
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --env-file)
+      if [[ $# -lt 2 ]]; then
+        echo '[build:vercel] Missing value for --env-file' >&2
+        print_usage >&2
+        exit 1
+      fi
       ENV_FILE="$2"
       shift 2
       ;;
@@ -15,13 +26,12 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      cat <<USAGE
-Usage: bash scripts/build-vercel.sh [--env-file <path>] [--prod]
-USAGE
+      print_usage
       exit 0
       ;;
     *)
       echo "[build:vercel] Unknown option: $1" >&2
+      print_usage >&2
       exit 1
       ;;
   esac

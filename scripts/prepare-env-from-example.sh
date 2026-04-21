@@ -5,13 +5,34 @@ SOURCE_FILE=".env.example"
 TARGET_FILE=".env.local"
 FORCE=false
 
+print_usage() {
+  cat <<USAGE
+Usage: bash scripts/prepare-env-from-example.sh [options]
+
+Options:
+  --source <path>   Source env template file (default: .env.example)
+  --target <path>   Destination env file (default: .env.local)
+  --force           Overwrite destination file if it exists
+USAGE
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --source)
+      if [[ $# -lt 2 ]]; then
+        echo '[prepare-env] Missing value for --source' >&2
+        print_usage >&2
+        exit 1
+      fi
       SOURCE_FILE="$2"
       shift 2
       ;;
     --target)
+      if [[ $# -lt 2 ]]; then
+        echo '[prepare-env] Missing value for --target' >&2
+        print_usage >&2
+        exit 1
+      fi
       TARGET_FILE="$2"
       shift 2
       ;;
@@ -20,18 +41,12 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      cat <<USAGE
-Usage: bash scripts/prepare-env-from-example.sh [options]
-
-Options:
-  --source <path>   Source env template file (default: .env.example)
-  --target <path>   Destination env file (default: .env.local)
-  --force           Overwrite destination file if it exists
-USAGE
+      print_usage
       exit 0
       ;;
     *)
       echo "[prepare-env] Unknown option: $1" >&2
+      print_usage >&2
       exit 1
       ;;
   esac
