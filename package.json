@@ -27,7 +27,16 @@
     "verify:prod": "bash scripts/verify-production.sh",
     "reliability:check": "bash scripts/reliability-check.sh",
     "protect:main": "bash scripts/enforce-branch-protection.sh",
-    "upgrade:next:prep": "bash scripts/next-upgrade-readiness.sh"
+    "upgrade:next:prep": "bash scripts/next-upgrade-readiness.sh",
+    "setup:env": "bash scripts/prepare-env-from-example.sh",
+    "validate:all": "bash scripts/run-all-checks.sh",
+    "ci:local": "bash scripts/run-ci-local.sh",
+    "build:vercel": "bash scripts/build-vercel.sh",
+    "env:validate": "bash scripts/validate-env.sh",
+    "clean": "bash scripts/clean.sh",
+    "clean:deep": "bash scripts/clean.sh --deep",
+    "clean:all": "bash scripts/clean.sh --all",
+    "preflight": "bash scripts/preflight.sh"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",
