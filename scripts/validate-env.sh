@@ -19,8 +19,6 @@ has_nonempty_env_value() {
   local line
   local value
   local trimmed
-  local first_char
-  local last_char
 
   line="$(grep -E "^${key}=" "$ENV_FILE" | tail -n 1 || true)"
   if [[ -z "$line" ]]; then
@@ -30,22 +28,30 @@ has_nonempty_env_value() {
   value="${line#*=}"
   trimmed="${value#"${value%%[![:space:]]*}"}"
   trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+  trimmed="$(strip_matching_quotes "$trimmed")"
 
-  if [[ ${#trimmed} -ge 2 ]]; then
-    first_char="${trimmed:0:1}"
-    last_char="${trimmed: -1}"
-    if [[ "$first_char" == '"' && "$last_char" == '"' ]]; then
-      trimmed="${trimmed:1:${#trimmed}-2}"
-    elif [[ "$first_char" == "'" && "$last_char" == "'" ]]; then
-      trimmed="${trimmed:1:${#trimmed}-2}"
-    fi
-  fi
-
-  if [[ -z "${trimmed//[[:space:]]/}" ]]; then
+  if [[ "$trimmed" =~ ^[[:space:]]*$ ]]; then
     return 1
   fi
 
   return 0
+}
+
+strip_matching_quotes() {
+  local value="$1"
+  local first_char
+  local last_char
+
+  if [[ ${#value} -ge 2 ]]; then
+    first_char="${value:0:1}"
+    last_char="${value: -1}"
+    if [[ ( "$first_char" == '"' && "$last_char" == '"' ) || ( "$first_char" == "'" && "$last_char" == "'" ) ]]; then
+      printf '%s\n' "${value:1:${#value}-2}"
+      return
+    fi
+  fi
+
+  printf '%s\n' "$value"
 }
 
 while [[ $# -gt 0 ]]; do
