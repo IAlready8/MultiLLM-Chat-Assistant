@@ -20,9 +20,12 @@ This project supports an optional Python sidecar service for orchestration-heavy
 5. If the sidecar is unavailable/unhealthy (5xx class), route falls back to local orchestration using `/api/llm/chat` per request and returns 200 with `x-orchestration-fallback: local`.
 
 ## Current Limitation
-- Python sidecar stream parity is incomplete:
-  - `src/core/main.py` currently includes `# TODO: Add /api/v1/llm/stream endpoint`.
-  - Sidecar should not be described as full parity with Next.js streaming until this endpoint and tests are implemented.
+- Python sidecar stream endpoint exists at `POST /api/v1/llm/stream` in
+  `src/core/main.py`.
+- Full parity should still be treated as pending until a dedicated
+  sidecar-vs-Next.js streaming parity test matrix is documented and passing in
+  CI (success path, provider auth error, rate limit, timeout, malformed
+  response, and network failure classifications).
 
 ## Local Setup
 ### Node app
