@@ -40,6 +40,9 @@ export interface WorkflowMetrics {
   conversationsCreated: number
   comparisonViews: number
   analyticsViews: number
+  billingViews: number
+  checkoutSessionsCreated: number
+  portalSessionsCreated: number
 }
 
 type StoredAnalyticsEvent = {
@@ -381,5 +384,14 @@ export async function getWorkflowMetrics(
     conversationsCreated: countEvents(parsedEvents, 'conversation_created'),
     comparisonViews: countEvents(parsedEvents, 'comparison_viewed'),
     analyticsViews: countEvents(parsedEvents, 'analytics_viewed'),
+    billingViews: countEvents(parsedEvents, 'billing_viewed'),
+    checkoutSessionsCreated: countEvents(
+      parsedEvents,
+      'billing_checkout_session_created'
+    ),
+    portalSessionsCreated: countEvents(
+      parsedEvents,
+      'billing_portal_session_created'
+    ),
   }
 }

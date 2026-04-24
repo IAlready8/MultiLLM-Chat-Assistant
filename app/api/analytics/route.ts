@@ -54,6 +54,14 @@ type ActivationStep = {
   complete: boolean
 }
 
+type Step11OutboundMetrics = {
+  attributedEvents: number
+  uniqueCohorts: number
+  analyticsViews: number
+  comparisonViews: number
+  comparisonReadyConversations: number
+}
+
 const TIMEFRAME_DAYS: Record<Timeframe, number> = {
   '24h': 1,
   '7d': 7,
@@ -386,7 +394,40 @@ const buildEmptyWorkflowMetrics = () => ({
   conversationsCreated: 0,
   comparisonViews: 0,
   analyticsViews: 0,
+  billingViews: 0,
+  checkoutSessionsCreated: 0,
+  portalSessionsCreated: 0,
 })
+
+const buildStep11OutboundMetrics = (
+  events: ParsedAnalyticsEvent[]
+): Step11OutboundMetrics => {
+  const founderOutbound = events.filter(
+    (event) => event.payload.acquisitionSource === 'founder-outbound'
+  )
+  const uniqueCohorts = new Set(
+    founderOutbound
+      .map((event) =>
+        typeof event.payload.acquisitionCohort === 'string'
+          ? event.payload.acquisitionCohort
+          : null
+      )
+      .filter((cohort): cohort is string => Boolean(cohort))
+  )
+
+  const countEvent = (eventName: string) =>
+    founderOutbound.filter((event) => event.event === eventName).length
+
+  return {
+    attributedEvents: founderOutbound.length,
+    uniqueCohorts: uniqueCohorts.size,
+    analyticsViews: countEvent('analytics_viewed'),
+    comparisonViews: countEvent('comparison_viewed'),
+    comparisonReadyConversations: countEvent(
+      'comparison_ready_conversation_saved'
+    ),
+  }
+}
 
 export const GET = withApiMetrics(async (request: Request) => {
   const authCheck = await getAuthenticatedUser({ allowGuest: true })
@@ -420,6 +461,7 @@ export const GET = withApiMetrics(async (request: Request) => {
       modelComparisonData: [],
       workflowMetrics: emptyWorkflowMetrics,
       activationFunnel: buildActivationFunnel(emptyWorkflowMetrics),
+      step11OutboundMetrics: buildStep11OutboundMetrics([]),
       totalStats: {
         totalRequests: 0,
         totalTokens: 0,
@@ -496,6 +538,7 @@ export const GET = withApiMetrics(async (request: Request) => {
       modelComparisonData,
       workflowMetrics: workflowMetricsWithCurrentView,
       activationFunnel: buildActivationFunnel(workflowMetricsWithCurrentView),
+      step11OutboundMetrics: buildStep11OutboundMetrics(events),
       totalStats,
       meta: {
         source: events.length > 0 ? 'live' : 'empty',

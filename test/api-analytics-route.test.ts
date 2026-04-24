@@ -54,6 +54,9 @@ describe('/api/analytics route', () => {
       conversationsCreated: 1,
       comparisonViews: 0,
       analyticsViews: 2,
+      billingViews: 4,
+      checkoutSessionsCreated: 2,
+      portalSessionsCreated: 1,
     })
   })
 
@@ -125,6 +128,16 @@ describe('/api/analytics route', () => {
       configuredProviders: 1,
       weeklySavedBriefComparisons: 1,
       analyticsViews: 3,
+      billingViews: 4,
+      checkoutSessionsCreated: 2,
+      portalSessionsCreated: 1,
+    })
+    expect(body.step11OutboundMetrics).toEqual({
+      attributedEvents: 0,
+      uniqueCohorts: 0,
+      analyticsViews: 0,
+      comparisonViews: 0,
+      comparisonReadyConversations: 0,
     })
     expect(body.activationFunnel).toHaveLength(4)
     expect(body.meta).toMatchObject({
@@ -167,6 +180,13 @@ describe('/api/analytics route', () => {
     expect(body.usageTrends).toHaveLength(24)
     expect(body.workflowMetrics.configuredProviders).toBe(1)
     expect(body.activationFunnel).toHaveLength(4)
+    expect(body.step11OutboundMetrics).toEqual({
+      attributedEvents: 0,
+      uniqueCohorts: 0,
+      analyticsViews: 0,
+      comparisonViews: 0,
+      comparisonReadyConversations: 0,
+    })
     expect(body.totalStats).toEqual({
       totalRequests: 0,
       totalTokens: 0,
@@ -231,6 +251,51 @@ describe('/api/analytics route', () => {
         acquisitionCampaign: 'agency-sprint',
         acquisitionCohort: 'wave-1',
       },
+    })
+  })
+
+  it('builds founder-outbound Step 11 metrics from attributed events', async () => {
+    mockGetParsedAnalyticsEvents.mockResolvedValue([
+      {
+        event: 'analytics_viewed',
+        userId: 'user-1',
+        createdAt: new Date('2026-02-09T10:00:00.000Z'),
+        payload: {
+          acquisitionSource: 'founder-outbound',
+          acquisitionCohort: 'wave-1',
+        },
+      },
+      {
+        event: 'comparison_ready_conversation_saved',
+        userId: 'user-1',
+        createdAt: new Date('2026-02-09T10:10:00.000Z'),
+        payload: {
+          acquisitionSource: 'founder-outbound',
+          acquisitionCohort: 'wave-2',
+        },
+      },
+      {
+        event: 'comparison_viewed',
+        userId: 'user-1',
+        createdAt: new Date('2026-02-09T10:20:00.000Z'),
+        payload: {
+          acquisitionSource: 'founder-outbound',
+        },
+      },
+    ])
+
+    const response = await GET(
+      new Request('http://localhost/api/analytics?timeframe=7d'),
+      routeContext
+    )
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.step11OutboundMetrics).toEqual({
+      attributedEvents: 3,
+      uniqueCohorts: 2,
+      analyticsViews: 1,
+      comparisonViews: 1,
+      comparisonReadyConversations: 1,
     })
   })
 
