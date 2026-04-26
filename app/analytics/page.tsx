@@ -42,6 +42,17 @@ type WorkflowMetrics = {
   conversationsCreated: number
   comparisonViews: number
   analyticsViews: number
+  billingViews: number
+  checkoutSessionsCreated: number
+  portalSessionsCreated: number
+}
+
+type Step11OutboundMetrics = {
+  attributedEvents: number
+  uniqueCohorts: number
+  analyticsViews: number
+  comparisonViews: number
+  comparisonReadyConversations: number
 }
 
 type ActivationStep = {
@@ -72,6 +83,7 @@ type AnalyticsApiResponse = {
   }
   workflowMetrics: WorkflowMetrics
   activationFunnel: ActivationStep[]
+  step11OutboundMetrics: Step11OutboundMetrics
   meta?: {
     source?: 'live' | 'empty'
     eventCount?: number
@@ -115,8 +127,19 @@ export default function AnalyticsPage() {
     conversationsCreated: 0,
     comparisonViews: 0,
     analyticsViews: 0,
+    billingViews: 0,
+    checkoutSessionsCreated: 0,
+    portalSessionsCreated: 0,
   })
   const [activationFunnel, setActivationFunnel] = useState<ActivationStep[]>([])
+  const [step11OutboundMetrics, setStep11OutboundMetrics] =
+    useState<Step11OutboundMetrics>({
+      attributedEvents: 0,
+      uniqueCohorts: 0,
+      analyticsViews: 0,
+      comparisonViews: 0,
+      comparisonReadyConversations: 0,
+    })
   const [isTelemetryEmpty, setIsTelemetryEmpty] = useState(false)
   const [sourceLabel, setSourceLabel] = useState<'Live data' | 'No telemetry yet'>('Live data')
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -160,9 +183,21 @@ export default function AnalyticsPage() {
           conversationsCreated: 0,
           comparisonViews: 0,
           analyticsViews: 0,
+          billingViews: 0,
+          checkoutSessionsCreated: 0,
+          portalSessionsCreated: 0,
         }
       )
       setActivationFunnel(data.activationFunnel || [])
+      setStep11OutboundMetrics(
+        data.step11OutboundMetrics || {
+          attributedEvents: 0,
+          uniqueCohorts: 0,
+          analyticsViews: 0,
+          comparisonViews: 0,
+          comparisonReadyConversations: 0,
+        }
+      )
       const source = data.meta?.source
       const hasWorkflowProgress =
         (data.activationFunnel || []).some(step => step.current > 0) ||
@@ -175,6 +210,9 @@ export default function AnalyticsPage() {
             conversationsCreated: 0,
             comparisonViews: 0,
             analyticsViews: 0,
+            billingViews: 0,
+            checkoutSessionsCreated: 0,
+            portalSessionsCreated: 0,
           }
         )
       const inferredEmpty =
@@ -442,6 +480,80 @@ export default function AnalyticsPage() {
                   </div>
                 )
               })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Monetization Signals</CardTitle>
+            <CardDescription>
+              Step 10 telemetry tied to billing intent and usage thresholds.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm text-muted-foreground">Billing views</div>
+              <div className="text-2xl font-bold">{workflowMetrics.billingViews}</div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Checkout sessions</div>
+              <div className="text-2xl font-bold">
+                {workflowMetrics.checkoutSessionsCreated}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Portal sessions</div>
+              <div className="text-2xl font-bold">
+                {workflowMetrics.portalSessionsCreated}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">
+                WSBC vs free guidance (3)
+              </div>
+              <div className="text-2xl font-bold">
+                {workflowMetrics.weeklySavedBriefComparisons}/3
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Founder Outbound Funnel</CardTitle>
+            <CardDescription>
+              Step 11 execution tracking for attributed direct-outbound traffic.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm text-muted-foreground">Attributed events</div>
+              <div className="text-2xl font-bold">
+                {step11OutboundMetrics.attributedEvents}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Active cohorts</div>
+              <div className="text-2xl font-bold">
+                {step11OutboundMetrics.uniqueCohorts}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">Analytics views</div>
+              <div className="text-2xl font-bold">
+                {step11OutboundMetrics.analyticsViews}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-muted-foreground">
+                Comparison-ready saves
+              </div>
+              <div className="text-2xl font-bold">
+                {step11OutboundMetrics.comparisonReadyConversations}
+              </div>
             </div>
           </CardContent>
         </Card>
