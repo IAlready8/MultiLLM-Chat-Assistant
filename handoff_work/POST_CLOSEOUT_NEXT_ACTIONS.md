@@ -219,8 +219,15 @@ This is the only authoritative forward plan file in `handoff_work/`.
     - `billing_viewed`
     - `billing_checkout_session_created`
     - `billing_portal_session_created`
+- Step 10 completed in this slice:
+  - billing plan source of truth exists for `FREE`, `PRO`, and `ENTERPRISE`
+  - `/billing` exposes the current tier, plan model, weekly saved brief comparison guidance, and next billing action
+  - `FREE` upgrade path uses `/api/subscriptions`
+  - `PRO` management path uses `/api/subscriptions/manage`
+  - billing workflow events are recorded through the first-party analytics store
+  - Stripe SDK API version is aligned with the installed SDK type contract
 - Step 10 pass state on this branch:
-  - in progress on `codex/monetization-behavior-step10-20260325`
+  - complete
 
 ## Step 11: First Real Users In One Niche Channel
 - Step 11 source of truth documents:
