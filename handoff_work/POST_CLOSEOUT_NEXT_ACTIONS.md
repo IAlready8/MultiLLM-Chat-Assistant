@@ -228,6 +228,9 @@ This is the only authoritative forward plan file in `handoff_work/`.
   - Stripe SDK API version is aligned with the installed SDK type contract
 - Step 10 pass state on this branch:
   - complete
+  - telemetry coverage for required billing events is now surfaced in `/analytics`
+    (`billing_viewed`, `billing_checkout_session_created`,
+    `billing_portal_session_created`) as of `2026-04-21`
 
 ## Step 11: First Real Users In One Niche Channel
 - Step 11 source of truth documents:
@@ -244,7 +247,9 @@ This is the only authoritative forward plan file in `handoff_work/`.
   - a real Step 11 user must fit the ICP, receive direct demo/onboarding attention, and attempt the real workflow
 - Step 11 prep state on this branch:
   - documentation prep complete
-  - user acquisition execution not yet started
+  - in-app founder-outbound funnel telemetry is now surfaced in `/analytics` as
+    of `2026-04-21` to track execution by attributed source/cohort
+  - user acquisition execution still requires real outreach + onboarding runs
 
 ## What Is Out Of Scope Until The Ordered Plan Requires It
 - random feature work
