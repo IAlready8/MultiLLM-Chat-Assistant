@@ -5,7 +5,7 @@ This file exists only to anchor Step 1 of the locked plan.
 ## Baseline Freeze
 - Stable release branch: `main`
 - Stable release head at branch start: `7418f753f22626020073ed4c38cbd20abde3901b`
-- Current active roadmap branch: `codex/step11-prep-20260327`
+- Current active roadmap branch: `feat/ollama-mistral-providers`
 
 ## Current Step Lock
 - Step 2 through Step 11 prep decisions are locked in:
