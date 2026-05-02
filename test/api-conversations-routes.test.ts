@@ -62,6 +62,8 @@ const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
 describe('/api/conversations routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ENABLE_API_READ_CACHE
+    delete process.env.API_READ_CACHE_TTL_MS
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
     mockRecordAnalyticsEvent.mockResolvedValue(undefined)
   })
@@ -87,6 +89,53 @@ describe('/api/conversations routes', () => {
     expect(mockConversationService.getConversationsByUserId).toHaveBeenCalledWith(
       'user-1'
     )
+  })
+
+  it('root GET uses cache when ENABLE_API_READ_CACHE is true', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    process.env.API_READ_CACHE_TTL_MS = '60000'
+    mockConversationService.getConversationsByUserId.mockResolvedValue([
+      {
+        id: 'conv-1',
+        title: 'Weekly planning',
+        userId: 'user-1',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ])
+
+    await getConversations(new Request('http://localhost/api/conversations'), rootRouteContext)
+    await getConversations(new Request('http://localhost/api/conversations'), rootRouteContext)
+
+    expect(mockConversationService.getConversationsByUserId).toHaveBeenCalledTimes(1)
+  })
+
+  it('root GET coalesces in-flight calls when cache is enabled', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-2' } })
+    let resolveFetch: (value: unknown) => void
+    const fetchPromise = new Promise(resolve => {
+      resolveFetch = resolve
+    })
+    mockConversationService.getConversationsByUserId.mockReturnValue(fetchPromise)
+
+    const req = new Request('http://localhost/api/conversations')
+    const p1 = getConversations(req, rootRouteContext)
+    const p2 = getConversations(req, rootRouteContext)
+
+    resolveFetch!([
+      {
+        id: 'conv-1',
+        title: 'Weekly planning',
+        userId: 'user-1',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ])
+
+    await Promise.all([p1, p2])
+
+    expect(mockConversationService.getConversationsByUserId).toHaveBeenCalledTimes(1)
   })
 
   it('root POST validates invalid payload', async () => {

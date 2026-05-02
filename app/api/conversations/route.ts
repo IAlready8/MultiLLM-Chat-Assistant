@@ -23,6 +23,29 @@ const createConvoSchema = z.object({
   ).min(1),
 })
 
+type ConversationsCacheEntry = {
+  value: Awaited<ReturnType<typeof ConversationService.getConversationsByUserId>>
+  expiresAt: number
+}
+
+const conversationsInFlight = new Map<string, Promise<ConversationsCacheEntry>>()
+const conversationsReadCache = new Map<string, ConversationsCacheEntry>()
+
+const readCacheEnabled = () => process.env.ENABLE_API_READ_CACHE === 'true'
+const readCacheTtlMs = () => Number(process.env.API_READ_CACHE_TTL_MS ?? '30000')
+
+const cacheKeyForUser = (userId: string) => `conversations:${userId}`
+
+const getCachedConversations = (key: string) => {
+  const cached = conversationsReadCache.get(key)
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    conversationsReadCache.delete(key)
+    return null
+  }
+  return cached.value
+}
+
 /**
  * GET /api/conversations
  * Retrieves all conversations (metadata) for the authenticated user.
@@ -33,9 +56,40 @@ export const GET = withApiMetrics(async (_req: Request) => {
   const { user } = authCheck
 
   try {
-    const conversations = await ConversationService.getConversationsByUserId(user.id)
+    const key = cacheKeyForUser(user.id)
+    if (readCacheEnabled()) {
+      const cached = getCachedConversations(key)
+      if (cached) {
+        return NextResponse.json(cached)
+      }
+
+      const inFlight = conversationsInFlight.get(key)
+      if (inFlight) {
+        const entry = await inFlight
+        return NextResponse.json(entry.value)
+      }
+    }
+
+    const fetchPromise = ConversationService.getConversationsByUserId(
+      user.id
+    ).then(value => ({
+      value,
+      expiresAt: Date.now() + readCacheTtlMs(),
+    }))
+
+    if (readCacheEnabled()) {
+      conversationsInFlight.set(key, fetchPromise)
+    }
+
+    const entry = await fetchPromise
+    if (readCacheEnabled()) {
+      conversationsReadCache.set(key, entry)
+      conversationsInFlight.delete(key)
+    }
+    const conversations = entry.value
     return NextResponse.json(conversations)
   } catch (error) {
+    conversationsInFlight.delete(cacheKeyForUser(user.id))
     console.error('Error loading conversations:', error)
     return NextResponse.json(
       { error: 'Failed to load conversations' },
@@ -79,6 +133,7 @@ export const POST = withApiMetrics(async (req: Request) => {
       title,
       prismaMessages
     )
+    conversationsReadCache.delete(cacheKeyForUser(user.id))
     try {
       await recordAnalyticsEvent({
         event: 'conversation_created',
