@@ -104,7 +104,7 @@ describe('/api/conversations routes', () => {
     expect(body.error).toBe('Invalid input')
   })
 
-  it('root POST strips cost/latency and creates conversation', async () => {
+  it('root POST preserves token fields and strips legacy cost/latency aliases', async () => {
     mockConversationService.createConversation.mockResolvedValue({
       id: 'conv-1',
       title: 'Weekly planning',
@@ -130,6 +130,11 @@ describe('/api/conversations routes', () => {
               content: 'Summarize this',
               provider: 'openai',
               model: 'gpt-4',
+              promptTokens: 11,
+              completionTokens: 22,
+              totalTokens: 33,
+              costUsd: 0.0024,
+              latencyMs: 420,
               cost: 0.13,
               latency: 420,
             },
@@ -149,6 +154,11 @@ describe('/api/conversations routes', () => {
           content: 'Summarize this',
           provider: 'openai',
           model: 'gpt-4',
+          promptTokens: 11,
+          completionTokens: 22,
+          totalTokens: 33,
+          costUsd: 0.0024,
+          latencyMs: 420,
         },
       ]
     )
@@ -277,6 +287,59 @@ describe('/api/conversations routes', () => {
       ]
     )
     expect(mockRecordAnalyticsEvent).not.toHaveBeenCalled()
+  })
+
+  it('id POST preserves assistant token usage fields', async () => {
+    mockConversationService.addMessages.mockResolvedValue({
+      id: 'conv-1',
+      title: 'Weekly planning',
+      userId: 'user-1',
+      messages: [],
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    })
+
+    const response = await addMessages(
+      new Request('http://localhost/api/conversations/conv-1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([
+          {
+            role: 'assistant',
+            content: 'OpenAI draft',
+            provider: 'openai',
+            model: 'gpt-4o',
+            promptTokens: 14,
+            completionTokens: 28,
+            totalTokens: 42,
+            costUsd: 0.0031,
+            latencyMs: 890,
+            cost: 0.99,
+            latency: 9999,
+          },
+        ]),
+      }),
+      idRouteContext('conv-1')
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockConversationService.addMessages).toHaveBeenCalledWith(
+      'conv-1',
+      'user-1',
+      [
+        {
+          role: 'assistant',
+          content: 'OpenAI draft',
+          provider: 'openai',
+          model: 'gpt-4o',
+          promptTokens: 14,
+          completionTokens: 28,
+          totalTokens: 42,
+          costUsd: 0.0031,
+          latencyMs: 890,
+        },
+      ]
+    )
   })
 
   it('id POST records comparison-ready saves when provider-tagged assistant messages are added', async () => {

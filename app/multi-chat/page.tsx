@@ -58,6 +58,23 @@ const AVAILABLE_MODELS: Record<string, string[]> = {
   grok: ['grok-beta', 'grok-2-1212'],
 }
 
+const COST_PER_1K: Record<string, { input: number; output: number }> = {
+  'gpt-4': { input: 0.03, output: 0.06 },
+  'gpt-4-turbo': { input: 0.01, output: 0.03 },
+  'gpt-4o': { input: 0.005, output: 0.015 },
+  'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+  'gpt-3.5-turbo': { input: 0.0005, output: 0.0015 },
+  'claude-3-5-sonnet-20241022': { input: 0.003, output: 0.015 },
+  'claude-3-sonnet-20240229': { input: 0.003, output: 0.015 },
+  'claude-3-haiku-20240307': { input: 0.00025, output: 0.00125 },
+  'claude-3-opus-20240229': { input: 0.015, output: 0.075 },
+  'gemini-1.5-flash': { input: 0.000075, output: 0.0003 },
+  'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
+  'gemini-pro': { input: 0.000125, output: 0.000375 },
+  'grok-beta': { input: 0.005, output: 0.015 },
+  'grok-2-1212': { input: 0.002, output: 0.01 },
+}
+
 // ---- Types ----
 interface Message {
   id: string
@@ -69,7 +86,9 @@ interface Message {
   instanceId?: string
   promptTokens?: number
   completionTokens?: number
+  totalTokens?: number
   costUsd?: number
+  latencyMs?: number
 }
 
 interface ModelInstance {
@@ -95,6 +114,41 @@ interface ChatState {
 // ---- Helper: generate unique ID ----
 const generateInstanceId = () =>
   `instance-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+
+const estimateTokenCount = (content: string) =>
+  Math.max(1, Math.round(content.length / 4))
+
+const estimatePromptTokens = (
+  messages: Array<{ role: string; content: string }>
+) =>
+  Math.max(
+    1,
+    messages.reduce((total, message) => total + estimateTokenCount(message.content), 0)
+  )
+
+const estimateCostUsd = (
+  model: string,
+  promptTokens: number,
+  completionTokens: number
+) => {
+  const pricing =
+    COST_PER_1K[model] ??
+    Object.entries(COST_PER_1K).find(([key]) => model.startsWith(key))?.[1]
+
+  if (!pricing) return 0
+  const cost =
+    (promptTokens / 1000) * pricing.input +
+    (completionTokens / 1000) * pricing.output
+  return Math.round(cost * 100000) / 100000
+}
+
+interface StreamUsage {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  costUsd: number
+  latencyMs: number
+}
 
 // ---- Main Content Component ----
 function MultiChatPageContent() {
@@ -179,7 +233,9 @@ function MultiChatPageContent() {
             model: msg.model ?? undefined,
             promptTokens: msg.promptTokens ?? undefined,
             completionTokens: msg.completionTokens ?? undefined,
+            totalTokens: msg.totalTokens ?? undefined,
             costUsd: msg.costUsd ?? undefined,
+            latencyMs: msg.latencyMs ?? undefined,
           })
         )
 
@@ -292,13 +348,18 @@ function MultiChatPageContent() {
     provider: string,
     model: string | undefined,
     content: string,
-    usage?: { promptTokens?: number; completionTokens?: number; costUsd?: number }
+    usage?: Partial<StreamUsage>
   ) => {
     const message: any = {
       role: 'assistant' as const,
       content,
       provider,
       model: model ?? null,
+      promptTokens: usage?.promptTokens ?? null,
+      completionTokens: usage?.completionTokens ?? null,
+      totalTokens: usage?.totalTokens ?? null,
+      costUsd: usage?.costUsd ?? null,
+      latencyMs: usage?.latencyMs ?? null,
     }
 
     try {
@@ -341,7 +402,8 @@ function MultiChatPageContent() {
     messages: Array<{ role: string; content: string }>,
     model: string,
     onChunk: (chunk: string) => void
-  ): Promise<{ content: string; usage?: any }> => {
+  ): Promise<{ content: string; usage: StreamUsage }> => {
+    const startedAt = Date.now()
     const response = await fetch('/api/llm/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -361,6 +423,7 @@ function MultiChatPageContent() {
       throw new Error('No response body received')
     }
 
+    const promptTokens = estimatePromptTokens(messages)
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let fullContent = ''
@@ -384,7 +447,17 @@ function MultiChatPageContent() {
       reader.releaseLock()
     }
 
-    return { content: fullContent }
+    const completionTokens = estimateTokenCount(fullContent)
+    return {
+      content: fullContent,
+      usage: {
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens,
+        costUsd: estimateCostUsd(model, promptTokens, completionTokens),
+        latencyMs: Date.now() - startedAt,
+      },
+    }
   }
 
   // ---- Submit handler ----
@@ -506,6 +579,22 @@ function MultiChatPageContent() {
       )
 
       if (result.content.trim()) {
+        setChatState((prev) => ({
+          ...prev,
+          messages: prev.messages.map((msg) =>
+            msg.id === typingId
+              ? {
+                  ...msg,
+                  promptTokens: result.usage.promptTokens,
+                  completionTokens: result.usage.completionTokens,
+                  totalTokens: result.usage.totalTokens,
+                  costUsd: result.usage.costUsd,
+                  latencyMs: result.usage.latencyMs,
+                }
+              : msg
+          ),
+        }))
+
         await persistAssistantMessage(
           conversationId,
           provider,

@@ -111,6 +111,7 @@ export default function SettingsPage() {
   const [isResetting, setIsResetting] = useState(false)
   const [configuredProviders, setConfiguredProviders] = useState<string[]>([])
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({})
+  const [activeTab, setActiveTab] = useState('general')
   const { toast } = useToast()
 
   const { theme, setTheme } = useTheme()
@@ -431,7 +432,7 @@ export default function SettingsPage() {
             <CardContent>
               {configuredProviders.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No providers configured. Add API keys in the "API Providers" tab first.
+                  No providers configured. Add API keys in the API Providers tab first.
                 </p>
               ) : (
                 <div className="space-y-3">
