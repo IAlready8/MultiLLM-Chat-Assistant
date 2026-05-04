@@ -7,6 +7,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { apiClient } from '@/lib/api-client'
+import {
+  deleteComparisonSession,
+  loadComparisonSessions,
+  saveComparisonSession,
+  type ComparisonSession,
+} from '@/services/comparison-session-storage'
 import type { Conversation, Message } from '@/types/prisma'
 
 type DashboardProviderUsage = {
@@ -58,6 +64,8 @@ const COST_PER_1K_TOKENS: Record<string, number> = {
   googleai: 0.001,
   openrouter: 0.01,
   grok: 0.02,
+  mistral: 0.01,
+  ollama: 0,
 }
 
 const normalizeKey = (value: string) => value.toLowerCase().trim()
@@ -69,6 +77,8 @@ const inferProviderFromName = (name: string) => {
   if (key.includes('gemini') || key.includes('google')) return 'Google AI'
   if (key.includes('grok')) return 'Grok'
   if (key.includes('openrouter')) return 'OpenRouter'
+  if (key.includes('mistral') || key.includes('mixtral') || key.includes('codestral')) return 'Mistral'
+  if (key.includes('ollama') || key.includes('llama') || key.includes('gemma') || key.includes('qwen')) return 'Ollama'
   return name
 }
 
@@ -202,6 +212,8 @@ export default function ComparisonPage() {
   const [selectedPrompt, setSelectedPrompt] = useState('Select a conversation to compare responses.')
   const [responseSamples, setResponseSamples] = useState<ResponseSample[]>([])
   const [loadingResponses, setLoadingResponses] = useState(false)
+  const [comparisonSessions, setComparisonSessions] = useState<ComparisonSession[]>([])
+  const [selectedSessionId, setSelectedSessionId] = useState('')
 
   const loadMetrics = useCallback(async () => {
     setLoading(true)
@@ -247,6 +259,11 @@ export default function ComparisonPage() {
     }
   }, [])
 
+  const refreshComparisonSessions = useCallback(() => {
+    const sessions = loadComparisonSessions()
+    setComparisonSessions(sessions)
+  }, [])
+
   const loadConversationComparison = useCallback(async (conversationId: string) => {
     if (!conversationId) {
       setSelectedPrompt('No conversation selected.')
@@ -258,6 +275,7 @@ export default function ComparisonPage() {
     try {
       const conversation = await apiClient.getConversation(conversationId)
       const { prompt, responses } = extractConversationSamples(conversation.messages)
+      setSelectedSessionId('')
       setSelectedPrompt(prompt)
       setResponseSamples(responses)
     } catch (err) {
@@ -270,8 +288,9 @@ export default function ComparisonPage() {
   }, [])
 
   useEffect(() => {
+    refreshComparisonSessions()
     void Promise.all([loadMetrics(), loadConversations()])
-  }, [loadMetrics, loadConversations])
+  }, [loadMetrics, loadConversations, refreshComparisonSessions])
 
   useEffect(() => {
     if (!selectedConversationId) {
@@ -279,6 +298,58 @@ export default function ComparisonPage() {
     }
     void loadConversationComparison(selectedConversationId)
   }, [selectedConversationId, loadConversationComparison])
+
+  const loadSavedComparisonSession = (sessionId: string) => {
+    setSelectedSessionId(sessionId)
+    const session = comparisonSessions.find(item => item.id === sessionId)
+    if (!session) {
+      return
+    }
+    setSelectedConversationId('')
+    setSelectedPrompt(session.prompt)
+    setResponseSamples(session.responses)
+  }
+
+  const saveSelectedComparisonSession = () => {
+    if (responseSamples.length === 0) {
+      setError('Select a conversation with provider-tagged responses before saving a comparison session.')
+      return
+    }
+
+    const sourceConversation = conversations.find(
+      conversation => conversation.id === selectedConversationId
+    )
+    const session = saveComparisonSession({
+      title: sourceConversation?.title || selectedPrompt.slice(0, 80) || 'Comparison session',
+      prompt: selectedPrompt,
+      responses: responseSamples,
+      sourceConversationId: selectedConversationId || undefined,
+    })
+
+    const sessions = loadComparisonSessions()
+    setComparisonSessions(sessions)
+    setSelectedSessionId(session.id)
+    setError(null)
+  }
+
+  const removeSelectedComparisonSession = () => {
+    if (!selectedSessionId) {
+      return
+    }
+
+    deleteComparisonSession(selectedSessionId)
+    const sessions = loadComparisonSessions()
+    setComparisonSessions(sessions)
+    const next = sessions[0]
+    setSelectedSessionId(next?.id || '')
+    if (next) {
+      setSelectedPrompt(next.prompt)
+      setResponseSamples(next.responses)
+    } else {
+      setSelectedPrompt('Select a conversation to compare responses.')
+      setResponseSamples([])
+    }
+  }
 
   const modelTableRows = useMemo(
     () => comparisonData.slice().sort((a, b) => b.usageCount - a.usageCount),
@@ -427,6 +498,38 @@ export default function ComparisonPage() {
             </select>
             <Button variant="outline" onClick={() => void loadConversations()}>
               Refresh
+            </Button>
+            <Button
+              type="button"
+              onClick={saveSelectedComparisonSession}
+              disabled={responseSamples.length === 0}
+            >
+              Save Session
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedSessionId}
+              onChange={(event) => loadSavedComparisonSession(event.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              {comparisonSessions.length === 0 && (
+                <option value="">No saved comparison sessions</option>
+              )}
+              {comparisonSessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.title}
+                </option>
+              ))}
+            </select>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={removeSelectedComparisonSession}
+              disabled={!selectedSessionId}
+            >
+              Delete Session
             </Button>
           </div>
 

@@ -6,11 +6,13 @@ import { CheckCircle2, CircleDashed, ArrowRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { loadComparisonSessions } from '@/services/comparison-session-storage'
 
 type ChecklistState = {
   configuredProviders: number
   personas: number
   comparisonReadyConversations: number
+  comparisonSessions: number
 }
 
 type Step = {
@@ -25,6 +27,7 @@ const defaultState: ChecklistState = {
   configuredProviders: 0,
   personas: 0,
   comparisonReadyConversations: 0,
+  comparisonSessions: 0,
 }
 
 export function ActivationChecklist() {
@@ -57,6 +60,7 @@ export function ActivationChecklist() {
             typeof data.comparisonReadyConversations === 'number'
               ? data.comparisonReadyConversations
               : 0,
+          comparisonSessions: loadComparisonSessions().length,
         })
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
@@ -103,6 +107,22 @@ export function ActivationChecklist() {
         href: '/multi-chat',
         complete: state.comparisonReadyConversations > 0,
       },
+      {
+        id: 'comparison',
+        label: 'Save a comparison session',
+        description:
+          'Snapshot the best multi-response thread so comparison work has an explicit saved artifact.',
+        href: '/comparison',
+        complete: state.comparisonSessions > 0,
+      },
+      {
+        id: 'analytics',
+        label: 'Review analytics',
+        description:
+          'Check usage, latency, and provider patterns after the first saved comparison.',
+        href: '/analytics',
+        complete: state.comparisonSessions > 0,
+      },
     ],
     [state]
   )
@@ -122,7 +142,7 @@ export function ActivationChecklist() {
       ? `Next best action: ${nextStep.label}`
       : 'Activation baseline complete'
   const summaryDescription = loading
-    ? 'We are checking providers, personas, and saved comparison-ready conversations now.'
+    ? 'We are checking providers, personas, saved comparison-ready conversations, and comparison sessions now.'
     : loadError
       ? 'Your progress could not be loaded. Review your setup manually and continue from there.'
     : nextStep
@@ -136,7 +156,7 @@ export function ActivationChecklist() {
           <div>
             <CardTitle>Activation Checklist</CardTitle>
             <CardDescription>
-              Reach the first real outcome fast: connect a provider, create a persona, and save one comparison-ready thread.
+              Follow the finished path: Settings, Personas, Multi-Chat, Comparison, then Analytics.
             </CardDescription>
           </div>
           <Badge variant="secondary" aria-live="polite">
@@ -145,7 +165,7 @@ export function ActivationChecklist() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           {steps.map(step => (
             <div
               key={step.id}

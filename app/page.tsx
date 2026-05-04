@@ -5,6 +5,32 @@ import { ActivationChecklist } from '@/components/activation-checklist'
 
 const coreWorkflowCards = [
   {
+    title: 'Configure Settings',
+    description:
+      'Connect providers, set account defaults, and make the workspace ready for real model calls.',
+    href: '/settings',
+    cta: 'Open Settings',
+    icon: (
+      <>
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+  },
+  {
+    title: 'Build Personas',
+    description:
+      'Create reusable instructions for common client workflows and apply them consistently.',
+    href: '/personas',
+    cta: 'Open Personas',
+    icon: (
+      <>
+        <path d="M20 21a8 8 0 0 0-16 0" />
+        <circle cx="12" cy="7" r="4" />
+      </>
+    ),
+  },
+  {
     title: 'Start New Chat',
     description:
       'Run the same brief with different providers and preserve the thread for later comparison.',
@@ -20,42 +46,13 @@ const coreWorkflowCards = [
   {
     title: 'Compare Outputs',
     description:
-      'Review side-by-side model results and conversation-level differences from saved work.',
+      'Save explicit comparison sessions and review side-by-side model differences from real work.',
     href: '/comparison',
     cta: 'Open Comparison',
     icon: (
       <>
         <path d="M3 3v18h18" />
         <path d="m19 9-5 5-4-4-3 3" />
-      </>
-    ),
-  },
-  {
-    title: 'Run AI Roundtable',
-    description:
-      'Stage a multi-agent discussion around one goal and capture how different providers debate and refine the answer.',
-    href: '/ai-roundtable',
-    cta: 'Open AI Roundtable',
-    icon: (
-      <>
-        <circle cx="7" cy="12" r="3" />
-        <circle cx="17" cy="7" r="3" />
-        <circle cx="17" cy="17" r="3" />
-        <path d="M9.5 10.5 14.5 8.5" />
-        <path d="M9.5 13.5 14.5 15.5" />
-      </>
-    ),
-  },
-  {
-    title: 'Build Personas',
-    description:
-      'Create reusable instructions for common client workflows and apply them consistently.',
-    href: '/personas',
-    cta: 'Open Personas',
-    icon: (
-      <>
-        <path d="M20 21a8 8 0 0 0-16 0" />
-        <circle cx="12" cy="7" r="4" />
       </>
     ),
   },
@@ -104,11 +101,27 @@ const workspaceCards = [
     ),
   },
   {
-    title: 'Configure Settings',
+    title: 'Run AI Roundtable',
     description:
-      'Manage provider connections, account defaults, and environment behavior without leaving the workspace.',
+      'Stage a multi-agent discussion around one goal when an experimental debate flow is useful.',
+    href: '/ai-roundtable',
+    cta: 'Open AI Roundtable',
+    icon: (
+      <>
+        <circle cx="7" cy="12" r="3" />
+        <circle cx="17" cy="7" r="3" />
+        <circle cx="17" cy="17" r="3" />
+        <path d="M9.5 10.5 14.5 8.5" />
+        <path d="M9.5 13.5 14.5 15.5" />
+      </>
+    ),
+  },
+  {
+    title: 'Review Settings',
+    description:
+      'Revisit provider connections, account defaults, and environment behavior.',
     href: '/settings',
-    cta: 'Open Settings',
+    cta: 'Review Settings',
     icon: (
       <>
         <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
@@ -205,10 +218,10 @@ export default function Home() {
       >
         <div className="mb-5 flex flex-col gap-2 text-center md:text-left">
           <h2 id="home-workspace-surfaces-title" className="text-2xl font-semibold">
-            Full Workspace
+            Planning And Experimental Surfaces
           </h2>
           <p className="text-sm text-muted-foreground">
-            Keep the broader planning and handoff surfaces visible when the job needs more than the core comparison loop.
+            Use these when the job needs planning, handoff, or experimental orchestration beyond the core comparison loop.
           </p>
         </div>
 

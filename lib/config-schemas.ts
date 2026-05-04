@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { providerRegistry, supportedProviderIds, type ProviderMeta } from './provider-registry'
+import { getAllProviderIds, getModelsForProvider } from './model-catalog'
 
 // Provider Configuration Schemas
 export const providerConfigSchema = z.object({
@@ -124,15 +125,12 @@ export type { ProviderMeta }
 export { providerRegistry, supportedProviderIds }
 
 // Default Configurations
-export const defaultProviderModels = {
-  openai: ['gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
-  anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307', 'claude-3-opus-20240229'],
-  googleai: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'],
-  openrouter: ['openrouter/auto', 'openai/gpt-4', 'anthropic/claude-3-opus', 'google/gemini-pro'],
-  grok: ['grok-beta', 'grok-2-1212'],
-  ollama: ['llama3', 'llama3:70b', 'mistral', 'mixtral', 'phi3', 'gemma2', 'codellama', 'qwen2', 'deepseek-coder'],
-  mistral: ['mistral-large-latest', 'mistral-small-latest', 'open-mixtral-8x22b', 'open-mixtral-8x7b', 'open-mistral-7b', 'codestral-latest'],
-}
+export const defaultProviderModels = Object.fromEntries(
+  getAllProviderIds().map((providerId) => [
+    providerId,
+    getModelsForProvider(providerId).map((model) => model.id),
+  ])
+) as Record<string, string[]>
 
 export const defaultRateLimits = {
   openai: { requests: 60, window: 60000 },

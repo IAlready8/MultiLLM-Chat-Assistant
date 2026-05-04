@@ -1,5 +1,6 @@
 import { errorManager, LLMProviderError, createErrorContext, ValidationError } from '@/lib/error-system'
 import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service'
+import { isProviderApiKeyRequired } from '@/lib/provider-registry'
 import {
   getProviderAdapter,
 } from '@/lib/providers'
@@ -34,7 +35,7 @@ async function resolveAdapterConfig(
   ])
 
   const providerConfig = providerConfigs.find((c: any) => c.provider === provider)
-  if (!providerConfig || !apiKey) {
+  if (!providerConfig || (apiKey === null && isProviderApiKeyRequired(provider))) {
     throw new ValidationError(
       `Provider ${provider} not configured`,
       'provider',
@@ -51,7 +52,7 @@ async function resolveAdapterConfig(
     if (settings.xTitle) extraHeaders['X-Title'] = settings.xTitle
   }
 
-  return { apiKey, baseUrl, extraHeaders }
+  return { apiKey: apiKey ?? '', baseUrl, extraHeaders }
 }
 
 export async function sendChatMessage(

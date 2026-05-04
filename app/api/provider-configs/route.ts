@@ -7,6 +7,7 @@ import {
 } from '@/lib/api-key-service'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
+import { isProviderApiKeyRequired } from '@/lib/provider-registry'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
@@ -23,7 +24,7 @@ function buildProviderSettings(
   const models =
     Array.isArray(config.models) && config.models.length > 0
       ? config.models
-      : defaultProviderModels[provider as keyof typeof defaultProviderModels] ?? []
+      : defaultProviderModels[provider] ?? []
 
   const rateLimits =
     config.rateLimits &&
@@ -78,7 +79,7 @@ export async function GET() {
     for (const config of configs) {
       const models =
         config.settings?.models ??
-        defaultProviderModels[config.provider as keyof typeof defaultProviderModels] ??
+        defaultProviderModels[config.provider] ??
         []
       const rateLimits =
         config.settings?.rateLimits ??
@@ -144,7 +145,7 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
-    if (!apiKey) {
+    if (!apiKey && isProviderApiKeyRequired(provider)) {
       return NextResponse.json(
         {
           success: false,
@@ -204,7 +205,10 @@ export async function PUT(request: NextRequest) {
 
     // Validate API key format if provided
     const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
-    if (!apiKey || apiKey.length < 10) {
+    if (
+      (!apiKey || apiKey.length < 10) &&
+      isProviderApiKeyRequired(provider)
+    ) {
       return NextResponse.json(
         {
           success: false,

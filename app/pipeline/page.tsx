@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
+import { getDefaultModel, getModelsForProvider } from '@/lib/model-catalog'
+import { getProviderMeta, providerRegistry } from '@/lib/provider-registry'
 
 type ProviderResponse = {
   provider: string
@@ -19,67 +21,29 @@ type ProviderResponse = {
   latency_ms: number
 }
 
-type ProviderId = 'openai' | 'anthropic' | 'googleai' | 'openrouter' | 'grok'
-
 type ProviderSelection = {
-  provider: ProviderId
+  provider: string
   model: string
   enabled: boolean
 }
 
-const PROVIDER_CATALOG: Record<
-  ProviderId,
-  { label: string; description: string; models: string[] }
-> = {
-  openai: {
-    label: 'OpenAI',
-    description: 'Strong general-purpose reasoning and coding',
-    models: ['gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini'],
-  },
-  anthropic: {
-    label: 'Anthropic',
-    description: 'Long context and nuanced writing quality',
-    models: [
-      'claude-3-5-sonnet-20241022',
-      'claude-3-opus-20240229',
-      'claude-3-haiku-20240307',
-    ],
-  },
-  googleai: {
-    label: 'Google AI',
-    description: 'Fast responses and broad model options',
-    models: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro'],
-  },
-  openrouter: {
-    label: 'OpenRouter',
-    description: 'Unified routing across many model providers',
-    models: ['openrouter/auto', 'openai/gpt-4', 'anthropic/claude-3-opus'],
-  },
-  grok: {
-    label: 'Grok',
-    description: 'xAI models for conversational exploration',
-    models: ['grok-2-1212', 'grok-beta'],
-  },
-}
-
-const providerIds = Object.keys(PROVIDER_CATALOG) as ProviderId[]
+const providerIds = providerRegistry.map(provider => provider.id)
 
 const samplePrompt =
   'Create a concise product launch plan for a multi-model AI assistant with timeline, risks, and success metrics.'
 
-const isProviderId = (value: string): value is ProviderId =>
-  providerIds.includes(value as ProviderId)
+const isProviderId = (value: string) => providerIds.includes(value)
 
-const createSelection = (provider: ProviderId): ProviderSelection => ({
+const createSelection = (provider: string): ProviderSelection => ({
   provider,
-  model: PROVIDER_CATALOG[provider].models[0],
+  model: getDefaultModel(provider),
   enabled: true,
 })
 
 const buildSelections = (configuredProviders: string[]): ProviderSelection[] => {
   const validConfigured = configuredProviders.filter(isProviderId)
   const providers = validConfigured.length > 0 ? validConfigured : ['openai']
-  return providers.map(provider => createSelection(provider as ProviderId))
+  return providers.map(provider => createSelection(provider))
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -96,11 +60,11 @@ export default function PipelinePage() {
   const [error, setError] = useState<string | null>(null)
   const [results, setResults] = useState<ProviderResponse[]>([])
   const [fallbackMode, setFallbackMode] = useState<string | null>(null)
-  const [configuredProviders, setConfiguredProviders] = useState<ProviderId[]>(
+  const [configuredProviders, setConfiguredProviders] = useState<string[]>(
     []
   )
   const [selections, setSelections] = useState<ProviderSelection[]>([])
-  const [providerToAdd, setProviderToAdd] = useState<ProviderId>('openai')
+  const [providerToAdd, setProviderToAdd] = useState('openai')
 
   const loadConfiguredProviders = useCallback(async () => {
     setIsLoadingProviders(true)
@@ -288,13 +252,13 @@ export default function PipelinePage() {
                     className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                     value={providerToAdd}
                     onChange={event =>
-                      setProviderToAdd(event.target.value as ProviderId)
+                      setProviderToAdd(event.target.value)
                     }
                     disabled={availableToAdd.length === 0}
                   >
                     {availableToAdd.map(provider => (
                       <option key={provider} value={provider}>
-                        {PROVIDER_CATALOG[provider].label}
+                        {getProviderMeta(provider)?.name ?? provider}
                       </option>
                     ))}
                   </select>
@@ -317,7 +281,8 @@ export default function PipelinePage() {
 
               <div className="space-y-3">
                 {selections.map((selection, index) => {
-                  const providerData = PROVIDER_CATALOG[selection.provider]
+                  const providerData = getProviderMeta(selection.provider)
+                  const models = getModelsForProvider(selection.provider)
                   return (
                     <div
                       key={selection.provider}
@@ -332,7 +297,7 @@ export default function PipelinePage() {
                               setSelection(index, { enabled: event.target.checked })
                             }
                           />
-                          {providerData.label}
+                          {providerData?.name ?? selection.provider}
                         </label>
                         <div className="flex items-center gap-2">
                           {configuredProviders.includes(selection.provider) ? (
@@ -353,7 +318,7 @@ export default function PipelinePage() {
                       </div>
 
                       <p className="mb-2 text-xs text-muted-foreground">
-                        {providerData.description}
+                        {providerData?.description ?? 'Provider model selection'}
                       </p>
 
                       <select
@@ -363,9 +328,9 @@ export default function PipelinePage() {
                           setSelection(index, { model: event.target.value })
                         }
                       >
-                        {providerData.models.map(model => (
-                          <option key={model} value={model}>
-                            {model}
+                        {models.map(model => (
+                          <option key={model.id} value={model.id}>
+                            {model.displayName}
                           </option>
                         ))}
                       </select>
@@ -437,8 +402,7 @@ export default function PipelinePage() {
                 <Card key={`${result.provider}-${result.model}`} className="bg-muted/40">
                   <CardHeader>
                     <CardTitle className="text-base">
-                      {PROVIDER_CATALOG[result.provider as ProviderId]?.label ||
-                        result.provider}{' '}
+                      {getProviderMeta(result.provider)?.name || result.provider}{' '}
                       ({result.model})
                     </CardTitle>
                     <p className="text-xs text-muted-foreground">

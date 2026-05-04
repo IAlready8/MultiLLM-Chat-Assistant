@@ -1,10 +1,12 @@
 import { encrypt, decrypt } from "@/lib/crypto";
+import { COMPARISON_SESSIONS_STORAGE_KEY } from "./comparison-session-storage";
 import { getAllConversations, saveConversation } from "./conversation-storage";
 
 export interface ExportData {
   version: string;
   timestamp: number;
   conversations: any[];
+  comparisonSessions?: any[];
   settings?: Record<string, any>;
   apiKeys?: Record<string, string>;
 }
@@ -17,6 +19,9 @@ export async function exportAllData(password: string): Promise<string> {
     // Get settings from localStorage
     const settings: Record<string, any> = {};
     const settingsKeys = ["modelSettings", "theme", "userPreferences"];
+    const comparisonSessionsRaw = localStorage.getItem(
+      COMPARISON_SESSIONS_STORAGE_KEY
+    );
     
     for (const key of settingsKeys) {
       const value = localStorage.getItem(key);
@@ -34,6 +39,9 @@ export async function exportAllData(password: string): Promise<string> {
       version: "1.0",
       timestamp: Date.now(),
       conversations,
+      comparisonSessions: comparisonSessionsRaw
+        ? JSON.parse(comparisonSessionsRaw)
+        : [],
       settings,
     };
     
@@ -63,6 +71,13 @@ export async function importAllData(encryptedData: string, password: string): Pr
         conversation.type,
         conversation.title,
         conversation.data
+      );
+    }
+
+    if (Array.isArray(importData.comparisonSessions)) {
+      localStorage.setItem(
+        COMPARISON_SESSIONS_STORAGE_KEY,
+        JSON.stringify(importData.comparisonSessions)
       );
     }
     

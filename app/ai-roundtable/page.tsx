@@ -9,22 +9,9 @@ import { Badge } from '@/components/ui/badge'
 import { Bot, Play, Plus, RotateCcw, Square, Target, Trash2, X } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
+import { getDefaultModel, getModelsForProvider } from '@/lib/model-catalog'
+import { getProviderMeta, providerRegistry, supportedProviderIds } from '@/lib/provider-registry'
 import type { Conversation, Message as PersistedMessage } from '@/types/prisma'
-
-const SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'googleai', 'openrouter', 'grok'] as const
-
-const AVAILABLE_MODELS: Record<string, string[]> = {
-  openai: ['gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
-  anthropic: [
-    'claude-3-5-sonnet-20241022',
-    'claude-3-sonnet-20240229',
-    'claude-3-haiku-20240307',
-    'claude-3-opus-20240229'
-  ],
-  googleai: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'],
-  openrouter: ['openrouter/auto', 'openai/gpt-4', 'anthropic/claude-3-opus', 'google/gemini-pro'],
-  grok: ['grok-beta', 'grok-2-1212']
-}
 
 type RoundtableMessage = {
   id: string
@@ -53,10 +40,10 @@ type StatusMessage = {
 const generateId = () => `rt-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
 
 const pickDefaultModel = (provider: string, index: number) => {
-  const models = AVAILABLE_MODELS[provider] ?? []
+  const models = getModelsForProvider(provider).map(model => model.id)
   if (models.length === 0) return ''
   if (index > 0 && models[index]) return models[index]
-  return models[0]
+  return getDefaultModel(provider) || models[0]
 }
 
 const buildAgentsForProviders = (
@@ -254,7 +241,7 @@ export default function AIRoundtablePage() {
         ? data.configuredProviders
         : []
       const filtered = configured.filter((provider: string) =>
-        SUPPORTED_PROVIDERS.includes(provider as (typeof SUPPORTED_PROVIDERS)[number])
+        supportedProviderIds.includes(provider)
       )
 
       if (filtered.length > 0) {
@@ -910,17 +897,17 @@ export default function AIRoundtablePage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-2">
-                {SUPPORTED_PROVIDERS.map(provider => (
+                {providerRegistry.map(provider => (
                   <Button
-                    key={provider}
+                    key={provider.id}
                     variant="outline"
                     size="sm"
-                    onClick={() => addAgent(provider)}
+                    onClick={() => addAgent(provider.id)}
                     disabled={isBusy}
-                    className="text-xs capitalize"
+                    className="text-xs"
                   >
                     <Plus className="h-3 w-3 mr-1" />
-                    {provider}
+                    {provider.name}
                   </Button>
                 ))}
               </div>
@@ -955,8 +942,8 @@ export default function AIRoundtablePage() {
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="text-[11px] text-muted-foreground capitalize">
-                        {agent.provider}
+                      <div className="text-[11px] text-muted-foreground">
+                        {getProviderMeta(agent.provider)?.name ?? agent.provider}
                       </div>
                       <select
                         value={agent.model}
@@ -964,8 +951,10 @@ export default function AIRoundtablePage() {
                         className="w-full p-1.5 border rounded text-xs bg-background"
                         disabled={isBusy}
                       >
-                        {AVAILABLE_MODELS[agent.provider]?.map(model => (
-                          <option key={model} value={model}>{model}</option>
+                        {getModelsForProvider(agent.provider).map(model => (
+                          <option key={model.id} value={model.id}>
+                            {model.displayName}
+                          </option>
                         ))}
                       </select>
                       <Textarea
