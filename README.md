@@ -68,6 +68,13 @@ Package manager:
 - `npm run test:coverage`: Vitest with coverage
 - `npm run smoke`: End-to-end smoke checks (pages + key APIs)
 - `npm run verify:prod`: Production readiness checks (env, DB, health, optional Stripe/webhook)
+- `npm run setup:env`: Scaffold `.env.local` from `.env.example`
+- `npm run env:validate`: Validate required env keys for local or production profiles
+- `npm run preflight`: Run env validation + type-check + lint before release steps
+- `npm run validate:all`: Full local gate (`type-check`, `lint`, `test:run`, `build`)
+- `npm run ci:local`: CI-parity local check sequence
+- `npm run build:vercel`: Wrapper for `vercel build` with optional dotenv injection
+- `npm run clean` / `clean:deep` / `clean:all`: Clean caches and build artifacts
 - `npm run protect:main`: Enforce `main` branch protection with required CI checks
 - `npm run upgrade:next:prep`: Next.js major-upgrade readiness scan + preflight gate checks
 
