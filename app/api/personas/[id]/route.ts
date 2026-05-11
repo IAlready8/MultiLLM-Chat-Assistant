@@ -5,6 +5,10 @@ import {
   withApiMetrics,
   type MetricsRouteContext,
 } from '@/lib/api-metrics-wrapper'
+import {
+  apiReadCacheKey,
+  invalidateApiReadCache,
+} from '@/lib/api-read-cache'
 import { z } from 'zod'
 
 // Zod schema for updating a persona
@@ -103,6 +107,8 @@ export const PUT = withApiMetrics(async (
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
+    invalidateApiReadCache(apiReadCacheKey('/api/personas', user.id))
+
     return NextResponse.json(updatedPersona)
   } catch (error) {
     console.error('Error updating persona:', error)
@@ -129,6 +135,8 @@ export const DELETE = withApiMetrics(async (
     if (!success) {
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
+
+    invalidateApiReadCache(apiReadCacheKey('/api/personas', user.id))
 
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {

@@ -52,6 +52,7 @@ import {
   PUT as updatePersona,
   DELETE as deletePersona,
 } from '@/app/api/personas/[id]/route'
+import { clearApiReadCache } from '@/lib/api-read-cache'
 
 const rootRouteContext = { params: Promise.resolve({}) }
 const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
@@ -59,6 +60,9 @@ const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
 describe('/api/personas routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ENABLE_API_READ_CACHE
+    delete process.env.API_READ_CACHE_TTL_MS
+    clearApiReadCache()
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
     mockRecordAnalyticsEvent.mockResolvedValue(undefined)
   })
@@ -86,6 +90,31 @@ describe('/api/personas routes', () => {
     expect(body).toHaveLength(1)
     expect(body[0].title).toBe('Research Analyst')
     expect(mockPersonaService.getPersonasByUserId).toHaveBeenCalledWith('user-1')
+  })
+
+  it('root GET serves cached persona lists when read cache is enabled', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    process.env.API_READ_CACHE_TTL_MS = '60000'
+    mockPersonaService.getPersonasByUserId.mockResolvedValue([
+      {
+        id: 'persona-1',
+        userId: 'user-1',
+        title: 'Research Analyst',
+      },
+    ])
+
+    const first = await getPersonas(
+      new Request('http://localhost/api/personas'),
+      rootRouteContext
+    )
+    const second = await getPersonas(
+      new Request('http://localhost/api/personas'),
+      rootRouteContext
+    )
+
+    expect(first.headers.get('X-Read-Cache')).toBe('miss')
+    expect(second.headers.get('X-Read-Cache')).toBe('hit')
+    expect(mockPersonaService.getPersonasByUserId).toHaveBeenCalledTimes(1)
   })
 
   it('root POST validates required fields', async () => {
@@ -151,6 +180,44 @@ describe('/api/personas routes', () => {
         acquisitionCohort: 'wave-1',
       },
     })
+  })
+
+  it('root POST invalidates cached persona lists after create', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    process.env.API_READ_CACHE_TTL_MS = '60000'
+    mockPersonaService.getPersonasByUserId
+      .mockResolvedValueOnce([{ id: 'persona-1', title: 'Old' }])
+      .mockResolvedValueOnce([{ id: 'persona-2', title: 'New' }])
+    mockPersonaService.createPersona.mockResolvedValue({
+      id: 'persona-2',
+      userId: 'user-1',
+      title: 'New',
+      description: null,
+      prompt: 'Prompt',
+    })
+
+    await getPersonas(
+      new Request('http://localhost/api/personas'),
+      rootRouteContext
+    )
+    await createPersona(
+      new Request('http://localhost/api/personas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'New',
+          systemPrompt: 'Prompt',
+        }),
+      }),
+      rootRouteContext
+    )
+    const response = await getPersonas(
+      new Request('http://localhost/api/personas'),
+      rootRouteContext
+    )
+
+    expect(response.headers.get('X-Read-Cache')).toBe('miss')
+    expect(mockPersonaService.getPersonasByUserId).toHaveBeenCalledTimes(2)
   })
 
   it('root POST still succeeds when persona telemetry recording fails', async () => {
