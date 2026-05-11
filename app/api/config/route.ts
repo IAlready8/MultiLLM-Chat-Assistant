@@ -5,6 +5,10 @@ import {
   mergeAttributionFromCookieHeader,
 } from '@/lib/acquisition-attribution'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
+import {
+  getProviderMeta,
+  isProviderApiKeyRequired,
+} from '@/lib/provider-registry'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
@@ -38,20 +42,22 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const providerRaw = body?.provider
   const apiKeyRaw = body?.apiKey
+  const clear = body?.clear === true
 
   if (!providerRaw || typeof providerRaw !== 'string') {
     return NextResponse.json({ error: 'Provider is required' }, { status: 400 })
   }
 
   const provider = normalizeProvider(providerRaw)
+  const providerMeta = getProviderMeta(provider)
 
   // Validate provider
-  if (!defaultProviderModels[provider as keyof typeof defaultProviderModels]) {
+  if (!providerMeta || !defaultProviderModels[provider]) {
     return NextResponse.json({ error: `Unsupported provider: ${provider}` }, { status: 400 })
   }
 
   const apiKey = typeof apiKeyRaw === 'string' ? apiKeyRaw.trim() : ''
-  if (!apiKey) {
+  if (clear || (!apiKey && isProviderApiKeyRequired(provider))) {
     // Delete provider configuration if no API key provided
     try {
       await deleteUserProviderConfig(user.id, provider)
@@ -66,7 +72,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Store API key with settings
-  const models = defaultProviderModels[provider as keyof typeof defaultProviderModels] || []
+  const models = defaultProviderModels[provider] || []
   const rateLimits = defaultRateLimits[provider as keyof typeof defaultRateLimits] || {
     requests: 60,
     window: 60000,

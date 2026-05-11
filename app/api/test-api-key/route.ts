@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { getUserApiKey } from '@/lib/api-key-service'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
+import { isProviderApiKeyRequired } from '@/lib/provider-registry'
 
 type HealthStatus = 'ok' | 'invalid' | 'unreachable' | 'rate_limited' | 'provider_error' | 'format'
 
@@ -112,27 +113,30 @@ export async function POST(request: NextRequest) {
     // Mode 1: Test a saved/stored key without re-entry
     if (testSaved) {
       const savedKey = await getUserApiKey(user.id, provider)
-      if (!savedKey) {
+      if (savedKey === null && isProviderApiKeyRequired(provider)) {
         return NextResponse.json(
           buildResult(false, 'No saved API key found for this provider.', 'invalid'),
           { status: 200 }
         )
       }
 
-      const result = await testKey(provider, savedKey)
+      const result = await testKey(provider, savedKey ?? '')
       return NextResponse.json(result, { status: 200 })
     }
 
     // Mode 2: Test a provided key (original behavior)
     const apiKeyRaw = body?.apiKey
-    if (!apiKeyRaw || typeof apiKeyRaw !== 'string') {
+    if (
+      (!apiKeyRaw || typeof apiKeyRaw !== 'string') &&
+      isProviderApiKeyRequired(provider)
+    ) {
       return NextResponse.json(
         { valid: false, message: 'API key is required.' },
         { status: 400 }
       )
     }
 
-    const apiKey = apiKeyRaw.trim()
+    const apiKey = typeof apiKeyRaw === 'string' ? apiKeyRaw.trim() : ''
     const result = await testKey(provider, apiKey)
     return NextResponse.json(result, { status: 200 })
   } catch (error) {

@@ -123,6 +123,36 @@ describe('/api/config route', () => {
     expect(mockStoreUserApiKey).not.toHaveBeenCalled()
   })
 
+  it('POST stores optional-key provider config when apiKey is empty', async () => {
+    const response = await POST(
+      makePostRequest({ provider: 'Ollama', apiKey: '   ' })
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ success: true })
+    expect(mockStoreUserApiKey).toHaveBeenCalledWith(
+      'user-1',
+      'ollama',
+      '',
+      expect.objectContaining({
+        models: expect.arrayContaining(['llama3']),
+        rateLimits: { requests: 1000, window: 60000 },
+      })
+    )
+    expect(mockDeleteUserProviderConfig).not.toHaveBeenCalled()
+  })
+
+  it('POST clears optional-key provider config when clear flag is set', async () => {
+    const response = await POST(
+      makePostRequest({ provider: 'Ollama', apiKey: '', clear: true })
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ success: true })
+    expect(mockDeleteUserProviderConfig).toHaveBeenCalledWith('user-1', 'ollama')
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
   it('POST returns 500 when clearing provider config fails', async () => {
     mockDeleteUserProviderConfig.mockRejectedValue(new Error('delete failed'))
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

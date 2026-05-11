@@ -91,3 +91,5 @@ export type ProviderId =
   | 'anthropic'
   | 'googleai'
   | 'grok'
+  | 'ollama'
+  | 'mistral'
