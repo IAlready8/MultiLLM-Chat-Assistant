@@ -214,6 +214,10 @@ describe('/api/conversations routes', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Conversation not found',
     })
+    expect(mockConversationService.getFullConversation).toHaveBeenCalledWith(
+      'conv-1',
+      'user-1'
+    )
   })
 
   it('id POST validates message payload', async () => {
