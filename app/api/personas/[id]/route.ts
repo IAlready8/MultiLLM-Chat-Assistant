@@ -5,6 +5,7 @@ import {
   withApiMetrics,
   type MetricsRouteContext,
 } from '@/lib/api-metrics-wrapper'
+import { invalidateReadCache } from '@/lib/api-read-cache'
 import { z } from 'zod'
 
 // Zod schema for updating a persona
@@ -24,6 +25,8 @@ const getPersonaIdFromContext = async (
   const rawId = (await ctx.params).id
   return Array.isArray(rawId) ? rawId[0] ?? '' : rawId ?? ''
 }
+
+const personasCacheKeyForUser = (userId: string) => `personas:${userId}`
 
 /**
  * GET /api/personas/[id]
@@ -103,6 +106,7 @@ export const PUT = withApiMetrics(async (
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
+    invalidateReadCache(personasCacheKeyForUser(user.id))
     return NextResponse.json(updatedPersona)
   } catch (error) {
     console.error('Error updating persona:', error)
@@ -130,6 +134,7 @@ export const DELETE = withApiMetrics(async (
       return NextResponse.json({ error: 'Persona not found' }, { status: 404 })
     }
 
+    invalidateReadCache(personasCacheKeyForUser(user.id))
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
     console.error('Error deleting persona:', error)

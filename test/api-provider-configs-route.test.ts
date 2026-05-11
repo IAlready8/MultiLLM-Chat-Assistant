@@ -51,6 +51,7 @@ const makeRequest = (
 describe('/api/provider-configs route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ENABLE_API_READ_CACHE
     mockGetAuthenticatedUser.mockResolvedValue({
       user: { id: 'user-1' },
     })
@@ -86,6 +87,16 @@ describe('/api/provider-configs route', () => {
       rateLimits: { requests: 15, window: 60000 },
     })
     expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
+  })
+
+  it('GET reuses cached provider configs when ENABLE_API_READ_CACHE is true', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    mockGetUserProviderConfigs.mockResolvedValue([])
+
+    await GET()
+    await GET()
+
+    expect(mockGetUserProviderConfigs).toHaveBeenCalledTimes(1)
   })
 
   it('POST rejects unsupported providers', async () => {

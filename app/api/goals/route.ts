@@ -3,6 +3,11 @@ import { z } from 'zod'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { GoalService } from '@/services/goal-service.db'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
+import {
+  invalidateReadCache,
+  logReadCacheMetrics,
+  withReadCache,
+} from '@/lib/api-read-cache'
 
 const goalStatusSchema = z.enum([
   'not-started',
@@ -22,6 +27,8 @@ const createGoalSchema = z.object({
   status: goalStatusSchema.optional(),
 })
 
+const goalsCacheKeyForUser = (userId: string) => `goals:${userId}`
+
 /**
  * GET /api/goals
  * Returns all goals for the authenticated user.
@@ -32,8 +39,13 @@ export const GET = withApiMetrics(async (_req: Request) => {
   const { user } = authCheck
 
   try {
-    const goals = await GoalService.getGoalsByUserId(user.id)
-    return NextResponse.json(goals)
+    const result = await withReadCache(goalsCacheKeyForUser(user.id), () =>
+      GoalService.getGoalsByUserId(user.id)
+    )
+    logReadCacheMetrics('/api/goals', result.source, result.durationMs)
+    return NextResponse.json(result.value, {
+      headers: { 'X-Read-Cache': result.source },
+    })
   } catch (error) {
     console.error('Error loading goals:', error)
     return NextResponse.json({ error: 'Failed to load goals' }, { status: 500 })
@@ -67,6 +79,7 @@ export const POST = withApiMetrics(async (req: Request) => {
       },
       user.id
     )
+    invalidateReadCache(goalsCacheKeyForUser(user.id))
 
     return NextResponse.json(goal, { status: 201 })
   } catch (error) {

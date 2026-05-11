@@ -7,10 +7,16 @@ import {
 } from '@/lib/api-key-service'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
+import {
+  invalidateReadCache,
+  logReadCacheMetrics,
+  withReadCache,
+} from '@/lib/api-read-cache'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
 const SUPPORTED_PROVIDERS = Object.keys(defaultProviderModels)
+const providerConfigsCacheKeyForUser = (userId: string) => `provider-configs:${userId}`
 
 function isSupportedProvider(provider: string): boolean {
   return SUPPORTED_PROVIDERS.includes(provider)
@@ -64,9 +70,13 @@ export async function GET() {
   const { user } = authCheck
 
   try {
-    const configs = await getUserProviderConfigs(user.id)
+    const cachedResult = await withReadCache(providerConfigsCacheKeyForUser(user.id), () =>
+      getUserProviderConfigs(user.id)
+    )
+    logReadCacheMetrics('/api/provider-configs', cachedResult.source, cachedResult.durationMs)
+    const configs = cachedResult.value
 
-    const result: Record<string, {
+    const mappedConfigs: Record<string, {
       provider: string
       isActive: boolean
       apiKey: string
@@ -85,7 +95,7 @@ export async function GET() {
         defaultRateLimits[config.provider as keyof typeof defaultRateLimits] ??
         { requests: 60, window: 60000 }
 
-      result[config.provider] = {
+      mappedConfigs[config.provider] = {
         provider: config.provider,
         isActive: config.isActive,
         apiKey: '',
@@ -96,10 +106,10 @@ export async function GET() {
     }
 
     return NextResponse.json(
-      { configs: result },
+      { configs: mappedConfigs },
       {
         status: 200,
-        headers: { 'Cache-Control': 'no-store' },
+        headers: { 'Cache-Control': 'no-store', 'X-Read-Cache': cachedResult.source },
       }
     )
   } catch (error) {
@@ -159,6 +169,7 @@ export async function POST(request: NextRequest) {
     const settings = buildProviderSettings(provider, config as Record<string, unknown>)
 
     await storeUserApiKey(user.id, provider, apiKey, settings)
+    invalidateReadCache(providerConfigsCacheKeyForUser(user.id))
 
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
@@ -276,6 +287,7 @@ export async function PUT(request: NextRequest) {
       const settings = buildProviderSettings(provider, config as Record<string, unknown>)
 
       await storeUserApiKey(user.id, provider, apiKey, settings)
+      invalidateReadCache(providerConfigsCacheKeyForUser(user.id))
     }
 
     return NextResponse.json(
@@ -314,6 +326,7 @@ export async function DELETE(request: NextRequest) {
     const provider = normalizeProvider(providerRaw)
 
     await deleteUserProviderConfig(user.id, provider)
+    invalidateReadCache(providerConfigsCacheKeyForUser(user.id))
 
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {

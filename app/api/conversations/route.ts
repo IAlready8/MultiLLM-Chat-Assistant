@@ -6,6 +6,11 @@ import {
 import { ConversationService } from '@/services/conversation-service.db'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
+import {
+  invalidateReadCache,
+  logReadCacheMetrics,
+  withReadCache,
+} from '@/lib/api-read-cache'
 import { z } from 'zod'
 
 // Zod schema for creating a conversation
@@ -23,6 +28,8 @@ const createConvoSchema = z.object({
   ).min(1),
 })
 
+const cacheKeyForUser = (userId: string) => `conversations:${userId}`
+
 /**
  * GET /api/conversations
  * Retrieves all conversations (metadata) for the authenticated user.
@@ -33,8 +40,14 @@ export const GET = withApiMetrics(async (_req: Request) => {
   const { user } = authCheck
 
   try {
-    const conversations = await ConversationService.getConversationsByUserId(user.id)
-    return NextResponse.json(conversations)
+    const key = cacheKeyForUser(user.id)
+    const result = await withReadCache(key, () =>
+      ConversationService.getConversationsByUserId(user.id)
+    )
+    logReadCacheMetrics('/api/conversations', result.source, result.durationMs)
+    return NextResponse.json(result.value, {
+      headers: { 'X-Read-Cache': result.source },
+    })
   } catch (error) {
     console.error('Error loading conversations:', error)
     return NextResponse.json(
@@ -79,6 +92,7 @@ export const POST = withApiMetrics(async (req: Request) => {
       title,
       prismaMessages
     )
+    invalidateReadCache(cacheKeyForUser(user.id))
     try {
       await recordAnalyticsEvent({
         event: 'conversation_created',

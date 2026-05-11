@@ -6,6 +6,7 @@ import {
   withApiMetrics,
   type MetricsRouteContext,
 } from '@/lib/api-metrics-wrapper'
+import { invalidateReadCache } from '@/lib/api-read-cache'
 
 const goalStatusSchema = z.enum([
   'not-started',
@@ -39,6 +40,8 @@ const getGoalIdFromContext = async (
   const rawId = (await ctx.params).id
   return Array.isArray(rawId) ? rawId[0] ?? '' : rawId ?? ''
 }
+
+const goalsCacheKeyForUser = (userId: string) => `goals:${userId}`
 
 /**
  * GET /api/goals/[id]
@@ -92,6 +95,7 @@ export const PUT = withApiMetrics(async (
     if (!updated) {
       return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
     }
+    invalidateReadCache(goalsCacheKeyForUser(user.id))
     return NextResponse.json(updated)
   } catch (error) {
     console.error('Error updating goal:', error)
@@ -117,6 +121,7 @@ export const DELETE = withApiMetrics(async (
     if (!deleted) {
       return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
     }
+    invalidateReadCache(goalsCacheKeyForUser(user.id))
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting goal:', error)

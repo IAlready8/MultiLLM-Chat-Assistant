@@ -47,6 +47,7 @@ const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
 describe('/api/goals routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ENABLE_API_READ_CACHE
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
   })
 
@@ -69,6 +70,18 @@ describe('/api/goals routes', () => {
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toHaveLength(1)
     expect(mockGoalService.getGoalsByUserId).toHaveBeenCalledWith('user-1')
+  })
+
+  it('root GET caches by user when ENABLE_API_READ_CACHE is true', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    mockGoalService.getGoalsByUserId.mockResolvedValue([
+      { id: 'goal-1', userId: 'user-1', title: 'Ship release', description: null, status: 'in-progress' },
+    ])
+
+    await getGoals(new Request('http://localhost/api/goals'), rootRouteContext)
+    await getGoals(new Request('http://localhost/api/goals'), rootRouteContext)
+
+    expect(mockGoalService.getGoalsByUserId).toHaveBeenCalledTimes(1)
   })
 
   it('root POST validates invalid payload', async () => {

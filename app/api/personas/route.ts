@@ -6,6 +6,11 @@ import {
 import { PersonaService } from '@/services/persona-service.db'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
+import {
+  invalidateReadCache,
+  logReadCacheMetrics,
+  withReadCache,
+} from '@/lib/api-read-cache'
 import { z } from 'zod'
 
 // Zod schema for persona validation
@@ -35,6 +40,8 @@ const personaSchema = z.object({
   }
 })
 
+const personasCacheKeyForUser = (userId: string) => `personas:${userId}`
+
 /**
  * GET /api/personas
  * Retrieves all personas for the authenticated user.
@@ -45,8 +52,13 @@ export const GET = withApiMetrics(async (_req: Request) => {
   const { user } = authCheck
 
   try {
-    const personas = await PersonaService.getPersonasByUserId(user.id)
-    return NextResponse.json(personas)
+    const result = await withReadCache(personasCacheKeyForUser(user.id), () =>
+      PersonaService.getPersonasByUserId(user.id)
+    )
+    logReadCacheMetrics('/api/personas', result.source, result.durationMs)
+    return NextResponse.json(result.value, {
+      headers: { 'X-Read-Cache': result.source },
+    })
   } catch (error) {
     console.error('Error loading personas:', error)
     return NextResponse.json({ error: 'Failed to load personas' }, { status: 500 })
@@ -84,6 +96,7 @@ export const POST = withApiMetrics(async (req: Request) => {
       description: description ?? null,
     }
     const newPersona = await PersonaService.createPersona(personaData, user.id)
+    invalidateReadCache(personasCacheKeyForUser(user.id))
     try {
       await recordAnalyticsEvent({
         event: 'persona_created',

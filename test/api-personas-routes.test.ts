@@ -59,6 +59,7 @@ const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
 describe('/api/personas routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ENABLE_API_READ_CACHE
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
     mockRecordAnalyticsEvent.mockResolvedValue(undefined)
   })
@@ -86,6 +87,26 @@ describe('/api/personas routes', () => {
     expect(body).toHaveLength(1)
     expect(body[0].title).toBe('Research Analyst')
     expect(mockPersonaService.getPersonasByUserId).toHaveBeenCalledWith('user-1')
+  })
+
+  it('root GET caches personas when ENABLE_API_READ_CACHE is true', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    mockPersonaService.getPersonasByUserId.mockResolvedValue([
+      {
+        id: 'persona-1',
+        userId: 'user-1',
+        title: 'Research Analyst',
+        description: 'Investigates deeply',
+        prompt: 'Always cite evidence',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ])
+
+    await getPersonas(new Request('http://localhost/api/personas'), rootRouteContext)
+    await getPersonas(new Request('http://localhost/api/personas'), rootRouteContext)
+
+    expect(mockPersonaService.getPersonasByUserId).toHaveBeenCalledTimes(1)
   })
 
   it('root POST validates required fields', async () => {
