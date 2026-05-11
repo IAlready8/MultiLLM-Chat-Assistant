@@ -47,10 +47,14 @@ export async function withReadCache<T>(
 
   try {
     const entry = await loadPromise
-    readCache.set(key, entry as CacheEntry<unknown>)
+    if (inFlightCache.get(key) === loadPromise) {
+      readCache.set(key, entry as CacheEntry<unknown>)
+    }
     return { value: entry.value, source: 'origin', durationMs: Date.now() - start }
   } finally {
-    inFlightCache.delete(key)
+    if (inFlightCache.get(key) === loadPromise) {
+      inFlightCache.delete(key)
+    }
   }
 }
 
