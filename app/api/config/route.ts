@@ -10,6 +10,10 @@ import {
   isProviderApiKeyRequired,
 } from '@/lib/provider-registry'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
+import {
+  apiReadCacheKey,
+  invalidateApiReadCache,
+} from '@/lib/api-read-cache'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
@@ -61,6 +65,7 @@ export async function POST(request: NextRequest) {
     // Delete provider configuration if no API key provided
     try {
       await deleteUserProviderConfig(user.id, provider)
+      invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
     } catch (error) {
       console.error(`Failed to delete provider config for ${provider}.`)
       return NextResponse.json(
@@ -85,6 +90,7 @@ export async function POST(request: NextRequest) {
 
   try {
     await storeUserApiKey(user.id, provider, apiKey, settings)
+    invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
     try {
       await recordAnalyticsEvent({
         event: 'provider_configured',

@@ -5,6 +5,10 @@ import {
 } from '@/lib/acquisition-attribution'
 import { ConversationService } from '@/services/conversation-service.db'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
+import {
+  apiReadCacheKey,
+  invalidateApiReadCache,
+} from '@/lib/api-read-cache'
 import { z } from 'zod'
 
 // Zod schema for adding messages
@@ -97,6 +101,8 @@ export async function POST(
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
 
+    invalidateApiReadCache(apiReadCacheKey('/api/conversations', user.id))
+
     const comparisonReadyMessages = prismaMessages.filter(
       message => message.role === 'assistant' && Boolean(message.provider)
     )
@@ -174,6 +180,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
 
+    invalidateApiReadCache(apiReadCacheKey('/api/conversations', user.id))
+
     return NextResponse.json(updatedConversation)
   } catch (error) {
     console.error('Error renaming conversation:', error)
@@ -204,6 +212,8 @@ export async function DELETE(
     if (!success) {
       return NextResponse.json({ error: 'Conversation not found or failed to delete' }, { status: 404 })
     }
+
+    invalidateApiReadCache(apiReadCacheKey('/api/conversations', user.id))
 
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
