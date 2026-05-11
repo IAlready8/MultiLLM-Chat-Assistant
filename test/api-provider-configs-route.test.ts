@@ -130,6 +130,30 @@ describe('/api/provider-configs route', () => {
     )
   })
 
+  it('POST allows optional-key providers to be saved without apiKey', async () => {
+    const response = await POST(
+      makeRequest({
+        provider: 'ollama',
+        config: {
+          apiKey: '',
+          baseUrl: 'http://localhost:11434',
+        },
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockStoreUserApiKey).toHaveBeenCalledWith(
+      'user-1',
+      'ollama',
+      '',
+      expect.objectContaining({
+        baseUrl: 'http://localhost:11434',
+        models: expect.arrayContaining(['llama3']),
+        rateLimits: { requests: 1000, window: 60000 },
+      })
+    )
+  })
+
   it('PUT returns validation errors for bad key format', async () => {
     mockValidateApiKeyFormat.mockReturnValue('Invalid API key format')
 
