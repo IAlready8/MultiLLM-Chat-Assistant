@@ -390,6 +390,10 @@ export default function AIRoundtablePage() {
 
   useEffect(() => {
     const initialize = async () => {
+      setGoal('')
+      setMessages([])
+      setStatusMessage(null)
+      setActiveConversationId(null)
       await loadConfiguredProviders()
       await refreshConversationList({ silent: true })
     }
