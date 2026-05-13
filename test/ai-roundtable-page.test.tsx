@@ -25,6 +25,17 @@ const roundtableConversation = {
   updatedAt: new Date('2026-01-02T00:00:00.000Z'),
 }
 
+const createStreamResponse = (text: string) =>
+  new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(text))
+        controller.close()
+      },
+    }),
+    { status: 200 }
+  )
+
 describe('AIRoundtablePage history behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -123,5 +134,54 @@ describe('AIRoundtablePage history behavior', () => {
     expect(goalInput).toHaveValue('')
     expect(mockApiClient.getConversation).not.toHaveBeenCalled()
     expect(screen.getByText('Roundtable: Old test chat')).toBeInTheDocument()
+  })
+
+  it('archives a completed roundtable and clears the active transcript', async () => {
+    const user = userEvent.setup()
+    const newConversation = {
+      id: 'roundtable-new',
+      title: 'Roundtable: New archived goal',
+      userId: 'user-1',
+      createdAt: new Date('2026-01-03T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-03T00:01:00.000Z'),
+    }
+
+    mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/api/llm/chat')) {
+        return createStreamResponse('Archived response')
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ configuredProviders: ['openai', 'anthropic'] }),
+      } as Response
+    })
+    mockApiClient.createConversation.mockResolvedValue(newConversation)
+    mockApiClient.addMessages.mockResolvedValue({})
+    mockApiClient.getConversations
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([newConversation])
+
+    render(<AIRoundtablePage />)
+
+    const goalInput = screen.getByPlaceholderText(
+      'Describe the objective for the AI conversation...'
+    )
+    const turnsInput = screen.getByDisplayValue('6')
+    await user.type(goalInput, 'New archived goal')
+    await user.clear(turnsInput)
+    await user.type(turnsInput, '2')
+    await user.click(screen.getByRole('button', { name: /^start$/i }))
+
+    expect(await screen.findByText('Roundtable saved to history.')).toBeInTheDocument()
+    expect(goalInput).toHaveValue('')
+    expect(
+      screen.getByText('Add a goal and start the roundtable to watch agents converse.')
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Archived response')).not.toBeInTheDocument()
+    expect(await screen.findByText('Roundtable: New archived goal')).toBeInTheDocument()
+    expect(
+      screen.getByText('Roundtable: New archived goal').closest('button')?.parentElement?.className
+    ).not.toContain('border-primary')
   })
 })

@@ -713,11 +713,11 @@ export default function AIRoundtablePage() {
       isRunningRef.current = false
       abortControllerRef.current = null
       await refreshConversationList({ silent: true })
-      setActiveConversationId(null)
+      resetRoundtable({ clearGoal: true })
       if (endState === 'completed') {
-        setStatusMessage({ type: 'success', text: 'Roundtable finished.' })
+        setStatusMessage({ type: 'success', text: 'Roundtable saved to history.' })
       } else if (endState === 'stopped') {
-        setStatusMessage({ type: 'info', text: 'Roundtable stopped.' })
+        setStatusMessage({ type: 'info', text: 'Roundtable stopped and saved to history.' })
       }
     }
   }
