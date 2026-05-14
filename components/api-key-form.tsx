@@ -123,7 +123,10 @@ export default function ApiKeyForm() {
 
   const handleSaveKey = async (providerId: string) => {
     const apiKey = apiKeys[providerId];
-    if (!apiKey) {
+    const provider = providers.find(p => p.id === providerId);
+    const requiresApiKey = provider?.requiresApiKey ?? true;
+
+    if (requiresApiKey && !apiKey) {
       toast({
         title: "No API Key",
         description: "Please enter an API key before saving.",
@@ -139,7 +142,7 @@ export default function ApiKeyForm() {
         const testResponse = await fetch('/api/test-api-key', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider: providerId, apiKey: apiKey }),
+          body: JSON.stringify({ provider: providerId, apiKey: apiKey || "" }),
         });
 
         if (!testResponse.ok) {
@@ -204,7 +207,7 @@ export default function ApiKeyForm() {
       } else {
         toast({
           title: "Success",
-          description: `API key for ${providers.find(p => p.id === providerId)?.name} saved successfully.`,
+          description: `${providers.find(p => p.id === providerId)?.name} configured successfully.`,
         });
       }
       setConfiguredProviders(prev => [...new Set([...prev, providerId])]);
@@ -236,7 +239,7 @@ export default function ApiKeyForm() {
       const response = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: providerId, apiKey: "" }),
+        body: JSON.stringify({ provider: providerId, apiKey: "", clear: true }),
       });
 
       if (!response.ok) {
@@ -333,7 +336,12 @@ export default function ApiKeyForm() {
       {providers.map((provider) => (
         <div key={provider.id}>
           <div className="flex items-center justify-between mb-1">
-            <Label htmlFor={`${provider.id}-api-key`}>{provider.name} API Key</Label>
+            <div className="space-y-0.5">
+              <Label htmlFor={`${provider.id}-api-key`}>
+                {provider.name}{provider.requiresApiKey ? ' API Key' : ' Connection'}
+              </Label>
+              <p className="text-xs text-muted-foreground">{provider.description}</p>
+            </div>
             {renderHealthBadge(provider.id)}
           </div>
           <div className="flex gap-2">
@@ -343,7 +351,7 @@ export default function ApiKeyForm() {
                 type={showKeys[provider.id] ? "text" : "password"}
                 value={apiKeys[provider.id] || ""}
                 onChange={(e) => setApiKeys(prev => ({ ...prev, [provider.id]: e.target.value }))}
-                placeholder={configuredProviders.includes(provider.id) ? "Key saved. Enter new key to replace." : provider.placeholder}
+                placeholder={configuredProviders.includes(provider.id) ? "Configured. Enter a new key to replace." : provider.placeholder}
                 className="pr-10"
               />
               <Button
@@ -360,10 +368,13 @@ export default function ApiKeyForm() {
             </div>
             <Button
               onClick={() => handleSaveKey(provider.id)}
-              disabled={loading[provider.id] || !apiKeys[provider.id]}
+              disabled={
+                loading[provider.id] ||
+                (provider.requiresApiKey && !apiKeys[provider.id])
+              }
               size="sm"
             >
-              {loading[provider.id] ? "Saving..." : "Save"}
+              {loading[provider.id] ? "Saving..." : provider.requiresApiKey ? "Save" : "Connect"}
             </Button>
             {configuredProviders.includes(provider.id) && !healthStatus[provider.id] && (
               <Button

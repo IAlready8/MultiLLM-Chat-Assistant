@@ -40,6 +40,7 @@ import {
   PUT as updateGoal,
   DELETE as deleteGoal,
 } from '@/app/api/goals/[id]/route'
+import { clearApiReadCache } from '@/lib/api-read-cache'
 
 const rootRouteContext = { params: Promise.resolve({}) }
 const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
@@ -47,6 +48,9 @@ const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
 describe('/api/goals routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ENABLE_API_READ_CACHE
+    delete process.env.API_READ_CACHE_TTL_MS
+    clearApiReadCache()
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
   })
 
@@ -69,6 +73,31 @@ describe('/api/goals routes', () => {
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toHaveLength(1)
     expect(mockGoalService.getGoalsByUserId).toHaveBeenCalledWith('user-1')
+  })
+
+  it('root GET serves cached goal lists when read cache is enabled', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    process.env.API_READ_CACHE_TTL_MS = '60000'
+    mockGoalService.getGoalsByUserId.mockResolvedValue([
+      {
+        id: 'goal-1',
+        userId: 'user-1',
+        title: 'Ship release',
+      },
+    ])
+
+    const first = await getGoals(
+      new Request('http://localhost/api/goals'),
+      rootRouteContext
+    )
+    const second = await getGoals(
+      new Request('http://localhost/api/goals'),
+      rootRouteContext
+    )
+
+    expect(first.headers.get('X-Read-Cache')).toBe('miss')
+    expect(second.headers.get('X-Read-Cache')).toBe('hit')
+    expect(mockGoalService.getGoalsByUserId).toHaveBeenCalledTimes(1)
   })
 
   it('root POST validates invalid payload', async () => {
@@ -113,6 +142,41 @@ describe('/api/goals routes', () => {
       },
       'user-1'
     )
+  })
+
+  it('root POST invalidates cached goal lists after create', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    process.env.API_READ_CACHE_TTL_MS = '60000'
+    mockGoalService.getGoalsByUserId
+      .mockResolvedValueOnce([{ id: 'goal-1', title: 'Old' }])
+      .mockResolvedValueOnce([{ id: 'goal-2', title: 'New' }])
+    mockGoalService.createGoal.mockResolvedValue({
+      id: 'goal-2',
+      userId: 'user-1',
+      title: 'New',
+      description: null,
+      status: 'not-started',
+    })
+
+    await getGoals(
+      new Request('http://localhost/api/goals'),
+      rootRouteContext
+    )
+    await createGoal(
+      new Request('http://localhost/api/goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'New' }),
+      }),
+      rootRouteContext
+    )
+    const response = await getGoals(
+      new Request('http://localhost/api/goals'),
+      rootRouteContext
+    )
+
+    expect(response.headers.get('X-Read-Cache')).toBe('miss')
+    expect(mockGoalService.getGoalsByUserId).toHaveBeenCalledTimes(2)
   })
 
   it('id GET returns 404 when goal is missing', async () => {

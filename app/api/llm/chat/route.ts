@@ -4,6 +4,7 @@ import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import { validateApiKeyFormat } from '@/lib/provider-key-test'
+import { isProviderApiKeyRequired } from '@/lib/provider-registry'
 import { checkProviderRateLimit, type ProviderRateLimitConfig } from '@/lib/provider-rate-limit'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import {
@@ -112,11 +113,11 @@ export async function POST(req: NextRequest) {
     }
 
     const apiKey = await getUserApiKey(userId, provider)
-    if (!apiKey) {
+    if (apiKey === null && isProviderApiKeyRequired(provider)) {
       return jsonErrorResponse(400, `Provider ${provider} not configured`, 'PROVIDER_NOT_CONFIGURED')
     }
 
-    const formatError = validateApiKeyFormat(provider, apiKey)
+    const formatError = validateApiKeyFormat(provider, apiKey ?? '')
     if (formatError) {
       return jsonErrorResponse(
         400,
@@ -150,7 +151,7 @@ export async function POST(req: NextRequest) {
       if (settings.xTitle) extraHeaders['X-Title'] = settings.xTitle
     }
 
-    const adapterConfig: ProviderAdapterConfig = { apiKey, baseUrl, extraHeaders }
+    const adapterConfig: ProviderAdapterConfig = { apiKey: apiKey ?? '', baseUrl, extraHeaders }
     const providerRequest: ProviderRequest = {
       messages,
       model: resolvedModel,

@@ -3,6 +3,11 @@ import { z } from 'zod'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { GoalService } from '@/services/goal-service.db'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
+import {
+  apiReadCacheKey,
+  cachedJsonResponse,
+  invalidateApiReadCache,
+} from '@/lib/api-read-cache'
 
 const goalStatusSchema = z.enum([
   'not-started',
@@ -32,8 +37,11 @@ export const GET = withApiMetrics(async (_req: Request) => {
   const { user } = authCheck
 
   try {
-    const goals = await GoalService.getGoalsByUserId(user.id)
-    return NextResponse.json(goals)
+    return await cachedJsonResponse(
+      '/api/goals',
+      apiReadCacheKey('/api/goals', user.id),
+      () => GoalService.getGoalsByUserId(user.id)
+    )
   } catch (error) {
     console.error('Error loading goals:', error)
     return NextResponse.json({ error: 'Failed to load goals' }, { status: 500 })
@@ -67,6 +75,7 @@ export const POST = withApiMetrics(async (req: Request) => {
       },
       user.id
     )
+    invalidateApiReadCache(apiReadCacheKey('/api/goals', user.id))
 
     return NextResponse.json(goal, { status: 201 })
   } catch (error) {

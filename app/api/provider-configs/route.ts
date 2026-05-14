@@ -7,6 +7,12 @@ import {
 } from '@/lib/api-key-service'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
+import { isProviderApiKeyRequired } from '@/lib/provider-registry'
+import {
+  apiReadCacheKey,
+  cachedJsonResponse,
+  invalidateApiReadCache,
+} from '@/lib/api-read-cache'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
@@ -23,7 +29,7 @@ function buildProviderSettings(
   const models =
     Array.isArray(config.models) && config.models.length > 0
       ? config.models
-      : defaultProviderModels[provider as keyof typeof defaultProviderModels] ?? []
+      : defaultProviderModels[provider] ?? []
 
   const rateLimits =
     config.rateLimits &&
@@ -64,42 +70,42 @@ export async function GET() {
   const { user } = authCheck
 
   try {
-    const configs = await getUserProviderConfigs(user.id)
+    return await cachedJsonResponse(
+      '/api/provider-configs',
+      apiReadCacheKey('/api/provider-configs', user.id),
+      async () => {
+        const configs = await getUserProviderConfigs(user.id)
 
-    const result: Record<string, {
-      provider: string
-      isActive: boolean
-      apiKey: string
-      models: string[]
-      rateLimits: { requests: number; window: number }
-      settings?: Record<string, unknown>
-    }> = {}
+        const result: Record<string, {
+          provider: string
+          isActive: boolean
+          apiKey: string
+          models: string[]
+          rateLimits: { requests: number; window: number }
+          settings?: Record<string, unknown>
+        }> = {}
 
-    for (const config of configs) {
-      const models =
-        config.settings?.models ??
-        defaultProviderModels[config.provider as keyof typeof defaultProviderModels] ??
-        []
-      const rateLimits =
-        config.settings?.rateLimits ??
-        defaultRateLimits[config.provider as keyof typeof defaultRateLimits] ??
-        { requests: 60, window: 60000 }
+        for (const config of configs) {
+          const models =
+            config.settings?.models ??
+            defaultProviderModels[config.provider] ??
+            []
+          const rateLimits =
+            config.settings?.rateLimits ??
+            defaultRateLimits[config.provider as keyof typeof defaultRateLimits] ??
+            { requests: 60, window: 60000 }
 
-      result[config.provider] = {
-        provider: config.provider,
-        isActive: config.isActive,
-        apiKey: '',
-        models: models as string[],
-        rateLimits: rateLimits as { requests: number; window: number },
-        settings: config.settings,
-      }
-    }
+          result[config.provider] = {
+            provider: config.provider,
+            isActive: config.isActive,
+            apiKey: '',
+            models: models as string[],
+            rateLimits: rateLimits as { requests: number; window: number },
+            settings: config.settings,
+          }
+        }
 
-    return NextResponse.json(
-      { configs: result },
-      {
-        status: 200,
-        headers: { 'Cache-Control': 'no-store' },
+        return { configs: result }
       }
     )
   } catch (error) {
@@ -144,7 +150,7 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
-    if (!apiKey) {
+    if (!apiKey && isProviderApiKeyRequired(provider)) {
       return NextResponse.json(
         {
           success: false,
@@ -159,6 +165,7 @@ export async function POST(request: NextRequest) {
     const settings = buildProviderSettings(provider, config as Record<string, unknown>)
 
     await storeUserApiKey(user.id, provider, apiKey, settings)
+    invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
 
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
@@ -204,7 +211,10 @@ export async function PUT(request: NextRequest) {
 
     // Validate API key format if provided
     const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
-    if (!apiKey || apiKey.length < 10) {
+    if (
+      (!apiKey || apiKey.length < 10) &&
+      isProviderApiKeyRequired(provider)
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -276,6 +286,7 @@ export async function PUT(request: NextRequest) {
       const settings = buildProviderSettings(provider, config as Record<string, unknown>)
 
       await storeUserApiKey(user.id, provider, apiKey, settings)
+      invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
     }
 
     return NextResponse.json(
@@ -314,6 +325,7 @@ export async function DELETE(request: NextRequest) {
     const provider = normalizeProvider(providerRaw)
 
     await deleteUserProviderConfig(user.id, provider)
+    invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
 
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
