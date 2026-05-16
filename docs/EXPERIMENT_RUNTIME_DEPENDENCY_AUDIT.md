@@ -23,7 +23,7 @@ Scope: direct production dependencies only
 - `npm run lint`
 - `npm run type-check`
 - `npm run test:run`
-- `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=... API_KEY_ENCRYPTION_SEED=... DATABASE_URL=postgresql://user@127.0.0.1:5432/experiment_build AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+- `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<placeholder> API_KEY_ENCRYPTION_SEED=<placeholder> DATABASE_URL=postgresql://<user>:<password>@<host>:5432/<database> AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
 
 Result:
 
@@ -35,11 +35,11 @@ Result:
 ## Held intentionally
 
 - Prisma family:
-  - coordinated hold applied at `7.3.0`:
+  - later aligned together at `7.7.0`:
     - `prisma`
     - `@prisma/client`
     - `@prisma/adapter-pg`
-  - reason: generator/runtime coupling needs a dedicated review, not a mixed runtime patch batch
+  - reason: generator/runtime coupling should stay version-locked
 - major-version jumps held:
   - `react`
   - `react-dom`

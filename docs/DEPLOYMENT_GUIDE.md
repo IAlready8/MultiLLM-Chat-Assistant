@@ -96,8 +96,9 @@ Experimental:
 - AI roundtable
 - admin pages/routes
 
-Removed from supported production scope:
-- `/api/teams`
+Disabled by default / outside supported production scope:
+- `/api/teams` remains present for internal experiments, but returns 404 unless
+  `ENABLE_TEAMS_API=true` is explicitly set.
 
 ## 9. Related Docs
 - `docs/OPERATOR_RUNBOOK.md`
