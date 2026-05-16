@@ -46,8 +46,8 @@ This is a Next.js multi-provider LLM application with:
 - AI roundtable
 - admin pages/routes
 
-### Removed from supported production scope
-- `/api/teams`
+### Internal/flag-gated scope
+- `/api/teams` is disabled by default and returns 404 unless `ENABLE_TEAMS_API=true`
 
 ## 4. Runtime Topology
 ### Production requirements
@@ -158,8 +158,8 @@ This is a Next.js multi-provider LLM application with:
 - `/api/admin/status`
 - `/api/admin/errors/stats`
 
-### Removed from supported production scope
-- `/api/teams`
+### Internal/flag-gated scope
+- `/api/teams` is disabled by default and returns 404 unless `ENABLE_TEAMS_API=true`
 
 ## 9. Authentication Model
 - production strict auth is mandatory

@@ -19,7 +19,7 @@ MultiLLM Chat Assistant is a Next.js 16 App Router application that provides mul
 
 ```
 app/                → Next.js App Router pages, layouts, API route handlers
-  api/              → REST endpoints (auth, config, conversations, goals, personas, llm, health, admin, webhooks, teams, subscriptions)
+  api/              → REST endpoints (auth, config, conversations, goals, personas, llm, health, admin, webhooks, subscriptions; teams is internal and flag-gated)
 components/         → React components (kebab-case filenames, e.g. api-key-form.tsx); reusable UI primitives in components/ui/
 lib/                → Core utilities: auth, crypto, Prisma client, rate limiting, logging, caching
   providers/        → LLM provider adapters implementing ProviderAdapter interface + registry
@@ -293,7 +293,7 @@ Copy `.env.example` to `.env.local` for local development. **Never commit secret
 - **Core**: `/api/conversations`, `/api/conversations/[id]`, `/api/goals`, `/api/goals/[id]`, `/api/personas`, `/api/personas/[id]`
 - **LLM**: `/api/llm/chat`, `/api/llm/stream`, `/api/llm/orchestrate`
 - **Billing**: `/api/subscriptions`, `/api/webhooks/stripe`
-- **Teams**: `/api/teams`
+- **Teams**: `/api/teams` (internal, flag-gated, disabled by default)
 - **Ops**: `/api/health`, `/api/admin/status`, `/api/admin/errors/stats`, `/api/analytics`
 
 ## Supported LLM Providers
