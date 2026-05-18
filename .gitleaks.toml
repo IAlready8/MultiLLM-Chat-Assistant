@@ -1,0 +1,16 @@
+[allowlist]
+description = "Repository-owned placeholders and test fixtures that intentionally exercise secret handling."
+regexes = [
+  '''ci-smoke-test-secret-32chars-min''',
+  '''verify-secret-32chars''',
+  '''<optional-[a-z-]+-api-key>''',
+  '''sk-test-1234567890''',
+  '''sk-test-12345678901234567890''',
+  '''sk-or-v1-12345678901234567890''',
+  '''sk-ant-invalid-key''',
+  '''sk-ant-abcdefghij123''',
+  '''xai-abcdefghij1234567890''',
+  '''sk_test_123''',
+  '''sk_test_1234567890''',
+  '''sk_live_abcdefghijklmnopqrstuvwxyz''',
+]

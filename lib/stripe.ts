@@ -6,7 +6,7 @@ export const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID?.trim()
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY?.trim()
 export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim()
 
-const PLACEHOLDER_STRIPE_SECRET_KEY = 'sk_test_placeholder'
+const PLACEHOLDER_STRIPE_SECRET_KEY = 'placeholder_stripe_secret_key_for_local_init'
 
 // Backward-compatible flag used by existing call sites
 export const isStripeConfigured = Boolean(
