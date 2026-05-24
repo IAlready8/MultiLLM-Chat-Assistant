@@ -18,6 +18,7 @@ coverage/
 
 playwright-report/
 test-results/
+.pytest_cache/
 user_input_files/
 backup-minimal/
 
@@ -27,3 +28,6 @@ backup-minimal/
 
 # TypeScript incremental compilation cache
 *.tsbuildinfo
+
+# Local database artifacts
+*.db
