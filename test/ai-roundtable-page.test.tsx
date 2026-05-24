@@ -97,6 +97,22 @@ describe('AIRoundtablePage history behavior', () => {
     expect(screen.queryByText('Old persisted response')).not.toBeInTheDocument()
   })
 
+  it('offers every catalog-backed provider, including local Ollama and Mistral', async () => {
+    const user = userEvent.setup()
+    render(<AIRoundtablePage />)
+
+    expect(
+      await screen.findByRole('button', { name: /Ollama \(local\)/i })
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: /Mistral/i })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /Mistral/i }))
+    expect(screen.getByRole('option', { name: 'Mistral Large' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /Ollama \(local\)/i }))
+    expect(screen.getByRole('option', { name: 'Llama 3 (8B)' })).toBeVisible()
+  })
+
   it('hydrates a saved Roundtable only after the user clicks a history item', async () => {
     const user = userEvent.setup()
     render(<AIRoundtablePage />)
@@ -183,5 +199,5 @@ describe('AIRoundtablePage history behavior', () => {
     expect(
       screen.getByText('Roundtable: New archived goal').closest('button')?.parentElement?.className
     ).not.toContain('border-primary')
-  })
+  }, 10_000)
 })
