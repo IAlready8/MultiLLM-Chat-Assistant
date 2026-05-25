@@ -23,23 +23,23 @@ import {
 } from '@/lib/demo-account'
 
 const PASSWORD_MIN_LENGTH = 8
-// Define the types for subscription tier and team role as strings
+// Define the types for subscription tier and user role as strings
 type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
-type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER'
+type UserRole = 'USER' | 'ADMIN' | 'OWNER'
 
 // Augment the NextAuth session to include our custom properties
 declare module 'next-auth' {
   interface Session {
     user: {
       id: string
-      role: TeamRole
+      role: UserRole
       tier: SubscriptionTier
     } & DefaultSession['user']
   }
 
   interface JWT {
     id?: string
-    role?: TeamRole
+    role?: UserRole
     tier?: SubscriptionTier
   }
 }
@@ -47,7 +47,7 @@ declare module 'next-auth' {
 declare module 'next-auth/jwt' {
   interface JWT {
     id?: string
-    role?: TeamRole
+    role?: UserRole
     tier?: SubscriptionTier
   }
 }
@@ -62,6 +62,14 @@ type InMemoryAuthUser = {
 const inMemoryAuthUsers = new Map<string, InMemoryAuthUser>()
 
 const normalizeEmail = (email: string) => email.toLowerCase().trim()
+const normalizeUserRole = (role: unknown): UserRole => {
+  if (role === 'OWNER' || role === 'ADMIN') {
+    return role
+  }
+
+  return 'USER'
+}
+
 validateStartupEnvironment()
 const strictAuth = isStrictAuthRequired()
 const allowInMemoryAuthFallback = isInMemoryAuthFallbackAllowed()
@@ -285,20 +293,31 @@ export const authOptions: NextAuthOptions = {
 
       if (user) {
         token.id = user.id
-        token.role = 'MEMBER'
+      }
+
+      const userId = (token.id || token.sub) as string | undefined
+      if (userId) {
         try {
+          const persistedUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+              role: true,
+            },
+          })
           const subscription = await prisma.subscription.findUnique({
-            where: { userId: user.id },
+            where: { userId },
             select: { tier: true },
           })
+          token.role = normalizeUserRole(persistedUser?.role)
           token.tier = (subscription?.tier as SubscriptionTier) || 'FREE'
         } catch (error) {
-          console.warn('Failed to load subscription tier, defaulting to FREE:', error)
+          console.warn('Failed to load user auth metadata, defaulting to USER/FREE:', error)
+          token.role = 'USER'
           token.tier = 'FREE'
         }
       }
 
-      token.role = token.role || 'MEMBER'
+      token.role = normalizeUserRole(token.role)
       token.tier = token.tier || 'FREE'
       return token
     },
@@ -308,7 +327,7 @@ export const authOptions: NextAuthOptions = {
         if (userId) {
           session.user.id = userId
         }
-        session.user.role = token.role || 'MEMBER'
+        session.user.role = normalizeUserRole(token.role)
         session.user.tier = token.tier || 'FREE'
       }
       return session
@@ -353,7 +372,7 @@ export async function auth() {
       id: userId,
       name: token.name,
       email: token.email,
-      role: (token.role || 'MEMBER') as TeamRole,
+      role: normalizeUserRole(token.role),
       tier: (token.tier || 'FREE') as SubscriptionTier,
     },
   }

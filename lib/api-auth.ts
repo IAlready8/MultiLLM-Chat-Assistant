@@ -17,6 +17,8 @@ type RoleAwareUser = User & {
   role?: string | null
 }
 
+const ADMIN_ROLES = new Set(['OWNER', 'ADMIN'])
+
 // Tracks whether we've already logged a session error to avoid log spam
 let sessionErrorLogged = false
 
@@ -118,7 +120,7 @@ export async function getAuthenticatedAdmin(): Promise<
   }
 
   const user = authCheck.user as RoleAwareUser
-  if (user.role !== 'OWNER' && user.role !== 'ADMIN') {
+  if (!user.role || !ADMIN_ROLES.has(user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

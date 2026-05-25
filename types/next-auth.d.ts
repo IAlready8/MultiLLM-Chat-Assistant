@@ -1,7 +1,7 @@
 import NextAuth, { DefaultSession } from 'next-auth'
 
 type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
-type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER'
+type UserRole = 'USER' | 'ADMIN' | 'OWNER'
 
 declare module 'next-auth' {
   /**
@@ -11,7 +11,7 @@ declare module 'next-auth' {
     user: {
       /** The user's id. */
       id: string
-      role: TeamRole
+      role: UserRole
       tier: SubscriptionTier
     } & DefaultSession['user']
   }
@@ -20,7 +20,7 @@ declare module 'next-auth' {
 declare module 'next-auth/jwt' {
   interface JWT {
     id?: string
-    role?: TeamRole
+    role?: UserRole
     tier?: SubscriptionTier
   }
 }

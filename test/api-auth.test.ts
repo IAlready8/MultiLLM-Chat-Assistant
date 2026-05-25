@@ -172,6 +172,24 @@ describe('getAuthenticatedUser', () => {
       id: 'owner-123',
       role: 'OWNER',
     })
+
+    mockAuth.mockResolvedValue({
+      user: {
+        id: 'admin-123',
+        name: 'Admin User',
+        email: 'admin@test.com',
+        role: 'ADMIN',
+      },
+    })
+
+    const adminResult = await getAuthenticatedAdmin()
+    expect(adminResult).not.toBeInstanceOf(NextResponse)
+    expect(
+      (adminResult as { user: { id: string; role: string } }).user
+    ).toMatchObject({
+      id: 'admin-123',
+      role: 'ADMIN',
+    })
   })
 
   it('returns 403 for authenticated non-admin users', async () => {
@@ -181,15 +199,45 @@ describe('getAuthenticatedUser', () => {
     })
     mockAuth.mockResolvedValue({
       user: {
-        id: 'member-123',
-        name: 'Member User',
-        email: 'member@test.com',
-        role: 'MEMBER',
+        id: 'user-123',
+        name: 'Normal User',
+        email: 'user@test.com',
+        role: 'USER',
       },
     })
 
     const result = await getAuthenticatedAdmin()
     expect(result).toBeInstanceOf(NextResponse)
     expect((result as NextResponse).status).toBe(403)
+  })
+
+  it('returns 403 when authenticated user has no role', async () => {
+    mockCookies.mockReturnValue({
+      get: (name: string) =>
+        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
+    })
+    mockAuth.mockResolvedValue({
+      user: {
+        id: 'roleless-123',
+        name: 'Roleless User',
+        email: 'roleless@test.com',
+      },
+    })
+
+    const result = await getAuthenticatedAdmin()
+    expect(result).toBeInstanceOf(NextResponse)
+    expect((result as NextResponse).status).toBe(403)
+  })
+
+  it('returns 401 for unauthenticated admin requests', async () => {
+    mockCookies.mockReturnValue({
+      get: (name: string) =>
+        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
+    })
+    mockAuth.mockResolvedValue({ user: null })
+
+    const result = await getAuthenticatedAdmin()
+    expect(result).toBeInstanceOf(NextResponse)
+    expect((result as NextResponse).status).toBe(401)
   })
 })

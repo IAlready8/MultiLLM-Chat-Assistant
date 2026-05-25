@@ -5,6 +5,8 @@ process.env.NEXTAUTH_SECRET = 'test-secret'
 
 const mockCookies = vi.fn()
 const mockDecode = vi.fn()
+const mockPrismaUserFindUnique = vi.hoisted(() => vi.fn())
+const mockPrismaSubscriptionFindUnique = vi.hoisted(() => vi.fn())
 
 vi.mock('next/headers', () => ({
   cookies: () => mockCookies(),
@@ -37,11 +39,11 @@ vi.mock('@next-auth/prisma-adapter', () => ({
 vi.mock('@/lib/prisma', () => ({
   default: {
     user: {
-      findUnique: vi.fn(),
+      findUnique: mockPrismaUserFindUnique,
       create: vi.fn(),
     },
     subscription: {
-      findUnique: vi.fn(),
+      findUnique: mockPrismaSubscriptionFindUnique,
     },
   },
 }))
@@ -70,7 +72,7 @@ vi.mock('@/lib/demo-account', () => ({
   isStrictAuthRequired: () => true,
 }))
 
-const { auth, readSessionTokenFromCookieStore } = await import('@/lib/auth')
+const { auth, authOptions, readSessionTokenFromCookieStore } = await import('@/lib/auth')
 
 afterAll(() => {
   process.env.NEXTAUTH_SECRET = originalNextAuthSecret
@@ -79,6 +81,8 @@ afterAll(() => {
 describe('auth session token reader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockPrismaUserFindUnique.mockReset()
+    mockPrismaSubscriptionFindUnique.mockReset()
   })
 
   it('reads the secure session cookie directly', () => {
@@ -128,7 +132,7 @@ describe('auth session token reader', () => {
       sub: 'user-123',
       email: 'user@example.com',
       name: 'Test User',
-      role: 'MEMBER',
+      role: 'USER',
       tier: 'FREE',
       exp: 1_900_000_000,
     })
@@ -139,7 +143,7 @@ describe('auth session token reader', () => {
         id: 'user-123',
         email: 'user@example.com',
         name: 'Test User',
-        role: 'MEMBER',
+        role: 'USER',
         tier: 'FREE',
       },
     })
@@ -148,5 +152,95 @@ describe('auth session token reader', () => {
       token: 'encoded-token',
       secret: 'test-secret',
     })
+  })
+
+  it('loads the persisted user role into JWT and session callbacks', async () => {
+    mockPrismaUserFindUnique.mockResolvedValue({
+      role: 'ADMIN',
+    })
+    mockPrismaSubscriptionFindUnique.mockResolvedValue({ tier: 'PRO' })
+
+    const jwt = authOptions.callbacks?.jwt
+    const session = authOptions.callbacks?.session
+    expect(jwt).toBeDefined()
+    expect(session).toBeDefined()
+
+    const token = await jwt!({
+      token: {
+        sub: 'user-123',
+        email: 'admin@example.com',
+        name: 'Admin User',
+      },
+      user: {
+        id: 'user-123',
+        email: 'admin@example.com',
+        name: 'Admin User',
+      },
+      account: null,
+      profile: undefined,
+      trigger: 'signIn',
+      isNewUser: false,
+    } as never)
+
+    expect(mockPrismaUserFindUnique).toHaveBeenCalledWith({
+      where: { id: 'user-123' },
+      select: {
+        role: true,
+      },
+    })
+    expect(mockPrismaSubscriptionFindUnique).toHaveBeenCalledWith({
+      where: { userId: 'user-123' },
+      select: { tier: true },
+    })
+    expect(token.role).toBe('ADMIN')
+    expect(token.tier).toBe('PRO')
+
+    const appSession = await session!({
+      session: {
+        expires: new Date(1_900_000_000 * 1000).toISOString(),
+        user: {
+          id: '',
+          email: 'admin@example.com',
+          name: 'Admin User',
+          role: 'USER',
+          tier: 'FREE',
+        },
+      },
+      token,
+      user: undefined,
+      newSession: undefined,
+      trigger: 'update',
+    } as never)
+
+    expect(appSession.user).toMatchObject({
+      id: 'user-123',
+      role: 'ADMIN',
+      tier: 'PRO',
+    })
+  })
+
+  it('defaults unknown or missing persisted roles to USER', async () => {
+    mockPrismaUserFindUnique.mockResolvedValue({
+      role: null,
+    })
+    mockPrismaSubscriptionFindUnique.mockResolvedValue(null)
+
+    const jwt = authOptions.callbacks?.jwt
+    expect(jwt).toBeDefined()
+
+    const token = await jwt!({
+      token: {
+        sub: 'user-123',
+        role: 'MEMBER',
+      },
+      user: undefined,
+      account: null,
+      profile: undefined,
+      trigger: undefined,
+      isNewUser: false,
+    } as never)
+
+    expect(token.role).toBe('USER')
+    expect(token.tier).toBe('FREE')
   })
 })
