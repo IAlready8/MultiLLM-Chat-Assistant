@@ -17,6 +17,7 @@ from .schemas import (
     HealthResponse,
     MultiProviderRequest,
     ProviderRequest,
+    ProviderError,
     ProviderResponse,
     ProviderStreamRequest,
 )
@@ -112,9 +113,37 @@ def _classify_stream_error(error: Exception) -> dict:
         }
 
     return {
-        "code": "INTERNAL_ERROR",
+        "code": "UNKNOWN_PROVIDER_ERROR",
         "error": message or "Internal server error",
     }
+
+
+def _provider_error_response(
+    request: ProviderRequest,
+    error: Exception,
+    latency_ms: int = 0,
+) -> ProviderResponse:
+    classified = _classify_stream_error(error)
+    return ProviderResponse(
+        provider=request.provider,
+        model=request.model,
+        success=False,
+        content="",
+        error=ProviderError(
+            code=classified["code"],
+            message=classified["error"],
+            retryable=classified["code"] in {
+                "RATE_LIMITED",
+                "PROVIDER_TIMEOUT",
+                "PROVIDER_MALFORMED_RESPONSE",
+                "NETWORK_ERROR",
+            },
+        ),
+        prompt_tokens=0,
+        completion_tokens=0,
+        cost_usd=0.0,
+        latency_ms=latency_ms,
+    )
 
 
 def _cache_key_for_request(request: ProviderRequest) -> str:
@@ -271,16 +300,9 @@ async def post_orchestrate(request: MultiProviderRequest):
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 log.error(f"Error in orchestration task {i}: {str(result)}")
-                # Create an error response
-                processed_results.append(ProviderResponse(
-                    provider=getattr(request.requests[i], 'provider', 'unknown'),
-                    model=getattr(request.requests[i], 'model', ''),
-                    content=f"Error processing request: {str(result)}",
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                    cost_usd=0.0,
-                    latency_ms=0
-                ))
+                processed_results.append(
+                    _provider_error_response(request.requests[i], result)
+                )
             else:
                 processed_results.append(result)
 
@@ -319,6 +341,16 @@ async def post_stream(request: ProviderStreamRequest):
                 max_tokens=request.max_tokens,
             )
             response = await execute_llm_request(provider_request)
+
+            if response.success is False and response.error is not None:
+                yield _stream_event(
+                    {
+                        "type": "error",
+                        "error": response.error.message,
+                        "code": response.error.code,
+                    }
+                )
+                return
 
             if _looks_like_error_content(response.content):
                 error_payload = _classify_stream_error(Exception(response.content))

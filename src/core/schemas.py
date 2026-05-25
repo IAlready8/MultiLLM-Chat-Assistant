@@ -7,7 +7,7 @@ class ProviderRequest(BaseModel):
     """
     Request model for a single LLM provider.
     """
-    provider: Literal["openai", "anthropic", "cohere", "google"]
+    provider: Literal["openai", "anthropic", "googleai"]
     model: str
     prompt: str = Field(..., max_length=10000)
     temperature: float = Field(0.7, ge=0.0, le=2.0)
@@ -25,7 +25,7 @@ class StreamMessage(BaseModel):
 class ProviderStreamRequest(BaseModel):
     """Request model for streaming chat completions."""
 
-    provider: Literal["openai", "anthropic", "cohere", "google"]
+    provider: Literal["openai", "anthropic", "googleai"]
     messages: List[StreamMessage] = Field(..., min_length=1)
     model: str
     temperature: float = Field(0.7, ge=0.0, le=2.0)
@@ -38,13 +38,24 @@ class MultiProviderRequest(BaseModel):
     requests: List[ProviderRequest]
     prompt: str # A single prompt to send to all models
     
+class ProviderError(BaseModel):
+    """
+    Structured provider-level error returned inside orchestration results.
+    """
+    code: str
+    message: str
+    retryable: bool = False
+
+
 class ProviderResponse(BaseModel):
     """
     Response model for a single LLM provider's output.
     """
     provider: str
     model: str
-    content: str
+    success: bool = True
+    content: str = ""
+    error: Optional[ProviderError] = None
     prompt_tokens: int
     completion_tokens: int
     cost_usd: float

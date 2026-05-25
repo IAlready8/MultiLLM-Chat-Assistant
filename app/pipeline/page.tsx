@@ -12,7 +12,13 @@ import { apiClient } from '@/lib/api-client'
 type ProviderResponse = {
   provider: string
   model: string
-  content: string
+  success?: boolean
+  content?: string
+  error?: {
+    code: string
+    message: string
+    retryable: boolean
+  }
   prompt_tokens: number
   completion_tokens: number
   cost_usd: number
@@ -440,6 +446,11 @@ export default function PipelinePage() {
                       {PROVIDER_CATALOG[result.provider as ProviderId]?.label ||
                         result.provider}{' '}
                       ({result.model})
+                      {result.success === false ? (
+                        <Badge variant="destructive" className="ml-2">
+                          Failed
+                        </Badge>
+                      ) : null}
                     </CardTitle>
                     <p className="text-xs text-muted-foreground">
                       Latency: {result.latency_ms}ms | Prompt tokens:{' '}
@@ -449,9 +460,19 @@ export default function PipelinePage() {
                     </p>
                   </CardHeader>
                   <CardContent>
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {result.content || 'No content returned.'}
-                    </p>
+                    {result.success === false && result.error ? (
+                      <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+                        <p className="font-medium">{result.error.message}</p>
+                        <p className="mt-1 text-xs opacity-80">
+                          {result.error.code}
+                          {result.error.retryable ? ' · retryable' : ''}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                        {result.content || 'No content returned.'}
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               ))}

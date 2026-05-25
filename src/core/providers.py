@@ -1,4 +1,4 @@
-from .schemas import ProviderRequest, ProviderResponse
+from .schemas import ProviderError, ProviderRequest, ProviderResponse
 from .config import settings
 from .llm_manager import LLMManager, LLMRequest, ProviderType
 from .security_utils import scrub_sensitive_info
@@ -44,11 +44,15 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
         response = await llm_manager.generate(llm_req)
 
         latency_ms = int((time.monotonic() - start_time) * 1000)
+        if _looks_like_error_content(response.content):
+            error = _classify_provider_error(Exception(response.content))
+            return _provider_error_response(req, error, latency_ms)
 
         # Convert back to the API response format
         return ProviderResponse(
             provider=response.provider.value,
             model=response.model,
+            success=True,
             content=response.content,
             prompt_tokens=max(1, response.tokens_used // 2),  # Estimate prompt tokens
             completion_tokens=max(1, response.tokens_used // 2),  # Estimate completion tokens
@@ -58,28 +62,22 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
     except ValueError as e:
         # Handle validation errors
         logging.error(f"Request validation error: {str(e)}")
-        # Return an error response
-        return ProviderResponse(
-            provider=req.provider,
-            model=req.model,
-            content=f"Request validation error: {scrub_sensitive_info(str(e))}",
-            prompt_tokens=0,
-            completion_tokens=0,
-            cost_usd=0.0,
-            latency_ms=int((time.monotonic() - start_time) * 1000)
+        return _provider_error_response(
+            req,
+            {
+                "code": "PROVIDER_UNSUPPORTED",
+                "message": "Unsupported or invalid provider request",
+                "retryable": False,
+            },
+            int((time.monotonic() - start_time) * 1000),
         )
     except Exception as e:
         # Handle unexpected errors
         logging.error(f"Error executing LLM request: {str(e)}", exc_info=True)
-        # Return an error response with scrubbed sensitive info
-        return ProviderResponse(
-            provider=req.provider,
-            model=req.model,
-            content=f"Error processing request: {scrub_sensitive_info(str(e))}",
-            prompt_tokens=0,
-            completion_tokens=0,
-            cost_usd=0.0,
-            latency_ms=int((time.monotonic() - start_time) * 1000)
+        return _provider_error_response(
+            req,
+            _classify_provider_error(e),
+            int((time.monotonic() - start_time) * 1000),
         )
 
 
@@ -97,3 +95,87 @@ def calculate_cost(provider: ProviderType, tokens_used: int) -> float:
 
     cost_per_token = cost_per_thousand_tokens.get(provider, 0.002) / 1000
     return cost_per_token * tokens_used
+
+
+def _looks_like_error_content(content: str) -> bool:
+    lowered = content.strip().lower()
+    return (
+        lowered.startswith("error")
+        or lowered.startswith("request validation error")
+        or lowered.startswith("no provider registered")
+    )
+
+
+def _classify_provider_error(error: Exception) -> dict:
+    message = scrub_sensitive_info(str(error))
+    lower = message.lower()
+
+    if "invalid api key" in lower or "http 401" in lower or "http 403" in lower:
+        return {
+            "code": "PROVIDER_AUTH_ERROR",
+            "message": "Provider rejected the configured API key",
+            "retryable": False,
+        }
+
+    if "rate limit" in lower or "http 429" in lower:
+        return {
+            "code": "RATE_LIMITED",
+            "message": "Provider rate limit reached, please retry shortly",
+            "retryable": True,
+        }
+
+    if "timeout" in lower or "timed out" in lower or "abort" in lower:
+        return {
+            "code": "PROVIDER_TIMEOUT",
+            "message": "Provider request timed out",
+            "retryable": True,
+        }
+
+    if "invalid json" in lower or "malformed" in lower or "unexpected response format" in lower:
+        return {
+            "code": "PROVIDER_MALFORMED_RESPONSE",
+            "message": "Provider returned malformed response",
+            "retryable": True,
+        }
+
+    if "connection" in lower or "network" in lower or "fetch failed" in lower:
+        return {
+            "code": "NETWORK_ERROR",
+            "message": "Failed to reach upstream provider",
+            "retryable": True,
+        }
+
+    if "no provider registered" in lower or "unsupported" in lower:
+        return {
+            "code": "PROVIDER_UNSUPPORTED",
+            "message": "Provider is not supported by the Python sidecar",
+            "retryable": False,
+        }
+
+    return {
+        "code": "UNKNOWN_PROVIDER_ERROR",
+        "message": message or "Provider request failed",
+        "retryable": False,
+    }
+
+
+def _provider_error_response(
+    req: ProviderRequest,
+    error: dict,
+    latency_ms: int,
+) -> ProviderResponse:
+    return ProviderResponse(
+        provider=req.provider,
+        model=req.model,
+        success=False,
+        content="",
+        error=ProviderError(
+            code=error["code"],
+            message=error["message"],
+            retryable=error["retryable"],
+        ),
+        prompt_tokens=0,
+        completion_tokens=0,
+        cost_usd=0.0,
+        latency_ms=latency_ms,
+    )

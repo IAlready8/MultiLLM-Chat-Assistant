@@ -26,11 +26,23 @@ type OrchestrateRequest = {
 type ProviderResponse = {
   provider: string
   model: string
-  content: string
+  success?: boolean
+  content?: string
+  error?: {
+    code: string
+    message: string
+    retryable: boolean
+  }
   prompt_tokens: number
   completion_tokens: number
   cost_usd: number
   latency_ms: number
+  usage?: {
+    inputTokens?: number
+    outputTokens?: number
+    totalTokens?: number
+  }
+  latencyMs?: number
 }
 
 type OrchestrateResponseWithMeta = {

@@ -318,6 +318,44 @@ describe('/api/llm/chat route', () => {
     })
   })
 
+  it('keeps stream=true responses as raw text/plain chunks', async () => {
+    const sseData = [
+      'data: {"choices":[{"delta":{"content":"Hello"},"finish_reason":null}]}\n',
+      'data: {"choices":[{"delta":{"content":" world"},"finish_reason":null}]}\n',
+      'data: [DONE]\n',
+    ].join('\n')
+    const encoder = new TextEncoder()
+
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(sseData))
+          controller.close()
+        },
+      }),
+    } as Response)
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          stream: true,
+          model: 'gpt-4',
+          messages: [{ role: 'user', content: 'Say hello' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8')
+    await expect(response.text()).resolves.toBe('Hello world')
+  })
+
   it('maps provider 429 errors to RATE_LIMITED', async () => {
     const fetchMock = vi.mocked(global.fetch)
     fetchMock.mockResolvedValue({

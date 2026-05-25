@@ -35,7 +35,7 @@ class TestHealthEndpoint:
                 mock_provider_health.return_value = {
                     "openai": True,
                     "anthropic": True,
-                    "google": True
+                    "googleai": True
                 }
                 
                 response = client.get("/api/v1/health")
@@ -57,7 +57,7 @@ class TestHealthEndpoint:
                 mock_provider_health.return_value = {
                     "openai": True,
                     "anthropic": False,  # This provider is unhealthy
-                    "google": True
+                    "googleai": True
                 }
                 
                 response = client.get("/api/v1/health")
@@ -393,7 +393,7 @@ class TestOrchestrateEndpoint:
                         "temperature": 0.7
                     },
                     {
-                        "provider": "google",
+                        "provider": "googleai",
                         "model": "gemini-pro",
                         "prompt": "Test prompt 3",
                         "max_tokens": 100,
@@ -411,16 +411,21 @@ class TestOrchestrateEndpoint:
             
             # First should be successful
             assert data[0]["provider"] == "openai"
+            assert data[0]["success"] is True
             assert "Response from OpenAI" in data[0]["content"]
             
-            # Second should be an error response
+            # Second should be a structured provider error, not assistant content
             assert data[1]["provider"] == "anthropic"
-            assert "Error processing request" in data[1]["content"]
-            assert "Rate limit exceeded for Anthropic" in data[1]["content"]
+            assert data[1]["success"] is False
+            assert data[1]["content"] == ""
+            assert data[1]["error"]["code"] == "RATE_LIMITED"
+            assert data[1]["error"]["message"] == "Provider rate limit reached, please retry shortly"
+            assert data[1]["error"]["retryable"] is True
             
             # Third should be successful
-            assert data[2]["provider"] == "google"
-            assert "Response from google" in data[2]["content"]
+            assert data[2]["provider"] == "googleai"
+            assert data[2]["success"] is True
+            assert "Response from googleai" in data[2]["content"]
 
     @pytest.mark.asyncio
     async def test_orchestrate_endpoint_invalid_api_key(self, client):
@@ -448,8 +453,11 @@ class TestOrchestrateEndpoint:
             assert response.status_code == 200
             data = response.json()
             assert data[0]["provider"] == "openai"
-            assert "Error processing request" in data[0]["content"]
-            assert "Invalid API key" in data[0]["content"]
+            assert data[0]["success"] is False
+            assert data[0]["content"] == ""
+            assert data[0]["error"]["code"] == "PROVIDER_AUTH_ERROR"
+            assert data[0]["error"]["message"] == "Provider rejected the configured API key"
+            assert data[0]["error"]["retryable"] is False
 
     @pytest.mark.asyncio
     async def test_orchestrate_endpoint_rate_limit(self, client):
@@ -477,8 +485,11 @@ class TestOrchestrateEndpoint:
             assert response.status_code == 200
             data = response.json()
             assert data[0]["provider"] == "openai"
-            assert "Error processing request" in data[0]["content"]
-            assert "Rate limit exceeded" in data[0]["content"]
+            assert data[0]["success"] is False
+            assert data[0]["content"] == ""
+            assert data[0]["error"]["code"] == "RATE_LIMITED"
+            assert data[0]["error"]["message"] == "Provider rate limit reached, please retry shortly"
+            assert data[0]["error"]["retryable"] is True
 
     @pytest.mark.asyncio
     async def test_orchestrate_endpoint_general_error(self, client):
@@ -504,8 +515,33 @@ class TestOrchestrateEndpoint:
             assert response.status_code == 200
             data = response.json()
             assert data[0]["provider"] == "openai"
-            assert "Error processing request" in data[0]["content"]
-            assert "General error" in data[0]["content"]
+            assert data[0]["success"] is False
+            assert data[0]["content"] == ""
+            assert data[0]["error"]["code"] == "UNKNOWN_PROVIDER_ERROR"
+            assert data[0]["error"]["message"] == "General error"
+            assert data[0]["error"]["retryable"] is False
+
+    def test_orchestrate_endpoint_rejects_cohere_provider_id(self, client):
+        """Cohere is not part of the TypeScript provider registry and stays quarantined."""
+        response = client.post(
+            "/api/v1/llm/orchestrate",
+            json={
+                "requests": [
+                    {
+                        "provider": "cohere",
+                        "model": "command-r",
+                        "prompt": "Test prompt",
+                    }
+                ],
+                "prompt": "Test prompt",
+            },
+        )
+
+        assert response.status_code == 422
+        assert response.json() == {
+            "detail": "Invalid request parameters",
+            "error": "validation_error",
+        }
 
 
 class TestStreamEndpoint:

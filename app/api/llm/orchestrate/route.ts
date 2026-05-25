@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/api-auth';
+import { classifyProviderError } from '@/lib/providers'
 import { z } from 'zod';
 
 // Define the URL for the Python service, managed by PM2
@@ -8,10 +9,20 @@ import { z } from 'zod';
 const PYTHON_CORE_URL = process.env.PYTHON_CORE_URL || 'http://127.0.0.1:8008';
 
 // Define the schema for the incoming request from the client
+const providerIdSchema = z.enum([
+  'openai',
+  'openrouter',
+  'anthropic',
+  'googleai',
+  'grok',
+  'ollama',
+  'mistral',
+])
+
 const orchestrateRequestSchema = z.object({
   requests: z.array(
     z.object({
-      provider: z.string(),
+      provider: providerIdSchema,
       model: z.string(),
       prompt: z.string(),
     })
@@ -33,12 +44,42 @@ type ChatResponsePayload = {
 type ProviderResult = {
   provider: string
   model: string
+  success: true
   content: string
   prompt_tokens: number
   completion_tokens: number
   cost_usd: number
   latency_ms: number
+  usage: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+  }
+  latencyMs: number
 }
+
+type ProviderErrorResult = {
+  provider: string
+  model: string
+  success: false
+  error: {
+    code: string
+    message: string
+    retryable: boolean
+  }
+  prompt_tokens: number
+  completion_tokens: number
+  cost_usd: number
+  latency_ms: number
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+  }
+  latencyMs: number
+}
+
+type OrchestrateResult = ProviderResult | ProviderErrorResult
 
 const COST_PER_1K_TOKENS: Record<string, number> = {
   openai: 0.03,
@@ -55,6 +96,52 @@ const estimateCost = (provider: string, totalTokens: number): number => {
   const rate = COST_PER_1K_TOKENS[provider] ?? 0.01
   return (totalTokens / 1000) * rate
 }
+
+const isRetryableProviderError = (code: string): boolean =>
+  [
+    'PROVIDER_TIMEOUT',
+    'PROVIDER_UNAVAILABLE',
+    'NETWORK_ERROR',
+    'RATE_LIMITED',
+    'SIDECAR_UNAVAILABLE',
+    'SIDECAR_BAD_RESPONSE',
+  ].includes(code)
+
+const looksLikeErrorContent = (content: string | undefined): boolean => {
+  const normalized = content?.trim().toLowerCase() || ''
+  return (
+    normalized.startsWith('error') ||
+    normalized.startsWith('provider request failed') ||
+    normalized.startsWith('request validation error')
+  )
+}
+
+const toProviderErrorResult = (
+  provider: string,
+  model: string,
+  error: { code: string; message: string; retryable?: boolean },
+  latencyMs: number,
+  prompt: string
+): ProviderErrorResult => ({
+  provider,
+  model,
+  success: false,
+  error: {
+    code: error.code,
+    message: error.message,
+    retryable: error.retryable ?? isRetryableProviderError(error.code),
+  },
+  prompt_tokens: estimatePromptTokens(prompt),
+  completion_tokens: 0,
+  cost_usd: 0,
+  latency_ms: latencyMs,
+  usage: {
+    inputTokens: estimatePromptTokens(prompt),
+    outputTokens: 0,
+    totalTokens: estimatePromptTokens(prompt),
+  },
+  latencyMs,
+})
 
 const toProviderResult = (
   provider: string,
@@ -74,12 +161,98 @@ const toProviderResult = (
   return {
     provider,
     model,
+    success: true,
     content: payload.content || '',
     prompt_tokens: promptTokens,
     completion_tokens: completionTokens,
     cost_usd: estimateCost(provider, totalTokens),
     latency_ms: latencyMs,
+    usage: {
+      inputTokens: promptTokens,
+      outputTokens: completionTokens,
+      totalTokens,
+    },
+    latencyMs,
   }
+}
+
+const normalizePythonResults = (data: unknown): OrchestrateResult[] => {
+  if (!Array.isArray(data)) {
+    throw new Error('Python service returned a non-array orchestration response')
+  }
+
+  return data.map((item: any) => {
+    const provider = typeof item?.provider === 'string' ? item.provider : 'unknown'
+    const model = typeof item?.model === 'string' ? item.model : ''
+    const latencyMs =
+      typeof item?.latency_ms === 'number'
+        ? item.latency_ms
+        : typeof item?.latencyMs === 'number'
+          ? item.latencyMs
+          : 0
+
+    if (item?.success === false || item?.error || looksLikeErrorContent(item?.content)) {
+      const mapped = item?.error
+        ? {
+            code: String(item.error.code || 'UNKNOWN_PROVIDER_ERROR'),
+            message: String(item.error.message || item.error.error || 'Provider request failed'),
+            retryable:
+              typeof item.error.retryable === 'boolean'
+                ? item.error.retryable
+                : undefined,
+          }
+        : classifyProviderError(new Error(String(item?.content || 'Provider request failed')))
+
+      return toProviderErrorResult(
+        provider,
+        model,
+        {
+          code: mapped.code,
+          message: 'error' in mapped ? mapped.error : mapped.message,
+          retryable:
+            'retryable' in mapped && typeof mapped.retryable === 'boolean'
+              ? mapped.retryable
+              : undefined,
+        },
+        latencyMs,
+        ''
+      )
+    }
+
+    const promptTokens =
+      typeof item?.prompt_tokens === 'number'
+        ? item.prompt_tokens
+        : typeof item?.usage?.inputTokens === 'number'
+          ? item.usage.inputTokens
+          : 0
+    const completionTokens =
+      typeof item?.completion_tokens === 'number'
+        ? item.completion_tokens
+        : typeof item?.usage?.outputTokens === 'number'
+          ? item.usage.outputTokens
+          : Math.max(1, Math.round(String(item?.content || '').length / 4))
+    const totalTokens = promptTokens + completionTokens
+
+    return {
+      provider,
+      model,
+      success: true,
+      content: String(item?.content || ''),
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      cost_usd:
+        typeof item?.cost_usd === 'number'
+          ? item.cost_usd
+          : estimateCost(provider, totalTokens),
+      latency_ms: latencyMs,
+      usage: {
+        inputTokens: promptTokens,
+        outputTokens: completionTokens,
+        totalTokens,
+      },
+      latencyMs,
+    }
+  })
 }
 
 const resolveBaseUrl = (req: Request): string => {
@@ -94,10 +267,10 @@ const resolveBaseUrl = (req: Request): string => {
 const runLocalFallbackOrchestration = async (
   requestData: OrchestrateRequest,
   req: Request
-): Promise<ProviderResult[]> => {
+): Promise<OrchestrateResult[]> => {
   const baseUrl = resolveBaseUrl(req)
   const cookieHeader = req.headers.get('cookie') || ''
-  const results: ProviderResult[] = []
+  const results: OrchestrateResult[] = []
 
   for (const request of requestData.requests) {
     const startedAt = Date.now()
@@ -133,15 +306,21 @@ const runLocalFallbackOrchestration = async (
         // Ignore parsing errors and use status-based message
       }
 
-      results.push({
-        provider: request.provider,
-        model: request.model,
-        content: `Provider request failed: ${errorMessage}`,
-        prompt_tokens: estimatePromptTokens(fallbackPrompt),
-        completion_tokens: 0,
-        cost_usd: 0,
-        latency_ms: latencyMs,
-      })
+      const mapped = classifyProviderError(
+        new Error(`HTTP ${chatResponse.status}: ${errorMessage}`)
+      )
+      results.push(
+        toProviderErrorResult(
+          request.provider,
+          request.model,
+          {
+            code: mapped.code,
+            message: mapped.error,
+          },
+          latencyMs,
+          fallbackPrompt
+        )
+      )
       continue
     }
 
@@ -247,6 +426,14 @@ export async function POST(req: Request) {
         })
       }
 
+      if (pythonResponse.status === 422) {
+        const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
+        return NextResponse.json(fallbackResults, {
+          status: 200,
+          headers: { 'x-orchestration-fallback': 'local-validation' },
+        })
+      }
+
       return NextResponse.json(
         {
           error: 'Python service error',
@@ -257,8 +444,28 @@ export async function POST(req: Request) {
       )
     }
 
-    const data = await pythonResponse.json();
-    return NextResponse.json(data);
+    let data: unknown
+    try {
+      data = await pythonResponse.json();
+    } catch (error) {
+      console.error('Python service returned an invalid JSON response:', error)
+      const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
+      return NextResponse.json(fallbackResults, {
+        status: 200,
+        headers: { 'x-orchestration-fallback': 'local-bad-response' },
+      })
+    }
+
+    try {
+      return NextResponse.json(normalizePythonResults(data));
+    } catch (error) {
+      console.error('Python service returned an unexpected orchestration shape:', error)
+      const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
+      return NextResponse.json(fallbackResults, {
+        status: 200,
+        headers: { 'x-orchestration-fallback': 'local-bad-response' },
+      })
+    }
 
   } catch (error: any) {
     // Handle different types of errors

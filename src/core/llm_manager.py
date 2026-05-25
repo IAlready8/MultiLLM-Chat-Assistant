@@ -21,8 +21,7 @@ class ProviderType(str, Enum):
     """Enum for supported LLM providers"""
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
-    GOOGLE = "google"
-    COHERE = "cohere"
+    GOOGLE = "googleai"
 
 
 @dataclass
