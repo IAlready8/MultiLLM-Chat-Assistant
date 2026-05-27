@@ -11,6 +11,8 @@ import { anthropicAdapter } from './anthropic'
 import { googleaiAdapter } from './googleai'
 import { grokAdapter } from './grok'
 import { openrouterAdapter } from './openrouter'
+import { ollamaAdapter } from './ollama'
+import { mistralAdapter } from './mistral'
 
 const adapters: Record<ProviderId, ProviderAdapter> = {
   openai: openaiAdapter,
@@ -18,6 +20,8 @@ const adapters: Record<ProviderId, ProviderAdapter> = {
   anthropic: anthropicAdapter,
   googleai: googleaiAdapter,
   grok: grokAdapter,
+  ollama: ollamaAdapter,
+  mistral: mistralAdapter,
 }
 
 /**

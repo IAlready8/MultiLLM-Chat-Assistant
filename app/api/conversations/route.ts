@@ -6,6 +6,11 @@ import {
 import { ConversationService } from '@/services/conversation-service.db'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
+import {
+  apiReadCacheKey,
+  cachedJsonResponse,
+  invalidateApiReadCache,
+} from '@/lib/api-read-cache'
 import { z } from 'zod'
 
 // Zod schema for creating a conversation
@@ -38,8 +43,11 @@ export const GET = withApiMetrics(async (_req: Request) => {
   const { user } = authCheck
 
   try {
-    const conversations = await ConversationService.getConversationsByUserId(user.id)
-    return NextResponse.json(conversations)
+    return await cachedJsonResponse(
+      '/api/conversations',
+      apiReadCacheKey('/api/conversations', user.id),
+      () => ConversationService.getConversationsByUserId(user.id)
+    )
   } catch (error) {
     console.error('Error loading conversations:', error)
     return NextResponse.json(
@@ -99,6 +107,7 @@ export const POST = withApiMetrics(async (req: Request) => {
       title,
       prismaMessages
     )
+    invalidateApiReadCache(apiReadCacheKey('/api/conversations', user.id))
     try {
       await recordAnalyticsEvent({
         event: 'conversation_created',

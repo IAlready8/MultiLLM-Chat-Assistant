@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { providerRegistry, supportedProviderIds, type ProviderMeta } from './provider-registry'
+import { getAllProviderIds, getModelsForProvider } from './model-catalog'
 
 // Provider Configuration Schemas
 export const providerConfigSchema = z.object({
@@ -40,6 +41,14 @@ export const grokConfigSchema = providerConfigSchema.extend({
   maxTokens: z.number().min(1).max(100000).default(4096),
 })
 
+export const ollamaConfigSchema = providerConfigSchema.extend({
+  baseUrl: z.string().url().default('http://localhost:11434'),
+}).optional()
+
+export const mistralConfigSchema = providerConfigSchema.extend({
+  maxTokens: z.number().min(1).max(128000).default(4096),
+}).optional()
+
 // System Configuration Schemas
 export const featuresConfigSchema = z.object({
   streaming: z.boolean().default(true),
@@ -74,6 +83,8 @@ export const configSchema = z.object({
     googleai: googleAIConfigSchema.optional(),
     openrouter: openRouterConfigSchema.optional(),
     grok: grokConfigSchema.optional(),
+    ollama: ollamaConfigSchema,
+    mistral: mistralConfigSchema,
   }),
   features: featuresConfigSchema,
   security: securityConfigSchema,
@@ -89,6 +100,8 @@ export type AnthropicConfig = z.infer<typeof anthropicConfigSchema>
 export type GoogleAIConfig = z.infer<typeof googleAIConfigSchema>
 export type OpenRouterConfig = z.infer<typeof openRouterConfigSchema>
 export type GrokConfig = z.infer<typeof grokConfigSchema>
+export type OllamaConfig = z.infer<typeof ollamaConfigSchema>
+export type MistralConfig = z.infer<typeof mistralConfigSchema>
 export type FeaturesConfig = z.infer<typeof featuresConfigSchema>
 export type SecurityConfig = z.infer<typeof securityConfigSchema>
 export type DatabaseConfig = z.infer<typeof databaseConfigSchema>
@@ -112,13 +125,12 @@ export type { ProviderMeta }
 export { providerRegistry, supportedProviderIds }
 
 // Default Configurations
-export const defaultProviderModels = {
-  openai: ['gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
-  anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307', 'claude-3-opus-20240229'],
-  googleai: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'],
-  openrouter: ['openrouter/auto', 'openai/gpt-4', 'anthropic/claude-3-opus', 'google/gemini-pro'],
-  grok: ['grok-beta', 'grok-2-1212'],
-}
+export const defaultProviderModels = Object.fromEntries(
+  getAllProviderIds().map((providerId) => [
+    providerId,
+    getModelsForProvider(providerId).map((model) => model.id),
+  ])
+) as Record<string, string[]>
 
 export const defaultRateLimits = {
   openai: { requests: 60, window: 60000 },
@@ -126,4 +138,6 @@ export const defaultRateLimits = {
   googleai: { requests: 60, window: 60000 },
   openrouter: { requests: 200, window: 60000 },
   grok: { requests: 60, window: 60000 },
+  ollama: { requests: 1000, window: 60000 },
+  mistral: { requests: 60, window: 60000 },
 }

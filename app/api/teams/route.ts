@@ -7,11 +7,24 @@ const createTeamSchema = z.object({
   name: z.string().min(1, 'Team name is required').max(100),
 })
 
+const isTeamsApiEnabled = () => process.env.ENABLE_TEAMS_API === 'true'
+
+const teamsDisabledResponse = () =>
+  NextResponse.json(
+    {
+      error: 'Teams API is not enabled',
+      code: 'teams_api_disabled',
+    },
+    { status: 404 }
+  )
+
 /**
  * GET /api/teams
  * Retrieves all teams the authenticated user is a member of.
  */
 export async function GET(req: Request) {
+  if (!isTeamsApiEnabled()) return teamsDisabledResponse()
+
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
@@ -25,6 +38,8 @@ export async function GET(req: Request) {
  * Creates a new team with the user as the OWNER.
  */
 export async function POST(req: Request) {
+  if (!isTeamsApiEnabled()) return teamsDisabledResponse()
+
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck

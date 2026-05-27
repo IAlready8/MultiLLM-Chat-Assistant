@@ -143,11 +143,19 @@ describe('classifyProviderError', () => {
 // ---------------------------------------------------------------------------
 
 describe('provider registry', () => {
-  it('exposes all five supported providers', () => {
+  it('exposes all supported providers', () => {
     expect(supportedProviderIds).toEqual(
-      expect.arrayContaining(['openai', 'openrouter', 'anthropic', 'googleai', 'grok']),
+      expect.arrayContaining([
+        'openai',
+        'openrouter',
+        'anthropic',
+        'googleai',
+        'grok',
+        'ollama',
+        'mistral',
+      ]),
     )
-    expect(supportedProviderIds).toHaveLength(5)
+    expect(supportedProviderIds).toHaveLength(7)
   })
 
   it('returns an adapter for each supported provider', () => {

@@ -27,13 +27,17 @@ This document summarizes all the errors that were identified and surgically fixe
 
 **Environment Configuration:**
 ```env
-DATABASE_URL="postgresql://postgres:...@db.aicueurvnfpnejzxmkuv.supabase.co:5432/postgres"
+DATABASE_URL="postgresql://<user>:<password>@<host>:5432/<database>"
 NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="JmUpyeLdCQsmYZ9GfPv4ta2rVjB24NVDz2kSXrzdh5A="
-OPENAI_API_KEY="sk-proj-..."
-ANTHROPIC_API_KEY="sk-ant-api03-..."
-GOOGLE_AI_API_KEY="AIzaSy..."
+NEXTAUTH_SECRET="<generate-with-openssl-rand-base64-48>"
+OPENAI_API_KEY="<optional-openai-api-key>"
+ANTHROPIC_API_KEY="<optional-anthropic-api-key>"
+GOOGLE_AI_API_KEY="<optional-google-ai-api-key>"
 ```
+
+Historical note: the original diagnostic example in this archived report used
+real-looking credential formats. Treat any value that was ever copied into this
+file as exposed and rotate it before production use.
 
 ### 3. ✅ DATABASE AND PRISMA ERRORS - RESOLVED
 **Problems Fixed:**

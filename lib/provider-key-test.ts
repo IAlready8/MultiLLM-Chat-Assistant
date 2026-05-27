@@ -1,7 +1,15 @@
+import { isProviderApiKeyRequired } from './provider-registry'
+
 export const validateApiKeyFormat = (
   provider: string,
   apiKey: string
 ): string | null => {
+  const requiresApiKey = isProviderApiKeyRequired(provider)
+
+  if (!apiKey && !requiresApiKey) {
+    return null
+  }
+
   if (!apiKey || apiKey.length < 10) {
     return 'API key is too short.'
   }
@@ -24,6 +32,10 @@ export const validateApiKeyFormat = (
         ? null
         : 'Google AI keys should start with AIza.'
     case 'grok':
+      return null
+    case 'mistral':
+      return null
+    case 'ollama':
       return null
     default:
       return null
@@ -73,8 +85,17 @@ export const testProviderKey = async (provider: string, apiKey: string) => {
       )
     case 'grok':
       return null
+    case 'mistral':
+      return fetchWithTimeout('https://api.mistral.ai/v1/models', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
+      })
+    case 'ollama':
+      return fetchWithTimeout('http://localhost:11434/api/tags', {
+        method: 'GET',
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+      })
     default:
       return null
   }
 }
-

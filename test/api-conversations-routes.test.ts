@@ -55,6 +55,7 @@ import {
   PUT as updateConversation,
   DELETE as deleteConversation,
 } from '@/app/api/conversations/[id]/route'
+import { clearApiReadCache } from '@/lib/api-read-cache'
 
 const rootRouteContext = { params: Promise.resolve({}) }
 const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
@@ -62,6 +63,9 @@ const idRouteContext = (id: string) => ({ params: Promise.resolve({ id }) })
 describe('/api/conversations routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ENABLE_API_READ_CACHE
+    delete process.env.API_READ_CACHE_TTL_MS
+    clearApiReadCache()
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
     mockRecordAnalyticsEvent.mockResolvedValue(undefined)
   })
@@ -87,6 +91,33 @@ describe('/api/conversations routes', () => {
     expect(mockConversationService.getConversationsByUserId).toHaveBeenCalledWith(
       'user-1'
     )
+  })
+
+  it('root GET serves cached conversation lists when read cache is enabled', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    process.env.API_READ_CACHE_TTL_MS = '60000'
+    mockConversationService.getConversationsByUserId.mockResolvedValue([
+      {
+        id: 'conv-1',
+        title: 'Weekly planning',
+        userId: 'user-1',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ])
+
+    const first = await getConversations(
+      new Request('http://localhost/api/conversations'),
+      rootRouteContext
+    )
+    const second = await getConversations(
+      new Request('http://localhost/api/conversations'),
+      rootRouteContext
+    )
+
+    expect(first.headers.get('X-Read-Cache')).toBe('miss')
+    expect(second.headers.get('X-Read-Cache')).toBe('hit')
+    expect(mockConversationService.getConversationsByUserId).toHaveBeenCalledTimes(1)
   })
 
   it('root POST validates invalid payload', async () => {
@@ -175,6 +206,45 @@ describe('/api/conversations routes', () => {
     })
   })
 
+  it('root POST invalidates cached conversation lists after create', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    process.env.API_READ_CACHE_TTL_MS = '60000'
+    mockConversationService.getConversationsByUserId
+      .mockResolvedValueOnce([{ id: 'conv-1', title: 'Old' }])
+      .mockResolvedValueOnce([{ id: 'conv-2', title: 'New' }])
+    mockConversationService.createConversation.mockResolvedValue({
+      id: 'conv-2',
+      title: 'New',
+      userId: 'user-1',
+      messages: [],
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    })
+
+    await getConversations(
+      new Request('http://localhost/api/conversations'),
+      rootRouteContext
+    )
+    await createConversation(
+      new Request('http://localhost/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'New',
+          messages: [{ role: 'user', content: 'Hello' }],
+        }),
+      }),
+      rootRouteContext
+    )
+    const response = await getConversations(
+      new Request('http://localhost/api/conversations'),
+      rootRouteContext
+    )
+
+    expect(response.headers.get('X-Read-Cache')).toBe('miss')
+    expect(mockConversationService.getConversationsByUserId).toHaveBeenCalledTimes(2)
+  })
+
   it('root POST still succeeds when conversation telemetry recording fails', async () => {
     mockConversationService.createConversation.mockResolvedValue({
       id: 'conv-1',
@@ -224,6 +294,10 @@ describe('/api/conversations routes', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Conversation not found',
     })
+    expect(mockConversationService.getFullConversation).toHaveBeenCalledWith(
+      'conv-1',
+      'user-1'
+    )
   })
 
   it('id POST validates message payload', async () => {

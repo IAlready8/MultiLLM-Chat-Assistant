@@ -390,14 +390,15 @@ export default function AIRoundtablePage() {
 
   useEffect(() => {
     const initialize = async () => {
+      setGoal('')
+      setMessages([])
+      setStatusMessage(null)
+      setActiveConversationId(null)
       await loadConfiguredProviders()
-      const conversations = await refreshConversationList({ silent: true })
-      if (conversations.length > 0) {
-        await loadConversationById(conversations[0].id)
-      }
+      await refreshConversationList({ silent: true })
     }
     void initialize()
-  }, [loadConfiguredProviders, loadConversationById, refreshConversationList])
+  }, [loadConfiguredProviders, refreshConversationList])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -440,7 +441,10 @@ export default function AIRoundtablePage() {
     )
   }
 
-  const resetRoundtable = () => {
+  const resetRoundtable = (options?: { clearGoal?: boolean }) => {
+    if (options?.clearGoal) {
+      setGoal('')
+    }
     setMessages([])
     setStatusMessage(null)
     setActiveConversationId(null)
@@ -453,8 +457,7 @@ export default function AIRoundtablePage() {
         prev.filter(conversation => conversation.id !== conversationId)
       )
       if (activeConversationId === conversationId) {
-        resetRoundtable()
-        setGoal('')
+        resetRoundtable({ clearGoal: true })
       }
     } catch (error) {
       console.error('Failed to delete roundtable conversation:', error)
@@ -709,10 +712,12 @@ export default function AIRoundtablePage() {
       setIsRunning(false)
       isRunningRef.current = false
       abortControllerRef.current = null
+      await refreshConversationList({ silent: true })
+      resetRoundtable({ clearGoal: true })
       if (endState === 'completed') {
-        setStatusMessage({ type: 'success', text: 'Roundtable finished.' })
+        setStatusMessage({ type: 'success', text: 'Roundtable saved to history.' })
       } else if (endState === 'stopped') {
-        setStatusMessage({ type: 'info', text: 'Roundtable stopped.' })
+        setStatusMessage({ type: 'info', text: 'Roundtable stopped and saved to history.' })
       }
     }
   }
@@ -734,7 +739,12 @@ export default function AIRoundtablePage() {
                   </Badge>
                 ))}
               </div>
-              <Button variant="outline" size="sm" onClick={resetRoundtable} disabled={isBusy}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => resetRoundtable({ clearGoal: true })}
+                disabled={isBusy}
+              >
                 <RotateCcw className="h-4 w-4 mr-2" />
                 New Thread
               </Button>

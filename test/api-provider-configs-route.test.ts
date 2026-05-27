@@ -37,6 +37,7 @@ import {
   PUT,
   DELETE,
 } from '@/app/api/provider-configs/route'
+import { clearApiReadCache } from '@/lib/api-read-cache'
 
 const makeRequest = (
   body: Record<string, unknown>,
@@ -51,6 +52,9 @@ const makeRequest = (
 describe('/api/provider-configs route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ENABLE_API_READ_CACHE
+    delete process.env.API_READ_CACHE_TTL_MS
+    clearApiReadCache()
     mockGetAuthenticatedUser.mockResolvedValue({
       user: { id: 'user-1' },
     })
@@ -86,6 +90,32 @@ describe('/api/provider-configs route', () => {
       rateLimits: { requests: 15, window: 60000 },
     })
     expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
+  })
+
+  it('GET serves cached provider configs when read cache is enabled', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    process.env.API_READ_CACHE_TTL_MS = '60000'
+    const now = new Date('2026-01-01T00:00:00.000Z')
+    mockGetUserProviderConfigs.mockResolvedValue([
+      {
+        id: 'cfg-1',
+        provider: 'openai',
+        isActive: true,
+        settings: {
+          models: ['gpt-4'],
+          rateLimits: { requests: 15, window: 60000 },
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+    ])
+
+    const first = await GET()
+    const second = await GET()
+
+    expect(first.headers.get('X-Read-Cache')).toBe('miss')
+    expect(second.headers.get('X-Read-Cache')).toBe('hit')
+    expect(mockGetUserProviderConfigs).toHaveBeenCalledTimes(1)
   })
 
   it('POST rejects unsupported providers', async () => {
@@ -128,6 +158,69 @@ describe('/api/provider-configs route', () => {
         models: ['gpt-4'],
       })
     )
+  })
+
+  it('POST allows optional-key providers to be saved without apiKey', async () => {
+    const response = await POST(
+      makeRequest({
+        provider: 'ollama',
+        config: {
+          apiKey: '',
+          baseUrl: 'http://localhost:11434',
+        },
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockStoreUserApiKey).toHaveBeenCalledWith(
+      'user-1',
+      'ollama',
+      '',
+      expect.objectContaining({
+        baseUrl: 'http://localhost:11434',
+        models: expect.arrayContaining(['llama3']),
+        rateLimits: { requests: 1000, window: 60000 },
+      })
+    )
+  })
+
+  it('POST invalidates cached provider configs after save', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    process.env.API_READ_CACHE_TTL_MS = '60000'
+    const now = new Date('2026-01-01T00:00:00.000Z')
+    mockGetUserProviderConfigs
+      .mockResolvedValueOnce([
+        {
+          id: 'cfg-1',
+          provider: 'openai',
+          isActive: true,
+          settings: { models: ['gpt-4'] },
+          createdAt: now,
+          updatedAt: now,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'cfg-2',
+          provider: 'anthropic',
+          isActive: true,
+          settings: { models: ['claude-3-haiku-20240307'] },
+          createdAt: now,
+          updatedAt: now,
+        },
+      ])
+
+    await GET()
+    await POST(
+      makeRequest({
+        provider: 'openai',
+        config: { apiKey: 'sk-test-1234567890' },
+      })
+    )
+    const response = await GET()
+
+    expect(response.headers.get('X-Read-Cache')).toBe('miss')
+    expect(mockGetUserProviderConfigs).toHaveBeenCalledTimes(2)
   })
 
   it('PUT returns validation errors for bad key format', async () => {
