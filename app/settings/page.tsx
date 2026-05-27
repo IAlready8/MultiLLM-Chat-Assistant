@@ -13,6 +13,7 @@ import ApiKeyForm from '@/components/api-key-form'
 import { ExportImportDialog } from '@/components/export-import-dialog'
 import { exportAllData, importAllData } from '@/services/export-import-service'
 import { supportedProviderIds } from '@/lib/provider-registry'
+import { Loader2, CheckCircle, XCircle, Zap } from 'lucide-react'
 
 const PROFILE_STORAGE_KEY = 'settings.profile'
 const FONT_SIZE_STORAGE_KEY = 'settings.fontSize'
@@ -47,6 +48,15 @@ const SUPPORTED_PROVIDER_IDS = supportedProviderIds
 
 const isFontSizeOption = (value: string): value is FontSizeOption =>
   value === 'small' || value === 'normal' || value === 'large'
+
+// Provider test status
+interface TestResult {
+  provider: string
+  success: boolean
+  latencyMs?: number
+  error?: string
+  testing: boolean
+}
 
 const applyFontScale = (option: FontSizeOption) => {
   if (typeof document === 'undefined') {
@@ -99,6 +109,9 @@ export default function SettingsPage() {
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
+  const [configuredProviders, setConfiguredProviders] = useState<string[]>([])
+  const [testResults, setTestResults] = useState<Record<string, TestResult>>({})
+  const [activeTab, setActiveTab] = useState('general')
   const { toast } = useToast()
 
   const { theme, setTheme } = useTheme()
@@ -117,6 +130,23 @@ export default function SettingsPage() {
   useEffect(() => {
     hydrateFromStorage()
   }, [hydrateFromStorage])
+
+  // Load configured providers
+  useEffect(() => {
+    const loadProviders = async () => {
+      try {
+        const response = await fetch('/api/config', { cache: 'no-store' })
+        if (!response.ok) return
+        const data = await response.json()
+        if (Array.isArray(data?.configuredProviders)) {
+          setConfiguredProviders(data.configuredProviders)
+        }
+      } catch (error) {
+        console.error('Failed to load providers:', error)
+      }
+    }
+    loadProviders()
+  }, [])
 
   const saveProfile = async () => {
     if (!profile.email.trim().includes('@')) {
@@ -240,6 +270,72 @@ export default function SettingsPage() {
     }
   }
 
+  // Provider connection test
+  const testProvider = useCallback(
+    async (provider: string) => {
+      setTestResults(prev => ({
+        ...prev,
+        [provider]: { provider, success: false, testing: true },
+      }))
+
+      try {
+        const response = await fetch('/api/providers/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider }),
+        })
+
+        const result = await response.json()
+
+        setTestResults(prev => ({
+          ...prev,
+          [provider]: {
+            provider,
+            success: result.success,
+            latencyMs: result.latencyMs,
+            error: result.error,
+            testing: false,
+          },
+        }))
+
+        if (result.success) {
+          toast({
+            title: `${provider} connected`,
+            description: `Response in ${result.latencyMs}ms.`,
+          })
+        } else {
+          toast({
+            title: `${provider} failed`,
+            description: result.error || 'Connection test failed.',
+            variant: 'destructive',
+          })
+        }
+      } catch (error) {
+        setTestResults(prev => ({
+          ...prev,
+          [provider]: {
+            provider,
+            success: false,
+            error: 'Network error',
+            testing: false,
+          },
+        }))
+        toast({
+          title: `${provider} error`,
+          description: 'Failed to reach test endpoint.',
+          variant: 'destructive',
+        })
+      }
+    },
+    [toast]
+  )
+
+  const testAllProviders = () => {
+    for (const provider of configuredProviders) {
+      testProvider(provider)
+    }
+  }
+
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <Card className="mb-6">
@@ -252,10 +348,11 @@ export default function SettingsPage() {
         </CardHeader>
       </Card>
 
-      <Tabs defaultValue="general">
-        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-5">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="providers">API Providers</TabsTrigger>
+          <TabsTrigger value="testing">Test Providers</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="advanced">Advanced</TabsTrigger>
         </TabsList>
@@ -305,6 +402,88 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <ApiKeyForm />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---- Test Providers Tab ---- */}
+        <TabsContent value="testing" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Provider Connection Test</CardTitle>
+                  <CardDescription>
+                    Test each configured provider with a minimal API call. Uses cheapest model and 5 max tokens.
+                  </CardDescription>
+                </div>
+                {configuredProviders.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={testAllProviders}
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    Test All
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {configuredProviders.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No providers configured. Add API keys in the API Providers tab first.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {configuredProviders.map((provider) => {
+                    const result = testResults[provider]
+                    return (
+                      <div
+                        key={provider}
+                        className="flex items-center justify-between p-3 border rounded-md"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium capitalize w-24">
+                            {provider}
+                          </span>
+                          {result && !result.testing && (
+                            <div className="flex items-center gap-2">
+                              {result.success ? (
+                                <>
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                  <span className="text-xs text-green-600">
+                                    OK ({result.latencyMs}ms)
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <XCircle className="h-4 w-4 text-destructive" />
+                                  <span className="text-xs text-destructive truncate max-w-[200px]">
+                                    {result.error}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => testProvider(provider)}
+                          disabled={result?.testing}
+                        >
+                          {result?.testing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            'Test'
+                          )}
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

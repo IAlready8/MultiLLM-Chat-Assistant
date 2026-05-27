@@ -297,6 +297,11 @@ export const ConversationService = {
         content: message.content,
         provider: message.provider ?? null,
         model: message.model ?? null,
+        ...(message.promptTokens !== undefined ? { promptTokens: message.promptTokens } : {}),
+        ...(message.completionTokens !== undefined ? { completionTokens: message.completionTokens } : {}),
+        ...(message.totalTokens !== undefined ? { totalTokens: message.totalTokens } : {}),
+        ...(message.costUsd !== undefined ? { costUsd: message.costUsd } : {}),
+        ...(message.latencyMs !== undefined ? { latencyMs: message.latencyMs } : {}),
       }))
 
       const conversation: ConversationWithMessages = {
@@ -365,6 +370,11 @@ export const ConversationService = {
         content: message.content,
         provider: message.provider ?? null,
         model: message.model ?? null,
+        ...(message.promptTokens !== undefined ? { promptTokens: message.promptTokens } : {}),
+        ...(message.completionTokens !== undefined ? { completionTokens: message.completionTokens } : {}),
+        ...(message.totalTokens !== undefined ? { totalTokens: message.totalTokens } : {}),
+        ...(message.costUsd !== undefined ? { costUsd: message.costUsd } : {}),
+        ...(message.latencyMs !== undefined ? { latencyMs: message.latencyMs } : {}),
       }))
 
       const updatedConversation: ConversationWithMessages = {

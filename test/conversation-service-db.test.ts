@@ -47,6 +47,11 @@ type MessageRecord = {
   content: string
   provider: string | null
   model: string | null
+  promptTokens?: number | null
+  completionTokens?: number | null
+  totalTokens?: number | null
+  costUsd?: number | null
+  latencyMs?: number | null
   createdAt: Date
 }
 
@@ -116,6 +121,11 @@ const makeStatefulPrismaMock = (): PrismaMock => {
             content: string
             provider?: string | null
             model?: string | null
+            promptTokens?: number | null
+            completionTokens?: number | null
+            totalTokens?: number | null
+            costUsd?: number | null
+            latencyMs?: number | null
           }>
         }
       }
@@ -139,6 +149,11 @@ const makeStatefulPrismaMock = (): PrismaMock => {
           content: message.content,
           provider: message.provider ?? null,
           model: message.model ?? null,
+          promptTokens: message.promptTokens ?? null,
+          completionTokens: message.completionTokens ?? null,
+          totalTokens: message.totalTokens ?? null,
+          costUsd: message.costUsd ?? null,
+          latencyMs: message.latencyMs ?? null,
           createdAt: new Date(),
         })
       }
@@ -156,6 +171,11 @@ const makeStatefulPrismaMock = (): PrismaMock => {
             content: string
             provider?: string | null
             model?: string | null
+            promptTokens?: number | null
+            completionTokens?: number | null
+            totalTokens?: number | null
+            costUsd?: number | null
+            latencyMs?: number | null
           }>
         }
       }
@@ -183,6 +203,11 @@ const makeStatefulPrismaMock = (): PrismaMock => {
             content: message.content,
             provider: message.provider ?? null,
             model: message.model ?? null,
+            promptTokens: message.promptTokens ?? null,
+            completionTokens: message.completionTokens ?? null,
+            totalTokens: message.totalTokens ?? null,
+            costUsd: message.costUsd ?? null,
+            latencyMs: message.latencyMs ?? null,
             createdAt: new Date(),
           })
         }
@@ -299,9 +324,21 @@ describe('ConversationService DB fallback', () => {
         content: 'hi there',
         provider: 'openai',
         model: 'gpt-4',
+        promptTokens: 12,
+        completionTokens: 24,
+        totalTokens: 36,
+        costUsd: 0.003,
+        latencyMs: 450,
       },
     ])
     expect(updated?.messages).toHaveLength(2)
+    expect(updated?.messages[1]).toMatchObject({
+      promptTokens: 12,
+      completionTokens: 24,
+      totalTokens: 36,
+      costUsd: 0.003,
+      latencyMs: 450,
+    })
 
     const renamed = await ConversationService.updateConversationTitle(
       created.id,

@@ -14,6 +14,42 @@ import {
 import type { ProviderRequest, ProviderAdapterConfig } from '@/lib/providers'
 
 // ---------------------------------------------------------------------------
+// Cost Estimation (per 1K tokens in USD)
+// ---------------------------------------------------------------------------
+const COST_PER_1K: Record<string, { input: number; output: number }> = {
+  'gpt-4': { input: 0.03, output: 0.06 },
+  'gpt-4-turbo': { input: 0.01, output: 0.03 },
+  'gpt-4o': { input: 0.005, output: 0.015 },
+  'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+  'gpt-3.5-turbo': { input: 0.0005, output: 0.0015 },
+  'claude-3-5-sonnet-20241022': { input: 0.003, output: 0.015 },
+  'claude-3-sonnet-20240229': { input: 0.003, output: 0.015 },
+  'claude-3-haiku-20240307': { input: 0.00025, output: 0.00125 },
+  'claude-3-opus-20240229': { input: 0.015, output: 0.075 },
+  'gemini-1.5-flash': { input: 0.000075, output: 0.0003 },
+  'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
+  'gemini-pro': { input: 0.000125, output: 0.000375 },
+  'grok-beta': { input: 0.005, output: 0.015 },
+  'grok-2-1212': { input: 0.002, output: 0.01 },
+}
+
+function estimateCost(model: string, promptTokens: number, completionTokens: number): number {
+  const pricing = COST_PER_1K[model]
+  if (!pricing) return 0
+  return (promptTokens / 1000) * pricing.input + (completionTokens / 1000) * pricing.output
+}
+
+function findCostForModel(model: string): { input: number; output: number } | undefined {
+  // Exact match
+  if (COST_PER_1K[model]) return COST_PER_1K[model]
+  // Prefix match (e.g., gpt-4o-2024-08-06 matches gpt-4o)
+  for (const [key, value] of Object.entries(COST_PER_1K)) {
+    if (model.startsWith(key)) return value
+  }
+  return undefined
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -44,6 +80,13 @@ const extractTotalTokens = (usage: any, fallbackTotal: number): number => {
     0
   const combined = promptTokens + completionTokens
   return combined > 0 ? combined : fallbackTotal
+}
+
+interface TokenUsage {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  costUsd: number
 }
 
 const safeRecordEvent = async (event: {
@@ -162,7 +205,7 @@ export async function POST(req: NextRequest) {
 
     if (stream) {
       const streamStart = Date.now()
-      const promptTokens = estimatePromptTokens(messages)
+      const estimatedPromptTokens = estimatePromptTokens(messages)
       const readableStream = new ReadableStream({
         async start(controller) {
           try {
@@ -174,6 +217,10 @@ export async function POST(req: NextRequest) {
             }
 
             const completionTokens = Math.max(1, Math.round(completionContent.length / 4))
+            const totalTokens = estimatedPromptTokens + completionTokens
+            const costUsd = estimateCost(analyticsModel, estimatedPromptTokens, completionTokens)
+            const latencyMs = Date.now() - streamStart
+
             await safeRecordEvent({
               event: 'llm_request',
               userId,
@@ -181,10 +228,11 @@ export async function POST(req: NextRequest) {
                 provider,
                 model: analyticsModel,
                 stream: true,
-                prompt_tokens: promptTokens,
+                prompt_tokens: estimatedPromptTokens,
                 completion_tokens: completionTokens,
-                total_tokens: promptTokens + completionTokens,
-                responseTime: Date.now() - streamStart,
+                total_tokens: totalTokens,
+                cost_usd: costUsd,
+                responseTime: latencyMs,
               },
             })
 
@@ -211,10 +259,26 @@ export async function POST(req: NextRequest) {
     } else {
       const requestStart = Date.now()
       const result = await adapter.chat(providerRequest, adapterConfig)
+      const latencyMs = Date.now() - requestStart
 
-      const promptTokens = estimatePromptTokens(messages)
-      const totalTokens = extractTotalTokens(result?.usage, promptTokens)
-      const completionTokens = Math.max(0, totalTokens - promptTokens)
+      const estimatedPromptTokens = estimatePromptTokens(messages)
+      const actualTotalTokens = extractTotalTokens(result?.usage, estimatedPromptTokens)
+      const actualPromptTokens = result?.usage?.prompt_tokens ?? estimatedPromptTokens
+      const completionTokens = result?.usage?.completion_tokens ?? Math.max(0, actualTotalTokens - actualPromptTokens)
+      const costUsd = estimateCost(analyticsModel, actualPromptTokens, completionTokens)
+
+      // Build response with usage data
+      const responseWithUsage = {
+        content: result.content,
+        finish_reason: result.finish_reason,
+        usage: {
+          prompt_tokens: actualPromptTokens,
+          completion_tokens: completionTokens,
+          total_tokens: actualTotalTokens,
+          cost_usd: Math.round(costUsd * 100000) / 100000,
+          latency_ms: latencyMs,
+        },
+      }
 
       await safeRecordEvent({
         event: 'llm_request',
@@ -223,14 +287,15 @@ export async function POST(req: NextRequest) {
           provider,
           model: analyticsModel,
           stream: false,
-          prompt_tokens: promptTokens,
+          prompt_tokens: actualPromptTokens,
           completion_tokens: completionTokens,
-          total_tokens: totalTokens,
-          responseTime: Date.now() - requestStart,
+          total_tokens: actualTotalTokens,
+          cost_usd: costUsd,
+          responseTime: latencyMs,
         },
       })
 
-      return NextResponse.json(result)
+      return NextResponse.json(responseWithUsage)
     }
   } catch (error) {
     if (analyticsUserId) {

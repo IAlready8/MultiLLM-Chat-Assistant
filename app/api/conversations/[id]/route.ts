@@ -18,6 +18,11 @@ const addMessagesSchema = z.array(
       content: z.string().min(1),
       provider: z.string().nullable().optional(),
       model: z.string().nullable().optional(),
+      promptTokens: z.number().int().nonnegative().nullable().optional(),
+      completionTokens: z.number().int().nonnegative().nullable().optional(),
+      totalTokens: z.number().int().nonnegative().nullable().optional(),
+      costUsd: z.number().nonnegative().nullable().optional(),
+      latencyMs: z.number().int().nonnegative().nullable().optional(),
       cost: z.number().optional(),
       latency: z.number().optional(),
     })
@@ -87,12 +92,27 @@ export async function POST(
       )
     }
 
-    // Map messages to match Prisma schema (strip out extra fields like cost/latency)
-    const prismaMessages = validation.data.map(({ role, content, provider, model }) => ({
+    // Map messages to match Prisma schema while dropping legacy cost/latency aliases.
+    const prismaMessages = validation.data.map(({
+      role,
+      content,
+      provider,
+      model,
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      costUsd,
+      latencyMs,
+    }) => ({
       role,
       content,
       provider: provider ?? null,
       model: model ?? null,
+      ...(promptTokens !== undefined ? { promptTokens } : {}),
+      ...(completionTokens !== undefined ? { completionTokens } : {}),
+      ...(totalTokens !== undefined ? { totalTokens } : {}),
+      ...(costUsd !== undefined ? { costUsd } : {}),
+      ...(latencyMs !== undefined ? { latencyMs } : {}),
     }))
 
     const updatedConversation = await ConversationService.addMessages(id, user.id, prismaMessages)
