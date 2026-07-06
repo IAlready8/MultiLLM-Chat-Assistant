@@ -1,0 +1,33 @@
+{
+  "id": "provider-registry-audit",
+  "version": 1,
+  "trigger": "manual",
+  "goal": "Detect provider configuration drift across metadata, adapters, models, and rate limits.",
+  "allowedPaths": [
+    "lib/provider-registry.ts",
+    "lib/model-catalog.ts",
+    "lib/config-schemas.ts",
+    "lib/providers",
+    "app/api/llm",
+    "app/multi-chat",
+    "test"
+  ],
+  "verificationCommands": [
+    "npm run type-check",
+    "npm run lint",
+    "npm run test:run",
+    "npm run build"
+  ],
+  "acceptanceCriteria": [
+    "Provider identifiers match across all registries.",
+    "Every provider has one adapter.",
+    "Every provider has models and one default model.",
+    "Provider identifiers are unique."
+  ],
+  "limits": {
+    "maxIterations": 6,
+    "maximumRuntimeMinutes": 25,
+    "maximumCostUsd": 2,
+    "repeatedFailureLimit": 2
+  }
+}
