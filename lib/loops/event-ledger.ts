@@ -6,8 +6,21 @@ import {
 } from '@/services/analytics-service'
 
 const REDACTED = '[REDACTED]'
-const secretKeyPattern =
-  /(api[-_]?key|password|secret|token|authorization|cookie|credential)/i
+const secretKeyNames = new Set([
+  'apikey',
+  'password',
+  'secret',
+  'accesstoken',
+  'refreshtoken',
+  'sessiontoken',
+  'authorization',
+  'cookie',
+  'credential',
+  'credentials',
+])
+
+const isSecretKey = (key: string): boolean =>
+  secretKeyNames.has(key.replaceAll('-', '').replaceAll('_', '').toLowerCase())
 
 const sanitizeValue = (value: unknown, depth = 0): unknown => {
   if (depth > 6) {
@@ -35,7 +48,7 @@ const sanitizeValue = (value: unknown, depth = 0): unknown => {
     return Object.fromEntries(
       entries.map(([key, nestedValue]) => [
         key,
-        secretKeyPattern.test(key)
+        isSecretKey(key)
           ? REDACTED
           : sanitizeValue(nestedValue, depth + 1),
       ])
