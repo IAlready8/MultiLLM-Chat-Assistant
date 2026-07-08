@@ -26,7 +26,7 @@
   ],
   "limits": {
     "maxIterations": 6,
-    "maximumRuntimeMinutes": 25,
+    "maximumRuntimeMinutes": 2,
     "maximumCostUsd": 2,
     "repeatedFailureLimit": 2
   }

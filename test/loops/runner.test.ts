@@ -100,6 +100,50 @@ describe('runLoop', () => {
     expect(result.iterations).toBe(2)
   })
 
+  it('continues when verifier evidence changes for the same gate', async () => {
+    let verificationCount = 0
+
+    const result = await runLoop({
+      spec: createSpec(),
+      worker: async () => readyWorkerResult(),
+      verifier: async () => {
+        verificationCount += 1
+        return {
+          verdict: 'REJECT',
+          failedGate: 'provider-drift',
+          evidence: [`Missing provider set ${verificationCount}.`],
+          requiredFix: 'Align provider registries.',
+        }
+      },
+    })
+
+    expect(result.finalState).toBe('MAX_ITERATIONS')
+    expect(result.iterations).toBe(3)
+    expect(verificationCount).toBe(3)
+  })
+
+  it('converts thrown worker errors into failed worker results', async () => {
+    let workerAttempts = 0
+
+    const result = await runLoop({
+      spec: createSpec(),
+      worker: async () => {
+        workerAttempts += 1
+        throw new Error('provider API timed out')
+      },
+      verifier: async () => acceptResult,
+    })
+
+    expect(result.finalState).toBe('VERIFICATION_FAILED')
+    expect(result.iterations).toBe(2)
+    expect(workerAttempts).toBe(2)
+    expect(result.lastWorkerResult).toMatchObject({
+      status: 'FAILED',
+      summary: 'Worker threw an unexpected error: provider API timed out',
+      failureSignature: 'worker-thrown-error:provider API timed out',
+    })
+  })
+
   it('stops immediately when the worker is blocked', async () => {
     const result = await runLoop({
       spec: createSpec(),

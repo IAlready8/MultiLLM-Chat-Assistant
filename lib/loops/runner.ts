@@ -33,8 +33,18 @@ export interface RunLoopOptions {
 const workerFailureSignature = (result: LoopWorkerResult): string =>
   result.failureSignature ?? `worker:${result.summary}`
 
-const verifierFailureSignature = (result: LoopVerifierResult): string =>
-  `verifier:${result.failedGate ?? result.requiredFix ?? result.evidence.join('|')}`
+const verifierFailureSignature = (result: LoopVerifierResult): string => {
+  const parts = [
+    result.failedGate,
+    result.requiredFix,
+    ...result.evidence,
+  ].filter((part): part is string => Boolean(part))
+
+  return `verifier:${parts.join('|') || result.verdict}`
+}
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
 
 export async function runLoop({
   spec,
@@ -118,14 +128,31 @@ export async function runLoop({
       previousAttempts: previousAttempts.length,
     })
 
-    lastWorkerResult = loopWorkerResultSchema.parse(
-      await worker({
-        spec,
-        iteration,
-        previousAttempts: [...previousAttempts],
-        lastVerifierResult,
-      })
-    )
+    try {
+      lastWorkerResult = loopWorkerResultSchema.parse(
+        await worker({
+          spec,
+          iteration,
+          previousAttempts: [...previousAttempts],
+          lastVerifierResult,
+        })
+      )
+    } catch (error) {
+      const message = getErrorMessage(error)
+      lastWorkerResult = {
+        status: 'FAILED',
+        summary: `Worker threw an unexpected error: ${message}`,
+        filesChanged: [],
+        commandsRun: [],
+        evidence: [],
+        remainingRisks: [message],
+        proposedMemoryUpdates: [],
+        nextAction: 'Investigate the worker error before retrying.',
+        tokenUsage: 0,
+        estimatedCostUsd: 0,
+        failureSignature: `worker-thrown-error:${message}`,
+      }
+    }
 
     tokenUsage += lastWorkerResult.tokenUsage
     estimatedCostUsd += lastWorkerResult.estimatedCostUsd
