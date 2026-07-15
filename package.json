@@ -36,7 +36,8 @@
     "upgrade:next:prep": "bash scripts/next-upgrade-readiness.sh",
     "validate:all": "bash scripts/run-all-checks.sh",
     "verify:preview:local": "bash scripts/vercel-preview-run.sh -- bash scripts/verify-production.sh",
-    "verify:prod": "bash scripts/verify-production.sh"
+    "verify:prod": "bash scripts/verify-production.sh",
+    "pilot:validate": "node scripts/validate-private-pilot-tracker.mjs"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",
