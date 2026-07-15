@@ -18,6 +18,9 @@ coverage/
 
 playwright-report/
 test-results/
+.pytest_cache/
+.pip-audit-cache/
+__pycache__/
 user_input_files/
 backup-minimal/
 
@@ -27,3 +30,6 @@ backup-minimal/
 
 # TypeScript incremental compilation cache
 *.tsbuildinfo
+
+# Local generated database artifacts
+prisma/prisma/dev.db
