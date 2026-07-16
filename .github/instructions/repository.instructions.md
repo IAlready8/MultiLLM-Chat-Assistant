@@ -229,9 +229,10 @@ Defined in `.github/workflows/ci.yml`, triggers on push/PR to `main`:
 
 1. **Quality Checks**: `npm ci` → `prisma generate` → `type-check` → `lint` → `test:run` → `build`
 2. **Smoke Tests** (depends on Quality Checks): PostgreSQL 16 service container → `prisma migrate deploy` → build → start server → `scripts/smoke-test.sh`
-3. **Security Audit**: `npm audit --audit-level=high` (non-blocking, `continue-on-error: true`)
+3. **Coverage**: `npm run coverage` with enforced global thresholds
+4. **Security Audit**: tracked-secret scan, blocking high/critical production audit, and blocking critical full-tree audit
 
-Node 20 is used. Build requires placeholder env vars: `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `API_KEY_ENCRYPTION_SEED`.
+Node 22 LTS is used from `.nvmrc`. Build requires placeholder env vars: `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `API_KEY_ENCRYPTION_SEED`.
 
 ## Environment Variables
 

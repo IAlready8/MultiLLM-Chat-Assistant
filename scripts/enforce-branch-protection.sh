@@ -47,7 +47,7 @@ cat >"${TMP_JSON}" <<'JSON'
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["Quality Checks", "Smoke Tests"]
+    "contexts": ["Quality Checks", "Smoke Tests", "Coverage", "Security Audit"]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
@@ -91,6 +91,8 @@ echo "Branch protection updated successfully."
 echo "Required checks:"
 echo " - Quality Checks"
 echo " - Smoke Tests"
+echo " - Coverage"
+echo " - Security Audit"
 echo "Additional protections:"
 echo " - Admin enforcement: enabled"
 echo " - PR required: enabled (approvals required: 0)"
