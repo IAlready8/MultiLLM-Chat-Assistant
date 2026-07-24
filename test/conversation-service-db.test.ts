@@ -14,6 +14,7 @@ type PrismaMock = {
   }
   message: {
     deleteMany: ReturnType<typeof vi.fn>
+    findMany?: ReturnType<typeof vi.fn>
   }
   $transaction: ReturnType<typeof vi.fn>
 }
@@ -539,5 +540,45 @@ describe('ConversationService DB fallback', () => {
       )
 
     expect(count).toBe(1)
+  })
+
+  it('returns DB-backed comparison counts in production without touching the in-memory store', async () => {
+    const env = process.env as Record<string, string | undefined>
+    const previousNodeEnv = env.NODE_ENV
+    env.NODE_ENV = 'production'
+
+    try {
+      const prismaMock: PrismaMock = {
+        conversation: {
+          findMany: vi.fn(),
+          findFirst: vi.fn(),
+          create: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn(),
+        },
+        message: {
+          deleteMany: vi.fn(),
+          findMany: vi
+            .fn()
+            .mockResolvedValue([{ conversationId: 'conversation-1' }]),
+        },
+        $transaction: vi.fn(),
+      }
+
+      const { ConversationService } = await loadServiceWithPrismaMock(prismaMock)
+
+      await expect(
+        ConversationService.getComparisonReadyConversationCountByUserId('user-1')
+      ).resolves.toBe(1)
+
+      await expect(
+        ConversationService.getWeeklySavedBriefComparisonCountByUserId(
+          'user-1',
+          new Date(Date.now() - 60 * 60 * 1000)
+        )
+      ).resolves.toBe(1)
+    } finally {
+      env.NODE_ENV = previousNodeEnv
+    }
   })
 })

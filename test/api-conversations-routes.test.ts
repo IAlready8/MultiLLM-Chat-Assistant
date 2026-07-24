@@ -196,6 +196,55 @@ describe('/api/conversations routes', () => {
     })
   })
 
+  it('root POST emits comparison_ready event for provider-tagged assistant messages', async () => {
+    mockConversationService.createConversation.mockResolvedValue({
+      id: 'conv-9',
+      title: 'Imported brief',
+      userId: 'user-1',
+      messages: [],
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    })
+
+    const response = await createConversation(
+      new Request('http://localhost/api/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie:
+            'multillm_acquisition=%7B%22source%22%3A%22founder-outbound%22%2C%22campaign%22%3A%22private-pilot%22%2C%22cohort%22%3A%22wave-1%22%7D',
+        },
+        body: JSON.stringify({
+          title: 'Imported brief',
+          messages: [
+            { role: 'user', content: 'brief' },
+            {
+              role: 'assistant',
+              content: 'answer',
+              provider: 'openai',
+              model: 'gpt-4o-mini',
+            },
+          ],
+        }),
+      }),
+      rootRouteContext
+    )
+
+    expect(response.status).toBe(201)
+    expect(mockRecordAnalyticsEvent).toHaveBeenCalledWith({
+      event: 'comparison_ready_conversation_saved',
+      userId: 'user-1',
+      payload: {
+        conversationId: 'conv-9',
+        responseCount: 1,
+        providers: ['openai'],
+        acquisitionSource: 'founder-outbound',
+        acquisitionCampaign: 'private-pilot',
+        acquisitionCohort: 'wave-1',
+      },
+    })
+  })
+
   it('root POST invalidates cached conversation lists after create', async () => {
     process.env.ENABLE_API_READ_CACHE = 'true'
     process.env.API_READ_CACHE_TTL_MS = '60000'

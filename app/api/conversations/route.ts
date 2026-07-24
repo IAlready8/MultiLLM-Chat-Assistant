@@ -108,6 +108,38 @@ export const POST = withApiMetrics(async (req: Request) => {
         analyticsError
       )
     }
+
+    const comparisonReadyMessages = prismaMessages.filter(
+      message => message.role === 'assistant' && Boolean(message.provider)
+    )
+
+    if (comparisonReadyMessages.length > 0) {
+      try {
+        await recordAnalyticsEvent({
+          event: 'comparison_ready_conversation_saved',
+          userId: user.id,
+          payload: mergeAttributionFromCookieHeader(
+            {
+              conversationId: newConversation.id,
+              responseCount: comparisonReadyMessages.length,
+              providers: Array.from(
+                new Set(
+                  comparisonReadyMessages
+                    .map(message => message.provider)
+                    .filter((provider): provider is string => Boolean(provider))
+                )
+              ),
+            },
+            req.headers.get('cookie')
+          ),
+        })
+      } catch (analyticsError) {
+        console.warn(
+          'Failed to record analytics event for comparison-ready conversation save:',
+          analyticsError
+        )
+      }
+    }
     return NextResponse.json(newConversation, { status: 201 })
   } catch (error) {
     console.error('Error creating conversation:', error)
