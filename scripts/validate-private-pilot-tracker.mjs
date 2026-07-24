@@ -11,6 +11,7 @@ const requiredHeaders = [
   'service_type_or_deliverable_type',
   'source',
   'contact_path',
+  'invite_url',
   'first_contact_date',
   'reply_status',
   'demo_booked_date',
@@ -40,11 +41,24 @@ if (rows.length < 10) {
   throw new Error(`Expected at least 10 pilot rows, found ${rows.length}`)
 }
 
-const ids = rows.map((row) => row.split(',')[0]).filter(Boolean)
+const ids = rows.map((row) => row.split(',')[0].trim()).filter(Boolean)
 const uniqueIds = new Set(ids)
+
+if (ids.length !== rows.length) {
+  throw new Error('Every pilot tracker row must include a prospect_id')
+}
 
 if (uniqueIds.size !== ids.length) {
   throw new Error('Pilot tracker prospect_id values must be unique')
+}
+
+const invalidRows = rows
+  .map((row, index) => ({ index: index + 2, columnCount: row.split(',').length }))
+  .filter(({ columnCount }) => columnCount !== headers.length)
+
+if (invalidRows.length > 0) {
+  const lines = invalidRows.map(({ index }) => index).join(', ')
+  throw new Error(`Pilot tracker rows must have ${headers.length} columns. Invalid lines: ${lines}`)
 }
 
 console.log(`Private pilot tracker is valid with ${rows.length} rows.`)

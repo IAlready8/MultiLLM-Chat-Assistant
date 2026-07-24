@@ -21,10 +21,17 @@ Run a 10-user private pilot with the locked Step 11 ICP and prove whether real u
 
 ## Access Model
 1. Invite prospects manually from the first 10-person outbound batch.
-2. Use the production URL only after a direct conversation, demo, or onboarding exchange.
-3. Ask each participant to create or use their own account and configure their own provider key during onboarding.
-4. Keep billing in validation mode: show the billing page if relevant, but do not require checkout or activate live payments for the pilot.
-5. Record each participant in `docs/templates/step11-private-pilot-tracker.csv` before sending access.
+2. Generate one attribution-safe invite URL per cohort using `npm run pilot:invite -- --cohort <cohort>` and save it in the tracker.
+3. Use the production URL only after a direct conversation, demo, or onboarding exchange.
+4. Ask each participant to create or use their own account and configure their own provider key during onboarding.
+5. Keep billing in validation mode: show the billing page if relevant, but do not require checkout or activate live payments for the pilot.
+6. Record each participant in `docs/templates/step11-private-pilot-tracker.csv` before sending access.
+
+### Invite Link Convention
+- Use `source=founder-outbound` for every pilot link; it is set by the generator.
+- Use `campaign=private-pilot` unless a deliberate, documented sub-campaign is being tested.
+- Use a cohort such as `wave-1`; do not place a prospect name or email in the URL.
+- The app stores this attribution for 30 days and includes it on Step 11 workflow events.
 
 ## Recommended Founder Outreach
 Use this exact message for the first batch unless a prospect requires a warmer introduction:
