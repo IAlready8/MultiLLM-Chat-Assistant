@@ -22,8 +22,8 @@ Current exact ICP and use case are locked in:
 
 ## Quickstart
 Requirements:
-- Node.js 20+
-- npm
+- Node.js 22 LTS (`22.22.0`; see `.nvmrc`)
+- npm 11
 - Optional Python 3.10+ (only for Python sidecar / Python tests)
 
 Setup:
@@ -37,8 +37,8 @@ Setup:
 4. Start dev server: `npm run dev`
 
 Package manager:
-- Source-of-truth lockfile is `package-lock.json` (npm workflow).
-- `pnpm-lock.yaml` is retained as an archival snapshot and is not used by CI.
+- `package-lock.json` is the only lockfile and source of truth.
+- CI and Vercel both install with `npm ci`.
 
 ## Auth Modes
 - Production:
@@ -65,6 +65,7 @@ Package manager:
 - `npm run type-check`: TypeScript checks
 - `npm run test`: Vitest (watch)
 - `npm run test:run`: Vitest one-shot
+- `npm run coverage`: Vitest coverage with the enforced baseline threshold
 - `npm run test:coverage`: Vitest with coverage
 - `npm run smoke`: End-to-end smoke checks (pages + key APIs)
 - `npm run verify:prod`: Production readiness checks (env, DB, health, optional Stripe/webhook)
@@ -85,8 +86,10 @@ GitHub Actions workflow: `.github/workflows/ci.yml`
 - Runs `npm run type-check`
 - Runs `npm run lint`
 - Runs `npm run test:run`
+- Runs `npm run coverage` as a blocking check
 - Runs `npm run build`
 - Runs smoke tests against a PostgreSQL-backed app instance
+- Blocks high/critical production advisories and critical full-tree advisories
 
 ## Branch Protection (Mandatory CI)
 To make CI checks mandatory on `main`, run:
@@ -106,6 +109,8 @@ npm run protect:main -- IAlready8/MultiLLM-Chat-Assistant
 This enforces required status checks:
 - `Quality Checks`
 - `Smoke Tests`
+- `Coverage`
+- `Security Audit`
 
 Without passing checks, merges to `main` are blocked.
 

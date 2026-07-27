@@ -9,6 +9,7 @@ import GitHubProvider from 'next-auth/providers/github'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import bcrypt from 'bcryptjs'
 import { cookies } from 'next/headers'
+import { hasDatabaseUrl } from '@/lib/database-url'
 import prisma from '@/lib/prisma'
 import { checkAndConsume } from '@/lib/rate-limit'
 import { readSessionTokenFromCookies } from '@/lib/session-cookie'
@@ -255,7 +256,7 @@ const buildProviders = () => {
   return providers
 }
 
-const maybeAdapter = process.env.DATABASE_URL ? PrismaAdapter(prisma as any) : undefined
+const maybeAdapter = hasDatabaseUrl() ? PrismaAdapter(prisma as any) : undefined
 
 export const authOptions: NextAuthOptions = {
   adapter: maybeAdapter,

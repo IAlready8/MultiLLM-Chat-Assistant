@@ -1,5 +1,6 @@
 import { PrismaClient as PrismaClientRuntime } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
+import { getDatabaseUrl } from '@/lib/database-url'
 import { validateStartupEnvironment } from '@/lib/startup-validation'
 import type {
   Analytics,
@@ -22,11 +23,12 @@ const prismaGlobal = globalThis as GlobalPrismaClient
 
 validateStartupEnvironment()
 const isProduction = process.env.NODE_ENV === 'production'
-const hasDatabaseUrl = Boolean(process.env.DATABASE_URL?.trim())
+const databaseUrl = getDatabaseUrl()
+const hasConfiguredDatabase = Boolean(databaseUrl)
 
-if (isProduction && !hasDatabaseUrl) {
+if (isProduction && !hasConfiguredDatabase) {
   throw new Error(
-    'DATABASE_URL is required in production. In-memory/stub database fallback is disabled.'
+    'DATABASE_URL (or POSTGRES_DATABASE_URL) is required in production. In-memory/stub database fallback is disabled.'
   )
 }
 
@@ -75,7 +77,7 @@ const createRuntimeClient = (): PrismaClient => {
     return prismaGlobal.__multiLlmPrismaClient as unknown as PrismaClient
   }
 
-  const connectionString = process.env.DATABASE_URL?.trim()
+  const connectionString = databaseUrl
   if (!connectionString) {
     return createStubClient()
   }
@@ -90,7 +92,7 @@ const createRuntimeClient = (): PrismaClient => {
   return client as unknown as PrismaClient
 }
 
-const prisma: PrismaClient = hasDatabaseUrl
+const prisma: PrismaClient = hasConfiguredDatabase
   ? createRuntimeClient()
   : createStubClient()
 
