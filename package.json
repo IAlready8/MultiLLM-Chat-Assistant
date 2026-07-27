@@ -26,6 +26,7 @@
     "check:hygiene": "npm run check:secrets && npm run check:artifacts",
     "coverage": "vitest run --coverage --passWithNoTests",
     "lint": "eslint . --max-warnings=0",
+    "ops:alias:check": "node scripts/alias-commit-guard.mjs",
     "postinstall": "prisma generate",
     "preflight": "bash scripts/preflight.sh",
     "protect:main": "bash scripts/enforce-branch-protection.sh",
