@@ -7,9 +7,12 @@ import {
 const trackedKeys = [
   'NODE_ENV',
   'DATABASE_URL',
+  'POSTGRES_DATABASE_URL',
   'NEXTAUTH_SECRET',
   'AUTH_SECRET',
   'NEXTAUTH_URL',
+  'VERCEL_ENV',
+  'VERCEL_URL',
   'API_KEY_ENCRYPTION_SEED',
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
@@ -77,7 +80,7 @@ describe('startup environment validation', () => {
       'Startup environment validation failed:'
     )
     expect(() => validateStartupEnvironment()).toThrow(
-      'DATABASE_URL is required in production.'
+      'DATABASE_URL (or POSTGRES_DATABASE_URL) is required in production.'
     )
   })
 
@@ -85,6 +88,28 @@ describe('startup environment validation', () => {
     setProductionBase()
 
     expect(() => validateStartupEnvironment()).not.toThrow()
+  })
+
+  it('accepts Vercel-managed Preview database and deployment URL variables', () => {
+    setProductionBase()
+    setEnvVar('DATABASE_URL', undefined)
+    setEnvVar('POSTGRES_DATABASE_URL', 'postgresql://localhost:5432/preview')
+    setEnvVar('NEXTAUTH_URL', undefined)
+    setEnvVar('VERCEL_ENV', 'preview')
+    setEnvVar('VERCEL_URL', 'preview.example.vercel.app')
+
+    expect(() => validateStartupEnvironment()).not.toThrow()
+  })
+
+  it('does not accept VERCEL_URL as a production NEXTAUTH_URL replacement', () => {
+    setProductionBase()
+    setEnvVar('NEXTAUTH_URL', undefined)
+    setEnvVar('VERCEL_ENV', 'production')
+    setEnvVar('VERCEL_URL', 'production.example.vercel.app')
+
+    expect(() => validateStartupEnvironment()).toThrow(
+      'NEXTAUTH_URL is required in production.'
+    )
   })
 
   it('throws when Stripe is partially configured', () => {
