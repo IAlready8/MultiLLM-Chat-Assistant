@@ -2,7 +2,7 @@
 
 ## Pilot Guardrails
 - Pilot type: private, founder-led, invite-only.
-- Owner/login email: `dan.frydenberg@gmail.com`.
+- Owner: repository owner.
 - Working product URL: `https://multi-llm-chat-assistant.vercel.app/`.
 - Do not publicly launch.
 - Do not activate live payments or require a paid checkout for access.
