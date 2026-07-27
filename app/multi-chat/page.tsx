@@ -20,17 +20,28 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
+import { getDefaultModel, getModelsForProvider } from '@/lib/model-catalog'
+import { providerRegistry } from '@/lib/provider-registry'
 import type { Conversation, Message as ConversationMessage } from '@/types/prisma'
 import Link from 'next/link'
 
-const SUPPORTED_PROVIDERS = ['openai', 'anthropic', 'googleai', 'openrouter', 'grok'] as const
+const PROVIDER_OPTIONS = providerRegistry
+  .map(provider => ({
+    ...provider,
+    models: getModelsForProvider(provider.id),
+  }))
+  .filter(provider => provider.models.length > 0)
 
-const AVAILABLE_MODELS: Record<string, string[]> = {
-  openai: ['gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
-  anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307', 'claude-3-opus-20240229'],
-  googleai: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'],
-  openrouter: ['openrouter/auto', 'openai/gpt-4', 'anthropic/claude-3-opus', 'google/gemini-pro'],
-  grok: ['grok-beta', 'grok-2-1212']
+const SUPPORTED_PROVIDER_IDS = PROVIDER_OPTIONS.map(provider => provider.id)
+const SUPPORTED_PROVIDER_SET = new Set(SUPPORTED_PROVIDER_IDS)
+
+const isSupportedProvider = (provider: string) =>
+  SUPPORTED_PROVIDER_SET.has(provider)
+
+const getProviderLabel = (provider: string) => {
+  const meta = PROVIDER_OPTIONS.find(option => option.id === provider)
+  if (!meta) return provider
+  return meta.requiresApiKey ? meta.name : `${meta.name} (local)`
 }
 
 interface Message {
@@ -62,7 +73,9 @@ export default function MultiChatPage() {
     messages: [],
     input: '',
     isLoading: false,
-    activeInstances: [{ id: 'default-openai', provider: 'openai', model: 'gpt-4' }]
+    activeInstances: [
+      { id: 'default-openai', provider: 'openai', model: getDefaultModel('openai') }
+    ]
   })
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
@@ -103,7 +116,7 @@ export default function MultiChatPage() {
         ? data.configuredProviders
         : []
       const filtered = configured.filter((provider: string) =>
-        SUPPORTED_PROVIDERS.includes(provider as (typeof SUPPORTED_PROVIDERS)[number])
+        isSupportedProvider(provider)
       )
 
       // Create default instances for configured providers
@@ -111,7 +124,7 @@ export default function MultiChatPage() {
         const instances: ModelInstance[] = filtered.map((provider: string) => ({
           id: generateInstanceId(),
           provider,
-          model: AVAILABLE_MODELS[provider]?.[0] || ''
+          model: getDefaultModel(provider)
         }))
         setChatState(prev => ({ ...prev, activeInstances: instances }))
       }
@@ -699,7 +712,7 @@ export default function MultiChatPage() {
     const newInstance: ModelInstance = {
       id: generateInstanceId(),
       provider,
-      model: AVAILABLE_MODELS[provider]?.[0] || ''
+      model: getDefaultModel(provider)
     }
     setChatState(prev => ({
       ...prev,
@@ -821,17 +834,18 @@ export default function MultiChatPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-2">
-                {SUPPORTED_PROVIDERS.map(provider => (
+                {PROVIDER_OPTIONS.map(provider => (
                   <Button
-                    key={provider}
+                    key={provider.id}
                     variant="outline"
                     size="sm"
-                    onClick={() => addModelInstance(provider)}
+                    onClick={() => addModelInstance(provider.id)}
                     disabled={isBusy}
-                    className="text-xs capitalize"
+                    className="text-xs"
+                    title={provider.description}
                   >
                     <Plus className="h-3 w-3 mr-1" />
-                    {provider}
+                    {getProviderLabel(provider.id)}
                   </Button>
                 ))}
               </div>
@@ -867,8 +881,10 @@ export default function MultiChatPage() {
                         className="w-full p-1.5 border rounded text-xs bg-background"
                         disabled={isBusy}
                       >
-                        {AVAILABLE_MODELS[instance.provider]?.map(model => (
-                          <option key={model} value={model}>{model}</option>
+                        {getModelsForProvider(instance.provider).map(model => (
+                          <option key={model.id} value={model.id}>
+                            {model.displayName}
+                          </option>
                         ))}
                       </select>
                     </div>

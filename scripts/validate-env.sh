@@ -56,7 +56,7 @@ fi
 
 missing=0
 for key in "${required[@]}"; do
-  if ! grep -Eq "^${key}=.+" "$ENV_FILE"; then
+  if ! grep -Eq "^[[:space:]]*${key}[[:space:]]*=[[:space:]]*.+" "$ENV_FILE"; then
     echo "[env:validate] Missing or empty: $key"
     missing=1
   fi
