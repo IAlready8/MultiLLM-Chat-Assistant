@@ -59,7 +59,20 @@ Run:
 ```bash
 npm run verify:prod -- --base-url https://<your-domain>
 bash scripts/smoke-test.sh --base-url https://<your-domain>
+npm run ops:alias:check -- --base-url https://<your-domain> --expected-commit-sha <full-release-commit-sha>
 ```
+
+For the final canonical verification, the production verifier can enforce the same
+release identity in one run:
+
+```bash
+npm run verify:prod -- \
+  --base-url https://<your-domain> \
+  --expected-commit-sha <full-release-commit-sha>
+```
+
+See `docs/PRODUCTION_ALIAS_GUARD.md` for the fail-closed contract and manual
+GitHub workflow.
 
 If billing is enabled and part of the release gate:
 
@@ -72,6 +85,7 @@ bash scripts/smoke-test.sh --base-url https://<your-domain>
 - required runtime envs
 - Prisma migration status, with optional deploy
 - `/api/health` status
+- optional exact release SHA match with `--expected-commit-sha`
 - optional Stripe configuration and signed webhook path when required
 - optional sidecar requirement when requested
 

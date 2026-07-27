@@ -3,6 +3,7 @@ import { getCacheDiagnostics } from '@/lib/cache'
 import prisma from '@/lib/prisma'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 import { getAuthenticatedAdmin } from '@/lib/api-auth'
+import { hasDatabaseUrl } from '@/lib/database-url'
 import {
   getErrorMessage,
   isDatabaseUnavailableError,
@@ -100,8 +101,11 @@ export const GET = withApiMetrics(async () => {
   const release = getReleaseMetadata()
   const strictAuth = isStrictAuthRequired()
   const hasNextAuthSecret = Boolean(process.env.NEXTAUTH_SECRET?.trim())
-  const hasNextAuthUrl = Boolean(process.env.NEXTAUTH_URL?.trim())
-  const hasDatabaseUrl = Boolean(process.env.DATABASE_URL?.trim())
+  const hasNextAuthUrl = Boolean(
+    process.env.NEXTAUTH_URL?.trim() ||
+      (process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL?.trim())
+  )
+  const databaseConfigured = hasDatabaseUrl()
   const hasApiSeed = Boolean(process.env.API_KEY_ENCRYPTION_SEED?.trim())
   const isProduction = process.env.NODE_ENV === 'production'
 
@@ -172,9 +176,10 @@ export const GET = withApiMetrics(async () => {
   let storageStatus: CheckStatus = 'ok'
   let storageMessage = 'Persistent storage is configured and available'
 
-  if (!hasDatabaseUrl) {
+  if (!databaseConfigured) {
     storageStatus = 'warning'
-    storageMessage = 'DATABASE_URL is not set; persistence relies on in-memory fallback'
+    storageMessage =
+      'DATABASE_URL and POSTGRES_DATABASE_URL are not set; persistence relies on in-memory fallback'
   } else if (databaseStatus !== 'ok') {
     storageStatus = 'warning'
     storageMessage = 'Database is configured but currently unavailable; using in-memory fallback'
@@ -282,7 +287,7 @@ export const GET = withApiMetrics(async () => {
       environment: process.env.NODE_ENV || 'development',
       nodeVersion: process.version,
       strictAuth,
-      databaseUrlConfigured: hasDatabaseUrl,
+      databaseUrlConfigured: databaseConfigured,
       stripe: {
         apiConfigured: isStripeApiConfigured,
         checkoutConfigured: isStripeCheckoutConfigured,

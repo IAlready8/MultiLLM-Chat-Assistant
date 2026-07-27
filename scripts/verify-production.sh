@@ -6,6 +6,7 @@ APPLY_MIGRATIONS=false
 REQUIRE_STRIPE=false
 REQUIRE_SIDECAR=false
 CHECK_WEBHOOK=false
+EXPECTED_COMMIT_SHA=""
 USE_VERCEL_CURL="${USE_VERCEL_CURL:-false}"
 VERCEL_CURL_DEPLOYMENT="${VERCEL_CURL_DEPLOYMENT:-}"
 
@@ -19,10 +20,13 @@ Options:
   --require-stripe       Require Stripe env vars and verify Stripe price ID
   --require-sidecar      Require PYTHON_CORE_URL and verify sidecar health
   --check-webhook        Validate webhook endpoint behavior on --base-url
+  --expected-commit-sha  Require /api/health release.commitSha to match a full SHA
   --help                 Show this help
 
 Examples:
   bash scripts/verify-production.sh --base-url https://example.vercel.app
+  bash scripts/verify-production.sh --base-url https://example.vercel.app \
+    --expected-commit-sha 0123456789abcdef0123456789abcdef01234567
   bash scripts/verify-production.sh --apply-migrations --require-stripe --require-sidecar
 
 Protected Vercel preview support:
@@ -112,6 +116,14 @@ while [[ $# -gt 0 ]]; do
       CHECK_WEBHOOK=true
       shift
       ;;
+    --expected-commit-sha)
+      if [[ -z "${2:-}" ]]; then
+        echo "ERROR: --expected-commit-sha requires a value."
+        exit 1
+      fi
+      EXPECTED_COMMIT_SHA="${2:-}"
+      shift 2
+      ;;
     --help)
       print_help
       exit 0
@@ -126,6 +138,16 @@ done
 
 if [[ "${CHECK_WEBHOOK}" == "true" && -z "${BASE_URL}" ]]; then
   echo "ERROR: --check-webhook requires --base-url."
+  exit 1
+fi
+
+if [[ -n "${EXPECTED_COMMIT_SHA}" && -z "${BASE_URL}" ]]; then
+  echo "ERROR: --expected-commit-sha requires --base-url."
+  exit 1
+fi
+
+if [[ -n "${EXPECTED_COMMIT_SHA}" && ! "${EXPECTED_COMMIT_SHA}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  echo "ERROR: --expected-commit-sha must be exactly 40 hexadecimal characters."
   exit 1
 fi
 
@@ -286,6 +308,17 @@ console.log(
   `Health check ok: status=${payload.status}, database=${payload.checks.database.status}`
 )
 NODE
+
+  if [[ -n "${EXPECTED_COMMIT_SHA}" ]]; then
+    echo "==> Checking deployment release commit"
+    HEALTH_JSON="${HEALTH_JSON}" EXPECTED_COMMIT_SHA="${EXPECTED_COMMIT_SHA}" node --input-type=module <<'NODE'
+import { verifyReleasePayload } from './scripts/alias-commit-guard.mjs'
+
+const payload = JSON.parse(process.env.HEALTH_JSON || '{}')
+const commitSha = verifyReleasePayload(payload, process.env.EXPECTED_COMMIT_SHA)
+console.log(`Release commit matches expected full SHA: ${commitSha}`)
+NODE
+  fi
 
   if [[ "${CHECK_WEBHOOK}" == "true" ]]; then
     echo "==> Checking Stripe webhook endpoint behavior"
