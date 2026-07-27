@@ -28,9 +28,12 @@ const requiredHeaders = [
   'outcome',
 ]
 
-const csv = readFileSync(trackerPath, 'utf8').trimEnd()
-const [headerLine, ...rows] = csv.split('\n')
-const headers = headerLine.split(',')
+const csv = readFileSync(trackerPath, 'utf8').replace(/^\uFEFF/, '')
+const [headerLine = '', ...rawRows] = csv.split(/\r?\n/)
+const headers = headerLine.split(',').map((header) => header.trim())
+const rows = rawRows
+  .map((row, index) => ({ line: index + 2, value: row.trim() }))
+  .filter(({ value }) => value.length > 0)
 const missingHeaders = requiredHeaders.filter((header) => !headers.includes(header))
 
 if (missingHeaders.length > 0) {
@@ -41,7 +44,7 @@ if (rows.length < 10) {
   throw new Error(`Expected at least 10 pilot rows, found ${rows.length}`)
 }
 
-const ids = rows.map((row) => row.split(',')[0].trim()).filter(Boolean)
+const ids = rows.map(({ value }) => value.split(',')[0].trim()).filter(Boolean)
 const uniqueIds = new Set(ids)
 
 if (ids.length !== rows.length) {
@@ -53,11 +56,11 @@ if (uniqueIds.size !== ids.length) {
 }
 
 const invalidRows = rows
-  .map((row, index) => ({ index: index + 2, columnCount: row.split(',').length }))
+  .map(({ line, value }) => ({ line, columnCount: value.split(',').length }))
   .filter(({ columnCount }) => columnCount !== headers.length)
 
 if (invalidRows.length > 0) {
-  const lines = invalidRows.map(({ index }) => index).join(', ')
+  const lines = invalidRows.map(({ line }) => line).join(', ')
   throw new Error(`Pilot tracker rows must have ${headers.length} columns. Invalid lines: ${lines}`)
 }
 
