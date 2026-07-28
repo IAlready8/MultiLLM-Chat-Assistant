@@ -8,9 +8,9 @@ This is the platform-agnostic deployment reference for the current release basel
 - production requires `NEXTAUTH_URL`
 - production requires `NEXTAUTH_SECRET` or `AUTH_SECRET`
 - production requires `API_KEY_ENCRYPTION_SEED`
+- production requires `REDIS_URL`
 - billing is optional for technical handoff readiness
 - Python sidecar is optional
-- Redis is optional
 
 ## 2. Pre-Deploy Checklist
 - `npm ci`
@@ -32,7 +32,6 @@ At minimum, configure:
 Optional families:
 - Stripe billing envs
 - sidecar envs
-- cache / Redis envs
 - deployment-platform env helpers
 
 Reference:

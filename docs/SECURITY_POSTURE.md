@@ -35,6 +35,7 @@ Production core security requires:
 - `NEXTAUTH_URL`
 - `NEXTAUTH_SECRET` or `AUTH_SECRET`
 - `API_KEY_ENCRYPTION_SEED`
+- `REDIS_URL`
 
 Optional but security-sensitive subsystems:
 - Stripe:
@@ -43,14 +44,14 @@ Optional but security-sensitive subsystems:
   - `STRIPE_WEBHOOK_SECRET`
 - OAuth providers:
   - provider client ID + client secret pairs
-- Redis:
-  - `REDIS_URL`
 - Python sidecar:
   - `PYTHON_CORE_URL`
 
 Fail-closed rules already enforced in code:
 - production startup rejects missing core auth and encryption secrets
+- production startup rejects missing `REDIS_URL`
 - strict auth is enforced in production even when local demo flags are false
+- production rate limiting fails closed when Redis is unavailable
 - Stripe webhook processing rejects missing signatures and missing webhook secret
 - admin routes require authenticated `OWNER` or `ADMIN` users
 
@@ -65,11 +66,14 @@ Primary implementation files:
 Security-relevant behaviors already present:
 - production secret resolution fails closed when auth secret is missing
 - strict-auth middleware protects page and API surfaces
-- `/api/health` and `/api/webhooks/stripe` remain intentionally public
+- `/api/health` remains intentionally public but is sanitized for unauthenticated callers
+- detailed health release/env/metrics data is restricted to authenticated admins
+- `/api/webhooks/stripe` remains intentionally public
 - session-cookie parsing supports direct and chunked NextAuth cookies
 - JWT decryption failures are treated as unauthenticated, not server-success
 - admin access requires `OWNER` or `ADMIN`
 - guest access is limited to non-strict mode only
+- production session lifetime is reduced to 7 days with secure cookie policy
 
 Existing proof coverage:
 - `test/api-auth.test.ts`

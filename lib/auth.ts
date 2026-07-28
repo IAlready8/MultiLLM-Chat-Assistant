@@ -86,6 +86,7 @@ const resolveAuthSecret = (): string => {
 }
 
 const authSecret = resolveAuthSecret()
+const useSecureCookies = process.env.NODE_ENV === 'production'
 
 const authLogger: NonNullable<NextAuthOptions['logger']> = {
   error(code, metadata) {
@@ -317,8 +318,25 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours - reduce session updates
+    maxAge: 7 * 24 * 60 * 60, // 7 days
+    updateAge: 4 * 60 * 60, // 4 hours
+  },
+  jwt: {
+    maxAge: 7 * 24 * 60 * 60,
+  },
+  useSecureCookies,
+  cookies: {
+    sessionToken: {
+      name: useSecureCookies
+        ? '__Secure-next-auth.session-token'
+        : 'next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: useSecureCookies,
+      },
+    },
   },
   secret: authSecret,
 }

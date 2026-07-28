@@ -50,6 +50,10 @@ export const validateStartupEnvironment = (): void => {
     issues.push('API_KEY_ENCRYPTION_SEED is required in production.')
   }
 
+  if (!isNonEmpty(process.env.REDIS_URL)) {
+    issues.push('REDIS_URL is required in production for rate limiting and cache safety.')
+  }
+
   validatePairedVars(
     issues,
     'Google OAuth',

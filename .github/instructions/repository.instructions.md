@@ -243,7 +243,7 @@ Node 22 LTS is used from `.nvmrc`. Build requires placeholder env vars: `DATABAS
 - `NEXTAUTH_SECRET` **or** `AUTH_SECRET` — NextAuth secret for signing/encryption (**required in production**; in local/dev NextAuth can use a hardcoded fallback, but setting it is recommended for consistency)
 
 **Additional / optional (feature- or scale-dependent):**
-- `REDIS_URL` — for distributed rate limiting (`lib/rate-limit.ts`) and caching (`lib/cache.ts`); not used for NextAuth session storage
+- `REDIS_URL` — required in production for distributed rate limiting (`lib/rate-limit.ts`) and caching (`lib/cache.ts`); not used for NextAuth session storage
 - `AUTH_REQUIRE_LOGIN` / `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN` — `true` for strict authentication
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRO_PRICE_ID` — for payment features
 - `PYTHON_CORE_URL` — URL for optional Python sidecar (default `http://127.0.0.1:8008`)
@@ -277,7 +277,7 @@ Copy `.env.example` to `.env.local` for local development. **Never commit secret
 | `lib/config-schemas.ts` | Zod schemas for provider/system config + defaults |
 | `lib/error-system.ts` | Structured error classes + `ErrorManager` singleton |
 | `lib/demo-account.ts` | Guest/demo user creation and auth bypass logic |
-| `lib/rate-limit.ts` | Redis-backed (with memory fallback) rate limiting |
+| `lib/rate-limit.ts` | Redis-backed rate limiting; production fails closed when Redis is unavailable |
 | `lib/cache.ts` | Redis-backed (with memory fallback) caching layer |
 | `lib/utils.ts` | `cn()` Tailwind class merge helper |
 | `types/prisma.ts` | TypeScript interfaces for all Prisma models + `PrismaClient` type |

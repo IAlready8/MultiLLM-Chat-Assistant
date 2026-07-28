@@ -157,6 +157,7 @@ Key groups:
 - Demo/guest behavior: `DEMO_ACCOUNT_*`, `NEXT_PUBLIC_DEMO_ACCOUNT_*`, `GUEST_USER_*`, `NEXT_PUBLIC_GUEST_USER_ID`
 - Provider key encryption: `API_KEY_ENCRYPTION_SEED`
 - Database: `DATABASE_URL` (required in production)
+- Rate limiting/cache backend: `REDIS_URL` (required in production)
 - Optional billing: `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
 - Optional sidecar routing: `PYTHON_CORE_URL`
 - Optional app metadata/network tuning: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL`, `LLM_FETCH_TIMEOUT_MS`, `LLM_FETCH_RETRIES`

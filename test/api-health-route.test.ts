@@ -6,6 +6,11 @@ const mockMetricsSnapshot = vi.fn()
 const mockGetCacheDiagnostics = vi.fn()
 const mockGetRateLimitDiagnostics = vi.fn()
 const mockFetch = vi.fn()
+const mockGetAuthenticatedAdmin = vi.fn()
+
+vi.mock('@/lib/api-auth', () => ({
+  getAuthenticatedAdmin: () => mockGetAuthenticatedAdmin(),
+}))
 
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -39,6 +44,9 @@ const originalGithubRefName = process.env.GITHUB_REF_NAME
 describe('/api/health route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockGetAuthenticatedAdmin.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })
+    )
     mockQueryRaw.mockResolvedValue([{ ok: 1 }])
     mockMetricsSnapshot.mockReturnValue({
       startedAt: '2026-01-01T00:00:00.000Z',
@@ -105,6 +113,7 @@ describe('/api/health route', () => {
     expect(response.status).toBe(200)
     const payload = await response.json()
     expect(payload.source).toBe('health')
+    expect(payload.visibility).toBe('public')
     expect(payload.status).toBe('healthy')
     expect(payload.generatedAt).toBeTypeOf('string')
     expect(payload.timestamp).toBe(payload.generatedAt)
@@ -121,7 +130,7 @@ describe('/api/health route', () => {
       payload.checks.cache.responseTimeMs
     )
     expect(payload.checks.cache.message).toBe(
-      'Redis not configured; using in-memory cache'
+      undefined
     )
     expect(payload.checks.rateLimit.status).toBe('memory')
     expect(payload.checks.rateLimit.responseTimeMs).toBeTypeOf('number')
@@ -129,7 +138,7 @@ describe('/api/health route', () => {
       payload.checks.rateLimit.responseTimeMs
     )
     expect(payload.checks.rateLimit.message).toBe(
-      'Redis not configured; using in-memory rate limiting'
+      undefined
     )
     expect(payload.checks.sidecar.status).toBe('disabled')
     expect(payload.checks.sidecar.responseTimeMs).toBeTypeOf('number')
@@ -140,13 +149,9 @@ describe('/api/health route', () => {
     expect(payload.checks.api.responseTime).toBe(
       payload.checks.api.responseTimeMs
     )
-    expect(payload.version).toBe('0.1.0')
-    expect(payload.release).toEqual({
-      version: '0.1.0',
-      commitSha: null,
-      commitShort: null,
-      branch: null,
-    })
+    expect(payload.version).toBeUndefined()
+    expect(payload.release).toBeUndefined()
+    expect(payload.environment).toBeUndefined()
     expect(payload.summary).toEqual({
       coreAvailability: 'available',
       degradedChecks: [],
@@ -156,7 +161,40 @@ describe('/api/health route', () => {
     expect(payload.metrics).toBeUndefined()
   })
 
+  it('includes release metadata and metrics for authenticated admins', async () => {
+    mockGetAuthenticatedAdmin.mockResolvedValue({
+      user: { id: 'owner-1', role: 'OWNER' },
+    })
+    const request = new NextRequest('http://localhost/api/health?metrics=1')
+
+    const response = await GET(request)
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload.visibility).toBe('admin')
+    expect(payload.version).toBe('0.1.0')
+    expect(payload.release).toEqual({
+      version: '0.1.0',
+      commitSha: null,
+      commitShort: null,
+      branch: null,
+    })
+    expect(payload.metrics).toEqual({
+      startedAt: '2026-01-01T00:00:00.000Z',
+      routes: {},
+    })
+    expect(payload.checks.cache.message).toBe(
+      'Redis not configured; using in-memory cache'
+    )
+    expect(payload.checks.rateLimit.message).toBe(
+      'Redis not configured; using in-memory rate limiting'
+    )
+  })
+
   it('returns degraded status when database check fails', async () => {
+    mockGetAuthenticatedAdmin.mockResolvedValue({
+      user: { id: 'owner-1', role: 'OWNER' },
+    })
     mockQueryRaw.mockRejectedValue(
       new Error('Database access is not available in this environment.')
     )
@@ -178,6 +216,9 @@ describe('/api/health route', () => {
   })
 
   it('returns degraded status when configured sidecar is unavailable', async () => {
+    mockGetAuthenticatedAdmin.mockResolvedValue({
+      user: { id: 'owner-1', role: 'OWNER' },
+    })
     process.env.PYTHON_CORE_URL = 'http://127.0.0.1:8008'
     mockFetch.mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:8008'))
 
@@ -199,6 +240,9 @@ describe('/api/health route', () => {
   })
 
   it('returns degraded cache status when Redis is configured but unavailable', async () => {
+    mockGetAuthenticatedAdmin.mockResolvedValue({
+      user: { id: 'owner-1', role: 'OWNER' },
+    })
     mockGetCacheDiagnostics.mockReturnValue({
       mode: 'memory',
       status: 'degraded',
@@ -227,6 +271,9 @@ describe('/api/health route', () => {
   })
 
   it('returns degraded rate-limit status when Redis is configured but unavailable', async () => {
+    mockGetAuthenticatedAdmin.mockResolvedValue({
+      user: { id: 'owner-1', role: 'OWNER' },
+    })
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'memory',
       status: 'degraded',
@@ -255,6 +302,9 @@ describe('/api/health route', () => {
   })
 
   it('includes metrics snapshot when metrics=1 query is provided', async () => {
+    mockGetAuthenticatedAdmin.mockResolvedValue({
+      user: { id: 'owner-1', role: 'OWNER' },
+    })
     mockMetricsSnapshot.mockReturnValue({
       startedAt: '2026-01-01T00:00:00.000Z',
       routes: {
@@ -287,6 +337,9 @@ describe('/api/health route', () => {
   })
 
   it('includes release commit metadata when deploy env is present', async () => {
+    mockGetAuthenticatedAdmin.mockResolvedValue({
+      user: { id: 'owner-1', role: 'OWNER' },
+    })
     process.env.VERCEL_GIT_COMMIT_SHA =
       '38bd6ff663ad85a9586de66c42978458fd8f2c25'
     process.env.VERCEL_GIT_COMMIT_REF = 'main'

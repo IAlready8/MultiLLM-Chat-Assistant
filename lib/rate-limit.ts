@@ -21,11 +21,18 @@ interface LimitConfig {
 
 export interface RateLimitDiagnostics {
   mode: 'redis' | 'memory'
-  status: 'connected' | 'degraded' | 'memory'
+  status: 'connected' | 'degraded' | 'memory' | 'error'
   message: string
   redisConfigured: boolean
   redisConnected: boolean
   inMemoryKeys: number
+}
+
+export interface RateLimitResult {
+  allowed: boolean
+  remaining: number
+  retryAfterMs: number
+  reason?: 'rate_limited' | 'backend_unavailable'
 }
 
 // Simple in-memory sliding window limiter (dev/default)
@@ -34,6 +41,8 @@ const hits = new Map<Key, number[]>()
 // Redis client instance
 let redisClient: any = null
 let isRedisConnected = false
+
+const isProduction = process.env.NODE_ENV === 'production'
 
 // Initialize Redis connection if REDIS_URL is provided
 async function initRedis() {
@@ -79,11 +88,20 @@ function checkAndConsumeInMemory(key: Key, cfg: LimitConfig) {
   const recent = arr.filter((ts) => ts > windowStart)
   if (recent.length >= cfg.max) {
     const retryAfterMs = cfg.windowMs - (t - recent[0])
-    return { allowed: false as const, remaining: Math.max(0, cfg.max - recent.length), retryAfterMs }
+    return {
+      allowed: false as const,
+      remaining: Math.max(0, cfg.max - recent.length),
+      retryAfterMs,
+      reason: 'rate_limited' as const,
+    }
   }
   recent.push(t)
   hits.set(key, recent)
-  return { allowed: true as const, remaining: Math.max(0, cfg.max - recent.length), retryAfterMs: 0 }
+  return {
+    allowed: true as const,
+    remaining: Math.max(0, cfg.max - recent.length),
+    retryAfterMs: 0,
+  }
 }
 
 // Redis-based implementation
@@ -121,7 +139,12 @@ async function checkAndConsumeRedis(key: Key, cfg: LimitConfig) {
       const oldest = await redisClient.zRangeWithScores(key, 0, 0)
       const retryAfterMs =
         oldest.length > 0 ? cfg.windowMs - (timestamp - oldest[0].score) : 0
-      return { allowed: false as const, remaining: Math.max(0, cfg.max - currentCount), retryAfterMs }
+      return {
+        allowed: false as const,
+        remaining: Math.max(0, cfg.max - currentCount),
+        retryAfterMs,
+        reason: 'rate_limited' as const,
+      }
     }
 
     return {
@@ -139,10 +162,19 @@ async function checkAndConsumeRedis(key: Key, cfg: LimitConfig) {
 }
 
 export async function checkAndConsume(key: Key, cfg: LimitConfig) {
-  if (redisClient && isRedisConnected) {
-    return checkAndConsumeRedis(key, cfg);
+  if (isProduction && (!process.env.REDIS_URL?.trim() || !redisClient || !isRedisConnected)) {
+    return {
+      allowed: false,
+      remaining: 0,
+      retryAfterMs: cfg.windowMs,
+      reason: 'backend_unavailable' as const,
+    }
   }
-  return Promise.resolve(checkAndConsumeInMemory(key, cfg));
+
+  if (redisClient && isRedisConnected) {
+    return checkAndConsumeRedis(key, cfg)
+  }
+  return Promise.resolve(checkAndConsumeInMemory(key, cfg))
 }
 
 export function resetAll() {
@@ -158,10 +190,20 @@ export function getRateLimitDiagnostics(): RateLimitDiagnostics {
   const redisConfigured = Boolean(process.env.REDIS_URL?.trim())
   const redisConnected = Boolean(redisClient && isRedisConnected)
   const status =
-    redisConnected ? 'connected' : redisConfigured ? 'degraded' : 'memory'
+    redisConnected
+      ? 'connected'
+      : isProduction
+        ? 'error'
+        : redisConfigured
+          ? 'degraded'
+          : 'memory'
   const message =
     status === 'connected'
       ? 'Redis-backed rate limiting is connected'
+      : status === 'error'
+        ? redisConfigured
+          ? 'Redis-backed rate limiting is required in production but unavailable'
+          : 'Redis-backed rate limiting is required in production but REDIS_URL is not configured'
       : status === 'degraded'
         ? 'Redis configured but unavailable; using in-memory rate limiting'
         : 'Redis not configured; using in-memory rate limiting'
