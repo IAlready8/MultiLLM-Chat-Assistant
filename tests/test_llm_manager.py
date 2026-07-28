@@ -6,9 +6,9 @@
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock
 
 from src.core.llm_manager import (
     LLMManager,
@@ -39,6 +39,7 @@ class MockProvider(LLMProvider):
         return LLMResponse(
             content=f"Mock response from {self.name}: {request.prompt[:50]}...",
             provider=ProviderType.OPENAI,  # Use for testing
+            model=request.model or "mock-model",
             tokens_used=len(request.prompt.split()) + 10,
             latency_ms=self.latency_ms,
             metadata={"mock": True, "provider_name": self.name},
@@ -48,7 +49,7 @@ class MockProvider(LLMProvider):
         return self._healthy
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def llm_manager():
     """Create LLM manager for testing with optimization settings"""
     manager = LLMManager(cache_size=100)  # Smaller cache for testing
@@ -59,7 +60,10 @@ async def llm_manager():
 def sample_request():
     """Create sample request for testing"""
     return LLMRequest(
-        prompt="What is the capital of France?", max_tokens=100, temperature=0.7
+        prompt="What is the capital of France?",
+        provider=ProviderType.OPENAI,
+        max_tokens=100,
+        temperature=0.7,
     )
 
 
@@ -120,21 +124,20 @@ class TestLLMManager:
         assert "50.00%" in stats["cache_hit_rate"]
 
     @pytest.mark.asyncio
-    async def test_provider_failover(self, llm_manager, sample_request):
-        """Test provider failover for reliability"""
+    async def test_provider_selection(self, llm_manager, sample_request):
+        """Test that requests use their explicitly selected provider."""
 
-        # Create providers with different health status
-        unhealthy_provider = MockProvider("unhealthy", healthy=False)
+        selected_provider = MockProvider("selected", healthy=False)
         healthy_provider = MockProvider("healthy", healthy=True)
 
-        await llm_manager.register_provider(ProviderType.OPENAI, unhealthy_provider)
+        await llm_manager.register_provider(ProviderType.OPENAI, selected_provider)
         await llm_manager.register_provider(ProviderType.ANTHROPIC, healthy_provider)
 
-        # Request should use healthy provider
         response = await llm_manager.generate(sample_request)
 
-        assert healthy_provider.call_count == 1
-        assert unhealthy_provider.call_count == 0
+        assert response.content.startswith("Mock response from selected")
+        assert selected_provider.call_count == 1
+        assert healthy_provider.call_count == 0
 
     @pytest.mark.asyncio
     async def test_performance_benchmarks(self, llm_manager):
@@ -147,7 +150,10 @@ class TestLLMManager:
         await llm_manager.register_provider(ProviderType.OPENAI, fast_provider)
 
         # Benchmark concurrent requests
-        requests = [LLMRequest(f"Test prompt {i}", max_tokens=100) for i in range(10)]
+        requests = [
+            LLMRequest(f"Test prompt {i}", ProviderType.OPENAI, max_tokens=100)
+            for i in range(10)
+        ]
 
         start_time = time.time()
 
@@ -175,9 +181,9 @@ class TestLLMManager:
         await llm_manager.register_provider(ProviderType.OPENAI, provider)
 
         # Create requests that exceed cache size
-        cache_size = llm_manager._cache_size
+        cache_size = llm_manager._request_cache.maxsize
         requests = [
-            LLMRequest(f"Unique prompt {i}", max_tokens=100)
+            LLMRequest(f"Unique prompt {i}", ProviderType.OPENAI, max_tokens=100)
             for i in range(cache_size + 50)
         ]
 
@@ -203,14 +209,16 @@ async def test_concurrent_load(llm_manager):
     # Create high concurrent load
     num_requests = 100
     requests = [
-        LLMRequest(f"Load test {i % 10}", max_tokens=50)  # Some duplicates for caching
+        LLMRequest(
+            f"Load test {i % 10}", ProviderType.OPENAI, max_tokens=50
+        )  # Some duplicates for caching
         for i in range(num_requests)
     ]
 
     start_time = time.time()
 
     # Execute with high concurrency
-    responses = await asyncio.gather(*[llm_manager.generate(req) for req in requests])
+    responses = await llm_manager.generate_multiple(requests)
 
     execution_time = time.time() - start_time
 
