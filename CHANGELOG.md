@@ -5,14 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-11-07
+## [0.2.0-private-pilot.1] - 2026-07-30
 
 ### Added
 
-- Initial release of the project.
-- CI/CD pipeline with testing and deployment to Vercel.
-- Documentation for Vercel deployment.
-- Issue templates for bug reports and feature requests.
-- `.nvmrc` file to enforce Node.js version.
-- `CHANGELOG.md` file.
-- `CONTRIBUTING.md` file.
+- Deterministic, attribution-safe private-pilot invite generation and a
+  validated 10-prospect tracker.
+- An exact full-SHA guard for verifying the canonical production alias.
+- Provider catalog and generated-artifact hygiene checks.
+
+### Changed
+
+- Standardized the supported toolchain on Node.js 22 and npm.
+- Made coverage floors, secret scanning, production dependency auditing, and
+  critical full-tree dependency auditing blocking CI gates.
+- Updated `python-dotenv` to 1.2.2 and `python-multipart` to 0.0.30.
+
+### Fixed
+
+- Restored the optional Python sidecar test suite on Python 3.14 and pytest 9.
+- Aligned production verification with the deployed release's exact full
+  commit SHA.
+
+### Release scope
+
+- This is an invite-only, founder-led private-pilot milestone. It is not a
+  public launch and does not claim user, retention, revenue, or live-payment
+  validation.
+- Broad legacy feature pull requests remain deferred and are not part of this
+  release.
+
+## [0.1.0] - 2026-05-18
+
+### Added
+
+- Stable baseline for the multi-provider LLM workspace, including chat,
+  personas, saved workflows, analytics, deployment documentation, and
+  production operations tooling.
+
+### Changed
+
+- Replaced the former `1.0.0` / 2025 changelog entry with the repository's
+  actual `v0.1.0-stable` tag date. The repository was created in January 2026,
+  so the previous date could not represent a real project release.
