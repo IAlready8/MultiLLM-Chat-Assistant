@@ -174,9 +174,9 @@ describe('/api/admin/status route', () => {
     expect(payload.generatedAt).toBeTypeOf('string')
     expect(payload.overallStatus).toBe('ok')
     expect(payload.checks).toHaveLength(8)
-    expect(payload.version).toBe('0.2.0-private-pilot.1')
+    expect(payload.version).toBe('0.2.0-private-pilot.2')
     expect(payload.release).toEqual({
-      version: '0.2.0-private-pilot.1',
+      version: '0.2.0-private-pilot.2',
       commitSha: null,
       commitShort: null,
       branch: null,
@@ -332,7 +332,7 @@ describe('/api/admin/status route', () => {
     expect(response.status).toBe(200)
     expect(payload.source).toBe('admin-status')
     expect(payload.release).toEqual({
-      version: '0.2.0-private-pilot.1',
+      version: '0.2.0-private-pilot.2',
       commitSha: '38bd6ff663ad85a9586de66c42978458fd8f2c25',
       commitShort: '38bd6ff',
       branch: 'main',
