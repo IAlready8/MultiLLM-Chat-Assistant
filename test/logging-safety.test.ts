@@ -60,7 +60,7 @@ describe('logging safety', () => {
 
     const payload = JSON.parse(String(errorSpy.mock.calls[0]?.[0]))
     expect(payload.release).toEqual({
-      version: '0.1.0',
+      version: '0.2.0-private-pilot.1',
       commitSha: null,
       commitShort: null,
       branch: null,
@@ -87,7 +87,7 @@ describe('logging safety', () => {
 
     const payload = JSON.parse(String(errorSpy.mock.calls[0]?.[0]))
     expect(payload.release).toEqual({
-      version: '0.1.0',
+      version: '0.2.0-private-pilot.1',
       commitSha: null,
       commitShort: null,
       branch: null,
