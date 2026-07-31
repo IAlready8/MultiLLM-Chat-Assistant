@@ -16,6 +16,7 @@ describe('config-schemas provider registry', () => {
     expect(ids).toContain('grok')
     expect(ids).toContain('ollama')
     expect(ids).toContain('mistral')
+    expect(ids).toContain('kimi')
   })
 
   it('providerRegistry entries have required fields', () => {

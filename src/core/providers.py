@@ -10,7 +10,7 @@ llm_manager = LLMManager()
 
 # Initialize providers if API keys are available
 async def initialize_providers():
-    from .llm_manager import OpenAIProvider, AnthropicProvider, GoogleProvider
+    from .llm_manager import OpenAIProvider, AnthropicProvider, GoogleProvider, KimiProvider
 
     if settings.OPENAI_API_KEY:
         await llm_manager.register_provider(ProviderType.OPENAI, OpenAIProvider())
@@ -20,6 +20,9 @@ async def initialize_providers():
 
     if settings.GOOGLE_AI_API_KEY:
         await llm_manager.register_provider(ProviderType.GOOGLE, GoogleProvider())
+
+    if settings.MOONSHOT_API_KEY:
+        await llm_manager.register_provider(ProviderType.KIMI, KimiProvider())
 
 
 async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
@@ -93,6 +96,7 @@ def calculate_cost(provider: ProviderType, tokens_used: int) -> float:
         ProviderType.OPENAI: 0.002,  # Example: $0.002 per 1k tokens for gpt-3.5-turbo
         ProviderType.ANTHROPIC: 0.008,  # Example: $0.008 per 1k tokens for Claude
         ProviderType.GOOGLE: 0.0005,  # Example: $0.0005 per 1k tokens for Gemini
+        ProviderType.KIMI: 0.009,  # Blended estimate; actual input/output rates differ
     }
 
     cost_per_token = cost_per_thousand_tokens.get(provider, 0.002) / 1000

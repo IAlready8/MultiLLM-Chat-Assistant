@@ -51,26 +51,43 @@ export async function* parseSSEStream(
 ): AsyncGenerator<string, void, undefined> {
   const reader = body.getReader()
   const decoder = new TextDecoder()
+  let buffer = ''
+
+  const parseLine = (line: string): string | undefined | null => {
+    const normalized = line.endsWith('\r') ? line.slice(0, -1) : line
+    if (!normalized.startsWith('data:')) return undefined
+
+    const data = normalized.slice(5).trimStart()
+    if (data === '[DONE]') return null
+
+    try {
+      return extractContent(JSON.parse(data))
+    } catch {
+      return undefined
+    }
+  }
+
   try {
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      const lines = decoder
-        .decode(value, { stream: true })
-        .split('\n')
-        .filter((line) => line.trim() !== '')
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6)
-          if (data === '[DONE]') return
-          try {
-            const content = extractContent(JSON.parse(data))
-            if (content) yield content
-          } catch {
-            /* Ignore malformed JSON lines */
-          }
-        }
+        const content = parseLine(line)
+        if (content === null) return
+        if (content) yield content
       }
+    }
+
+    buffer += decoder.decode()
+    if (buffer) {
+      const content = parseLine(buffer)
+      if (content === null) return
+      if (content) yield content
     }
   } finally {
     reader.releaseLock()

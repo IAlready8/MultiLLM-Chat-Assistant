@@ -58,6 +58,7 @@ const COST_PER_1K_TOKENS: Record<string, number> = {
   googleai: 0.001,
   openrouter: 0.01,
   grok: 0.02,
+  kimi: 0.009,
 }
 
 const normalizeKey = (value: string) => value.toLowerCase().trim()
@@ -69,6 +70,7 @@ const inferProviderFromName = (name: string) => {
   if (key.includes('gemini') || key.includes('google')) return 'Google AI'
   if (key.includes('grok')) return 'Grok'
   if (key.includes('openrouter')) return 'OpenRouter'
+  if (key.includes('kimi')) return 'Kimi'
   return name
 }
 

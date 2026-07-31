@@ -56,6 +56,13 @@ export const providerRegistry: ProviderMeta[] = [
     description: 'Mistral hosted models and open-weight families.',
     requiresApiKey: true,
   },
+  {
+    id: 'kimi',
+    name: 'Kimi (Moonshot AI)',
+    placeholder: 'Kimi API key',
+    description: 'Long-context Kimi models for reasoning, writing, and coding.',
+    requiresApiKey: true,
+  },
 ]
 
 export const supportedProviderIds = providerRegistry.map((provider) => provider.id)

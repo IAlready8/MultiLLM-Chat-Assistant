@@ -29,7 +29,7 @@ describe('MultiChatPage provider model picker', () => {
     vi.unstubAllGlobals()
   })
 
-  it('offers every catalog-backed provider, including local Ollama and Mistral', async () => {
+  it('offers every catalog-backed provider, including Ollama, Mistral, and Kimi', async () => {
     const user = userEvent.setup()
     render(<MultiChatPage />)
 
@@ -37,11 +37,19 @@ describe('MultiChatPage provider model picker', () => {
       await screen.findByRole('button', { name: /Ollama \(local\)/i })
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /Mistral/i })).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
+    ).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /Mistral/i }))
     expect(screen.getByRole('option', { name: 'Mistral Large' })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /Ollama \(local\)/i }))
     expect(screen.getByRole('option', { name: 'Llama 3 (8B)' })).toBeVisible()
+
+    await user.click(
+      screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
+    )
+    expect(screen.getByRole('option', { name: 'Kimi K3' })).toBeVisible()
   })
 })

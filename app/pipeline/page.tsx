@@ -8,6 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
+import { getModelsForProvider } from '@/lib/model-catalog'
+import { providerRegistry } from '@/lib/provider-registry'
+import type { ProviderId } from '@/lib/providers'
 
 type ProviderResponse = {
   provider: string
@@ -19,50 +22,24 @@ type ProviderResponse = {
   latency_ms: number
 }
 
-type ProviderId = 'openai' | 'anthropic' | 'googleai' | 'openrouter' | 'grok'
-
 type ProviderSelection = {
   provider: ProviderId
   model: string
   enabled: boolean
 }
 
-const PROVIDER_CATALOG: Record<
-  ProviderId,
-  { label: string; description: string; models: string[] }
-> = {
-  openai: {
-    label: 'OpenAI',
-    description: 'Strong general-purpose reasoning and coding',
-    models: ['gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini'],
-  },
-  anthropic: {
-    label: 'Anthropic',
-    description: 'Long context and nuanced writing quality',
-    models: [
-      'claude-3-5-sonnet-20241022',
-      'claude-3-opus-20240229',
-      'claude-3-haiku-20240307',
-    ],
-  },
-  googleai: {
-    label: 'Google AI',
-    description: 'Fast responses and broad model options',
-    models: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro'],
-  },
-  openrouter: {
-    label: 'OpenRouter',
-    description: 'Unified routing across many model providers',
-    models: ['openrouter/auto', 'openai/gpt-4', 'anthropic/claude-3-opus'],
-  },
-  grok: {
-    label: 'Grok',
-    description: 'xAI models for conversational exploration',
-    models: ['grok-2-1212', 'grok-beta'],
-  },
-}
+const providerIds = providerRegistry.map(provider => provider.id) as ProviderId[]
 
-const providerIds = Object.keys(PROVIDER_CATALOG) as ProviderId[]
+const PROVIDER_CATALOG = Object.fromEntries(
+  providerRegistry.map(provider => [
+    provider.id,
+    {
+      label: provider.name,
+      description: provider.description,
+      models: getModelsForProvider(provider.id).map(model => model.id),
+    },
+  ])
+) as Record<ProviderId, { label: string; description: string; models: string[] }>
 
 const samplePrompt =
   'Create a concise product launch plan for a multi-model AI assistant with timeline, risks, and success metrics.'

@@ -35,6 +35,8 @@ export const validateApiKeyFormat = (
       return null
     case 'mistral':
       return null
+    case 'kimi':
+      return null
     case 'ollama':
       return null
     default:
@@ -87,6 +89,11 @@ export const testProviderKey = async (provider: string, apiKey: string) => {
       return null
     case 'mistral':
       return fetchWithTimeout('https://api.mistral.ai/v1/models', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
+      })
+    case 'kimi':
+      return fetchWithTimeout('https://api.moonshot.ai/v1/models', {
         method: 'GET',
         headers: { Authorization: `Bearer ${apiKey}` },
       })

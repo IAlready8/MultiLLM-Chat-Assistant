@@ -46,6 +46,7 @@ const COST_PER_1K_TOKENS: Record<string, number> = {
   googleai: 0.001,
   openrouter: 0.01,
   grok: 0.02,
+  kimi: 0.009,
 }
 
 const estimatePromptTokens = (prompt: string): number =>

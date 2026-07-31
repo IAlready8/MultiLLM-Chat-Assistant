@@ -76,6 +76,14 @@ describe('validateApiKeyFormat', () => {
     })
   })
 
+  describe('kimi', () => {
+    it('accepts opaque keys without assuming an undocumented prefix', () => {
+      expect(
+        validateApiKeyFormat('kimi', 'moonshot-test-key-12345')
+      ).toBeNull()
+    })
+  })
+
   describe('unknown providers', () => {
     it('accepts any format for unknown providers', () => {
       expect(

@@ -23,6 +23,7 @@ class ProviderType(str, Enum):
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
     COHERE = "cohere"
+    KIMI = "kimi"
 
 
 @dataclass
@@ -463,6 +464,103 @@ class GoogleProvider(LLMProvider):
 
     def health_check(self) -> bool:
         return settings.GOOGLE_AI_API_KEY is not None
+
+
+class KimiProvider(LLMProvider):
+    """Kimi API provider implementation using Moonshot AI's compatible API."""
+
+    def __init__(self):
+        if not settings.MOONSHOT_API_KEY:
+            raise InvalidAPIKeyError("Kimi API key not configured")
+
+        self.base_url = "https://api.moonshot.ai/v1"
+        self.headers = {
+            "Authorization": f"Bearer {settings.MOONSHOT_API_KEY.get_secret_value()}",
+            "Content-Type": "application/json",
+        }
+        self.timeout = 120.0
+
+    async def generate(self, request: LLMRequest) -> LLMResponse:
+        start_time = time.time()
+
+        try:
+            payload = {
+                "model": request.model or "kimi-k3",
+                "messages": [{"role": "user", "content": request.prompt}],
+                "max_completion_tokens": request.max_tokens,
+            }
+
+            async with httpx.AsyncClient(
+                base_url=self.base_url,
+                headers=self.headers,
+                timeout=self.timeout,
+            ) as client:
+                response = await client.post("/chat/completions", json=payload)
+
+            if response.status_code == 429:
+                raise RateLimitError(f"Kimi rate limit exceeded: {response.text}")
+            if response.status_code in (401, 403):
+                raise InvalidAPIKeyError(f"Invalid Kimi API key: {response.text}")
+            if response.status_code >= 500:
+                raise APIConnectionError(f"Kimi server error: {response.text}")
+            if not response.is_success:
+                response.raise_for_status()
+
+            try:
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+            except (ValueError, KeyError, IndexError, TypeError) as exc:
+                logging.error(f"Unexpected response format from Kimi: {exc}")
+                return LLMResponse(
+                    content="Error: Unexpected response format from Kimi API",
+                    provider=ProviderType.KIMI,
+                    model=request.model,
+                    tokens_used=0,
+                    latency_ms=(time.time() - start_time) * 1000,
+                )
+
+            usage = data.get("usage") or {}
+            tokens_used = usage.get("total_tokens")
+            if not isinstance(tokens_used, int):
+                tokens_used = len(request.prompt.split()) + len(content.split())
+
+            return LLMResponse(
+                content=content,
+                provider=ProviderType.KIMI,
+                model=data.get("model", request.model or "kimi-k3"),
+                tokens_used=tokens_used,
+                latency_ms=(time.time() - start_time) * 1000,
+            )
+        except httpx.TimeoutException:
+            return LLMResponse(
+                content="Error: Kimi API request timed out",
+                provider=ProviderType.KIMI,
+                model=request.model,
+                tokens_used=0,
+                latency_ms=(time.time() - start_time) * 1000,
+            )
+        except httpx.RequestError as exc:
+            return LLMResponse(
+                content=f"Error connecting to Kimi API: {str(exc)}",
+                provider=ProviderType.KIMI,
+                model=request.model,
+                tokens_used=0,
+                latency_ms=(time.time() - start_time) * 1000,
+            )
+        except (RateLimitError, InvalidAPIKeyError):
+            raise
+        except Exception as exc:
+            logging.exception(f"Unexpected error in Kimi provider: {str(exc)}")
+            return LLMResponse(
+                content=f"Error calling Kimi API: {str(exc)}",
+                provider=ProviderType.KIMI,
+                model=request.model,
+                tokens_used=0,
+                latency_ms=(time.time() - start_time) * 1000,
+            )
+
+    def health_check(self) -> bool:
+        return settings.MOONSHOT_API_KEY is not None
 
 
 class LLMManager:

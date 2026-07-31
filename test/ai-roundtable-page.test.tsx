@@ -97,7 +97,7 @@ describe('AIRoundtablePage history behavior', () => {
     expect(screen.queryByText('Old persisted response')).not.toBeInTheDocument()
   })
 
-  it('offers every catalog-backed provider, including local Ollama and Mistral', async () => {
+  it('offers every catalog-backed provider, including Ollama, Mistral, and Kimi', async () => {
     const user = userEvent.setup()
     render(<AIRoundtablePage />)
 
@@ -105,12 +105,20 @@ describe('AIRoundtablePage history behavior', () => {
       await screen.findByRole('button', { name: /Ollama \(local\)/i })
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /Mistral/i })).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
+    ).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /Mistral/i }))
     expect(screen.getByRole('option', { name: 'Mistral Large' })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /Ollama \(local\)/i }))
     expect(screen.getByRole('option', { name: 'Llama 3 (8B)' })).toBeVisible()
+
+    await user.click(
+      screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
+    )
+    expect(screen.getByRole('option', { name: 'Kimi K3' })).toBeVisible()
   })
 
   it('hydrates a saved Roundtable only after the user clicks a history item', async () => {
