@@ -52,6 +52,22 @@ require_auth_secret() {
   fi
 }
 
+resolve_database_url() {
+  local name
+  local value
+
+  for name in DATABASE_URL POSTGRES_DATABASE_URL POSTGRES_URL; do
+    value="${!name:-}"
+    if [[ "${value}" == postgres://* || "${value}" == postgresql://* ]]; then
+      export DATABASE_URL="${value}"
+      return
+    fi
+  done
+
+  echo "ERROR: DATABASE_URL, POSTGRES_DATABASE_URL, or POSTGRES_URL must contain a valid PostgreSQL URL."
+  exit 1
+}
+
 ensure_pair_or_empty() {
   local first_name="$1"
   local second_name="$2"
@@ -155,7 +171,7 @@ echo "==> Verifying required runtime environment variables"
 require_env NEXTAUTH_URL
 require_auth_secret
 require_env API_KEY_ENCRYPTION_SEED
-require_env DATABASE_URL
+resolve_database_url
 ensure_pair_or_empty GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
 ensure_pair_or_empty GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET
 
@@ -181,7 +197,7 @@ let parsed
 try {
   parsed = new URL(rawUrl)
 } catch {
-  console.error('ERROR: DATABASE_URL is not a valid URL.')
+  console.error('ERROR: Resolved database connection string is not a valid URL.')
   process.exit(1)
 }
 
@@ -189,7 +205,7 @@ const host = parsed.hostname
 const port = Number(parsed.port || 5432)
 
 if (!host || Number.isNaN(port)) {
-  console.error('ERROR: DATABASE_URL is missing a valid host/port.')
+  console.error('ERROR: Resolved database URL is missing a valid host/port.')
   process.exit(1)
 }
 
