@@ -24,7 +24,7 @@
  *
  * CONTEXT WINDOW LIMITS
  * ----------------------
- * Values here reflect published context windows as of 2026-Q1.
+ * Values here reflect published context windows as of 2026-08-01.
  * Update this table when providers announce new limits.
  */
 
@@ -60,6 +60,7 @@ interface ContextWindowEntry {
 
 const CONTEXT_WINDOWS: Record<string, ContextWindowEntry[]> = {
   openai: [
+    { pattern: 'gpt-5.6',             tokens: 1_050_000 },
     { pattern: 'gpt-4o',              tokens: 128_000 },
     { pattern: 'gpt-4-turbo',         tokens: 128_000 },
     { pattern: 'gpt-4-32k',           tokens: 32_768  },
@@ -70,6 +71,10 @@ const CONTEXT_WINDOWS: Record<string, ContextWindowEntry[]> = {
     { pattern: 'o3',                  tokens: 200_000 },
   ],
   anthropic: [
+    { pattern: 'claude-fable-5',      tokens: 1_000_000 },
+    { pattern: 'claude-opus-5',       tokens: 1_000_000 },
+    { pattern: 'claude-sonnet-5',     tokens: 1_000_000 },
+    { pattern: 'claude-haiku-4-5',    tokens: 200_000 },
     { pattern: 'claude-3-5-sonnet',   tokens: 200_000 },
     { pattern: 'claude-3-5-haiku',    tokens: 200_000 },
     { pattern: 'claude-3-opus',       tokens: 200_000 },

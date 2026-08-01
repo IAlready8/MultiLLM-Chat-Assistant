@@ -53,6 +53,27 @@ export interface ModelInfo {
 export const MODEL_CATALOG: Record<string, ModelInfo[]> = {
   openai: [
     {
+      id: 'gpt-5.6-sol',
+      displayName: 'GPT-5.6 Sol',
+      contextWindow: 1_050_000,
+      isDefault: false,
+      tag: 'frontier',
+    },
+    {
+      id: 'gpt-5.6-terra',
+      displayName: 'GPT-5.6 Terra',
+      contextWindow: 1_050_000,
+      isDefault: false,
+      tag: 'balanced',
+    },
+    {
+      id: 'gpt-5.6-luna',
+      displayName: 'GPT-5.6 Luna',
+      contextWindow: 1_050_000,
+      isDefault: false,
+      tag: 'economy',
+    },
+    {
       id: 'gpt-4o',
       displayName: 'GPT-4o',
       contextWindow: 128_000,
@@ -109,6 +130,34 @@ export const MODEL_CATALOG: Record<string, ModelInfo[]> = {
   ],
 
   anthropic: [
+    {
+      id: 'claude-fable-5',
+      displayName: 'Claude Fable 5',
+      contextWindow: 1_000_000,
+      isDefault: false,
+      tag: 'frontier',
+    },
+    {
+      id: 'claude-opus-5',
+      displayName: 'Claude Opus 5',
+      contextWindow: 1_000_000,
+      isDefault: false,
+      tag: 'flagship',
+    },
+    {
+      id: 'claude-sonnet-5',
+      displayName: 'Claude Sonnet 5',
+      contextWindow: 1_000_000,
+      isDefault: false,
+      tag: 'balanced',
+    },
+    {
+      id: 'claude-haiku-4-5-20251001',
+      displayName: 'Claude Haiku 4.5',
+      contextWindow: 200_000,
+      isDefault: false,
+      tag: 'fast',
+    },
     {
       id: 'claude-3-5-sonnet-20241022',
       displayName: 'Claude 3.5 Sonnet',

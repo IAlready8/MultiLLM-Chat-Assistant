@@ -97,7 +97,7 @@ describe('AIRoundtablePage history behavior', () => {
     expect(screen.queryByText('Old persisted response')).not.toBeInTheDocument()
   })
 
-  it('offers every catalog-backed provider, including Ollama, Mistral, and Kimi', async () => {
+  it('offers every catalog-backed provider and recent OpenAI/Anthropic models', async () => {
     const user = userEvent.setup()
     render(<AIRoundtablePage />)
 
@@ -108,6 +108,12 @@ describe('AIRoundtablePage history behavior', () => {
     expect(
       screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
     ).toBeVisible()
+    expect(screen.getByRole('option', { name: 'GPT-5.6 Sol' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /Claude \(Anthropic\)/i }))
+    expect(
+      screen.getAllByRole('option', { name: 'Claude Fable 5' }).length,
+    ).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: /Mistral/i }))
     expect(screen.getByRole('option', { name: 'Mistral Large' })).toBeVisible()
