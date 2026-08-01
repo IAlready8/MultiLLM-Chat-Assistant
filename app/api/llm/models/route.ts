@@ -21,8 +21,7 @@
  *     -> 400 { error: "Unknown provider: unknown", code: "UNKNOWN_PROVIDER" }
  *
  * Auth:
- *   Requires a valid session. Returns 401 in strict auth mode when unauthenticated.
- *   Allows guest access in non-strict mode so the model picker works before login.
+ *   Requires a valid session. Returns 401 when unauthenticated.
  *
  * Caching:
  *   The catalog is static (no DB call). We set Cache-Control headers to allow
@@ -70,8 +69,7 @@ function jsonError(status: number, error: string, code: string): NextResponse {
 // ---------------------------------------------------------------------------
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  // Auth check - allow guest so model picker works in demo mode
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
 
   const { searchParams } = req.nextUrl

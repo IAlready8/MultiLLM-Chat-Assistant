@@ -52,19 +52,19 @@ This is a Next.js multi-provider LLM application with:
 ## 4. Runtime Topology
 ### Production requirements
 - Postgres required
-- strict auth required
+- mandatory authentication required
 - auth secret required
 - provider key encryption seed required
+- at least one OAuth provider required for self-service account creation
 
 ### Optional production systems
 - Stripe
 - Python sidecar
 - Redis
-- OAuth providers
 
 ### Production fallback policy
 - in-memory persistence is not an accepted production persistence mode
-- guest/demo access is not accepted for protected production access
+- unauthenticated access is not accepted for protected application surfaces
 - optional subsystems may degrade cleanly without redefining core availability
 
 ## 5. Exact Stack
@@ -119,6 +119,7 @@ This is a Next.js multi-provider LLM application with:
 
 ### Auth pages
 - `/auth/signin`
+- `/auth/register`
 - `/auth/signout`
 - `/auth/error`
 
@@ -129,7 +130,6 @@ This is a Next.js multi-provider LLM application with:
 ## 8. API Surface
 ### Auth
 - `/api/auth/[...nextauth]`
-- `/api/auth/upgrade-guest`
 
 ### Configuration
 - `/api/config`
@@ -162,16 +162,21 @@ This is a Next.js multi-provider LLM application with:
 - `/api/teams` is disabled by default and returns 404 unless `ENABLE_TEAMS_API=true`
 
 ## 9. Authentication Model
-- production strict auth is mandatory
+- authentication is mandatory in every environment
 - `NEXTAUTH_SECRET` or `AUTH_SECRET` is required
 - `NEXTAUTH_URL` is required
-- guest/demo flows are allowed only outside production
+- `AUTH_OWNER_EMAILS` assigns at least one real operator account
+- Google/GitHub OAuth creates durable Prisma-backed accounts when configured
+- credentials authentication is login-only for existing password users
+- demo, guest, bypass, and guest-upgrade flows are unsupported
 - auth/session handling was repaired and proven live after the production cookie/session defect fix
 
 Primary auth files:
 - `lib/auth.ts`
 - `lib/api-auth.ts`
-- `lib/demo-account.ts`
+- `lib/auth-policy.ts`
+- `lib/auth-roles.ts`
+- `lib/credentials-auth.ts`
 - `proxy.ts`
 - `lib/session-cookie.ts`
 

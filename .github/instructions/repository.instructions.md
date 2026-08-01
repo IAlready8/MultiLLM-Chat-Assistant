@@ -9,7 +9,7 @@ MultiLLM Chat Assistant is a Next.js 16 App Router application that provides mul
 - **Framework**: Next.js 16 (App Router), React 18, TypeScript 5 (`strict: true`)
 - **Styling**: Tailwind CSS 3 + Radix UI headless primitives + CVA (class-variance-authority) + Framer Motion
 - **Database**: Prisma 7 ORM with PostgreSQL; stub client + in-memory fallback when `DATABASE_URL` is absent in development/tests only — production deployments must set `DATABASE_URL`
-- **Auth**: NextAuth.js v4 with Prisma adapter; supports strict auth, guest, and demo modes
+- **Auth**: NextAuth.js v4 with Prisma adapter; mandatory sessions, OAuth account creation, and existing-account password login
 - **Validation**: Zod 4 schemas in `lib/config-schemas.ts`; manual validators in `schemas/`
 - **Payments**: Stripe 20
 - **Testing**: Vitest 3 + Testing Library + jsdom; Playwright for E2E
@@ -120,12 +120,16 @@ Error classification is unified in `lib/providers/errors.ts` via `classifyProvid
 
 ### 3. Authentication Model
 
-Controlled by `AUTH_REQUIRE_LOGIN` / `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN` environment variables. Logic lives in `lib/api-auth.ts` and `lib/demo-account.ts`.
+Authentication is mandatory in every environment. Logic lives in
+`lib/auth.ts`, `lib/api-auth.ts`, `lib/credentials-auth.ts`, and `proxy.ts`.
 
-- **Strict mode** (`true`): Requires valid NextAuth session; unauthenticated requests get 401
-- **Guest/Demo mode** (`false`): Creates guest users via `createGuestUserRecord()` or demo users via `createDemoUserRecord()`. Guest-to-user upgrade available at `POST /api/auth/upgrade-guest`
+- Google/GitHub OAuth creates durable Prisma-backed users and linked accounts.
+- Credentials authentication is login-only for users with an existing bcrypt hash.
+- `AUTH_OWNER_EMAILS` and optional `AUTH_ADMIN_EMAILS` assign server-side operator roles.
+- Demo, guest, bypass, implicit registration, and guest-upgrade paths are unsupported.
 
-All API routes authenticate via `getAuthenticatedUser()` from `lib/api-auth.ts`. Most routes pass `{ allowGuest: true }`. JWT decryption errors (e.g., rotated secrets) are handled gracefully as "no session" rather than 500s.
+All protected API routes call `getAuthenticatedUser()` with no options. JWT
+decryption errors are treated as expired sessions and return 401 rather than 500.
 
 ### 4. API Key Encryption
 
@@ -157,7 +161,7 @@ All API route handlers follow this structure:
 
 ```typescript
 export async function POST(req: NextRequest) {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -240,22 +244,16 @@ Node 22 LTS is used from `.nvmrc`. Build requires placeholder env vars: `DATABAS
 - `DATABASE_URL` — PostgreSQL connection string (**required in production**; in local/dev the app can fall back to an in-memory stub when this is absent)
 - `NEXTAUTH_URL` — application base URL (e.g., `http://localhost:3000`)
 - `API_KEY_ENCRYPTION_SEED` — seed for AES-256-GCM key derivation (generate with `openssl rand -base64 32`)
-- `NEXTAUTH_SECRET` **or** `AUTH_SECRET` — NextAuth secret for signing/encryption (**required in production**; in local/dev NextAuth can use a hardcoded fallback, but setting it is recommended for consistency)
+- `NEXTAUTH_SECRET` **or** `AUTH_SECRET` — NextAuth secret for signing/encryption (required in every runtime environment)
 
 **Additional / optional (feature- or scale-dependent):**
 - `REDIS_URL` — for distributed rate limiting (`lib/rate-limit.ts`) and caching (`lib/cache.ts`); not used for NextAuth session storage
-- `AUTH_REQUIRE_LOGIN` / `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN` — `true` for strict authentication
+- `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` — Google OAuth account creation/sign-in
+- `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET` — GitHub OAuth account creation/sign-in
+- `AUTH_OWNER_EMAILS` — comma-separated real owner identities
+- `AUTH_ADMIN_EMAILS` — optional comma-separated admin identities
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRO_PRICE_ID` — for payment features
 - `PYTHON_CORE_URL` — URL for optional Python sidecar (default `http://127.0.0.1:8008`)
-
-**Demo/Guest overrides:**
-- `DEMO_ACCOUNT_ENABLED`, `DEMO_ACCOUNT_BYPASS_AUTH`, `NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH`
-- `DEMO_ACCOUNT_EMAIL`, `DEMO_ACCOUNT_PASSWORD`, `DEMO_ACCOUNT_NAME`, `DEMO_ACCOUNT_ID`
-- `GUEST_USER_ID`, `GUEST_USER_NAME`, `GUEST_USER_EMAIL`
-
-**OAuth Providers (optional):**
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
 
 **LLM API Keys (optional — users can supply their own via the settings UI):**
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_AI_API_KEY`, `OPENROUTER_API_KEY`
@@ -268,6 +266,9 @@ Copy `.env.example` to `.env.local` for local development. **Never commit secret
 |---|---|
 | `lib/api-auth.ts` | `getAuthenticatedUser()` — used by all API routes |
 | `lib/auth.ts` | NextAuth configuration, `resolveAuthSecret()`, credential + OAuth providers |
+| `lib/auth-policy.ts` | Mandatory-auth policy and OAuth configuration diagnostics |
+| `lib/auth-roles.ts` | Server-only owner/admin role allowlists |
+| `lib/credentials-auth.ts` | Existing-account password verification and login throttling |
 | `lib/db-fallback.ts` | DB availability tracker + in-memory fallback utilities |
 | `lib/prisma.ts` | Prisma client initialization with stub fallback |
 | `lib/crypto.ts` | AES-256-GCM encryption/decryption for API keys |
@@ -276,7 +277,6 @@ Copy `.env.example` to `.env.local` for local development. **Never commit secret
 | `lib/providers/errors.ts` | `classifyProviderError()` — unified error classification |
 | `lib/config-schemas.ts` | Zod schemas for provider/system config + defaults |
 | `lib/error-system.ts` | Structured error classes + `ErrorManager` singleton |
-| `lib/demo-account.ts` | Guest/demo user creation and auth bypass logic |
 | `lib/rate-limit.ts` | Redis-backed (with memory fallback) rate limiting |
 | `lib/cache.ts` | Redis-backed (with memory fallback) caching layer |
 | `lib/utils.ts` | `cn()` Tailwind class merge helper |
@@ -289,7 +289,7 @@ Copy `.env.example` to `.env.local` for local development. **Never commit secret
 
 ## API Surface
 
-- **Auth**: `/api/auth/[...nextauth]`, `/api/auth/upgrade-guest`
+- **Auth**: `/api/auth/[...nextauth]`, `/auth/signin`, `/auth/register`
 - **Config**: `/api/config`, `/api/provider-configs`, `/api/test-api-key`
 - **Core**: `/api/conversations`, `/api/conversations/[id]`, `/api/goals`, `/api/goals/[id]`, `/api/personas`, `/api/personas/[id]`
 - **LLM**: `/api/llm/chat`, `/api/llm/stream`, `/api/llm/orchestrate`

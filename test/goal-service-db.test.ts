@@ -104,21 +104,21 @@ describe('GoalService DB fallback', () => {
         description: 'Stored in memory when FK prevents DB write',
         status: 'pending',
       },
-      'guest-local-user'
+      'test-user-123'
     )
 
-    const list = await GoalService.getGoalsByUserId('guest-local-user')
+    const list = await GoalService.getGoalsByUserId('test-user-123')
     expect(list).toHaveLength(1)
     expect(list[0].id).toBe(created.id)
 
     const updated = await GoalService.updateGoal(
       created.id,
       { status: 'done' },
-      'guest-local-user'
+      'test-user-123'
     )
     expect(updated?.status).toBe('completed')
 
-    const deleted = await GoalService.deleteGoal(created.id, 'guest-local-user')
+    const deleted = await GoalService.deleteGoal(created.id, 'test-user-123')
     expect(deleted).toBe(true)
   })
 

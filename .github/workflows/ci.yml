@@ -75,8 +75,6 @@ jobs:
       NEXTAUTH_SECRET: ci-smoke-test-secret-32chars-min
       NEXTAUTH_URL: http://localhost:3000
       API_KEY_ENCRYPTION_SEED: ci-smoke-encryption-seed-32chars
-      AUTH_REQUIRE_LOGIN: 'true'
-      NEXT_PUBLIC_AUTH_REQUIRE_LOGIN: 'true'
 
     steps:
       - name: Checkout code

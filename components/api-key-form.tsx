@@ -149,7 +149,7 @@ export default function ApiKeyForm() {
           if (testResponse.status === 401 || testResponse.status === 403) {
             toast({
               title: "Sign in required",
-              description: "Sign in is required in strict auth mode. Disable strict mode to save guest keys.",
+              description: "Sign in again to verify and save provider keys to your account.",
               variant: "destructive",
             });
             return;
@@ -184,7 +184,7 @@ export default function ApiKeyForm() {
         if (saveResponse.status === 401 || saveResponse.status === 403) {
           toast({
             title: "Sign in required",
-            description: "Sign in is required in strict auth mode. Disable strict mode to save guest keys.",
+            description: "Sign in again to save provider keys to your account.",
             variant: "destructive",
           });
           return;

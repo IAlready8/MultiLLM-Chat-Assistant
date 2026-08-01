@@ -9,11 +9,10 @@ vi.mock('next-auth/jwt', () => ({
 
 import { proxy as middleware } from '@/proxy'
 
-const originalAuthRequireLogin = process.env.AUTH_REQUIRE_LOGIN
-const originalPublicAuthRequireLogin = process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN
 const originalNextAuthSecret = process.env.NEXTAUTH_SECRET
 const originalAuthSecret = process.env.AUTH_SECRET
-const originalNodeEnv = process.env.NODE_ENV
+const originalAuthRequireLogin = process.env.AUTH_REQUIRE_LOGIN
+const originalPublicAuthRequireLogin = process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN
 
 const setEnvVar = (key: string, value: string | undefined) => {
   const env = process.env as Record<string, string | undefined>
@@ -24,61 +23,54 @@ const setEnvVar = (key: string, value: string | undefined) => {
   }
 }
 
-describe('middleware strict-auth routing', () => {
+describe('mandatory-auth routing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockDecode.mockResolvedValue(null)
   })
 
   afterEach(() => {
-    setEnvVar('AUTH_REQUIRE_LOGIN', originalAuthRequireLogin)
-    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', originalPublicAuthRequireLogin)
     setEnvVar('NEXTAUTH_SECRET', originalNextAuthSecret)
     setEnvVar('AUTH_SECRET', originalAuthSecret)
-    setEnvVar('NODE_ENV', originalNodeEnv)
+    setEnvVar('AUTH_REQUIRE_LOGIN', originalAuthRequireLogin)
+    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', originalPublicAuthRequireLogin)
   })
 
-  it('allows requests through in non-strict mode', async () => {
+  it.each([
+    '/auth/signin',
+    '/auth/register',
+    '/api/auth/providers',
+    '/api/health',
+    '/api/webhooks/stripe',
+  ])('keeps %s public', async (path) => {
+    const response = await middleware(
+      new NextRequest(`http://localhost:3000${path}`),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockDecode).not.toHaveBeenCalled()
+  })
+
+  it('does not honor legacy flags that attempted to disable authentication', async () => {
     setEnvVar('AUTH_REQUIRE_LOGIN', 'false')
     setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'false')
+    setEnvVar('NEXTAUTH_SECRET', 'test-secret')
 
-    const request = new NextRequest('http://localhost:3000/api/conversations')
-    const response = await middleware(request)
+    const response = await middleware(
+      new NextRequest('http://localhost:3000/api/conversations'),
+    )
 
-    expect(response.status).toBe(200)
-    expect(mockDecode).not.toHaveBeenCalled()
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
   })
 
-  it('keeps /api/health public in strict mode', async () => {
-    setEnvVar('AUTH_REQUIRE_LOGIN', 'true')
-    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
-
-    const request = new NextRequest('http://localhost:3000/api/health')
-    const response = await middleware(request)
-
-    expect(response.status).toBe(200)
-    expect(mockDecode).not.toHaveBeenCalled()
-  })
-
-  it('keeps /api/webhooks/stripe public in strict mode', async () => {
-    setEnvVar('AUTH_REQUIRE_LOGIN', 'true')
-    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
-
-    const request = new NextRequest('http://localhost:3000/api/webhooks/stripe')
-    const response = await middleware(request)
-
-    expect(response.status).toBe(200)
-    expect(mockDecode).not.toHaveBeenCalled()
-  })
-
-  it('returns 500 for protected API routes in strict mode when auth secret is missing', async () => {
-    setEnvVar('AUTH_REQUIRE_LOGIN', 'true')
-    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
+  it('returns 500 for protected API routes when the auth secret is missing', async () => {
     setEnvVar('NEXTAUTH_SECRET', undefined)
     setEnvVar('AUTH_SECRET', undefined)
 
-    const request = new NextRequest('http://localhost:3000/api/conversations')
-    const response = await middleware(request)
+    const response = await middleware(
+      new NextRequest('http://localhost:3000/api/conversations'),
+    )
 
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toEqual({
@@ -87,65 +79,46 @@ describe('middleware strict-auth routing', () => {
     expect(mockDecode).not.toHaveBeenCalled()
   })
 
-  it('redirects page routes to auth/error in strict mode when auth secret is missing', async () => {
-    setEnvVar('AUTH_REQUIRE_LOGIN', 'true')
-    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
+  it('redirects protected pages to the configuration error when the secret is missing', async () => {
     setEnvVar('NEXTAUTH_SECRET', undefined)
     setEnvVar('AUTH_SECRET', undefined)
 
-    const request = new NextRequest('http://localhost:3000/settings')
-    const response = await middleware(request)
+    const response = await middleware(
+      new NextRequest('http://localhost:3000/settings'),
+    )
 
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toContain('/auth/error')
     expect(response.headers.get('location')).toContain('error=Configuration')
-    expect(mockDecode).not.toHaveBeenCalled()
   })
 
-  it('returns 401 for protected API routes in strict mode when token is missing and secret is present', async () => {
-    setEnvVar('AUTH_REQUIRE_LOGIN', 'true')
-    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
+  it('returns 401 for a protected API route without a session', async () => {
     setEnvVar('NEXTAUTH_SECRET', 'test-secret')
 
-    const request = new NextRequest('http://localhost:3000/api/conversations')
-    const response = await middleware(request)
+    const response = await middleware(
+      new NextRequest('http://localhost:3000/api/conversations'),
+    )
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
-    expect(mockDecode).not.toHaveBeenCalled()
   })
 
-  it('enforces strict auth in production even when strict flags are false', async () => {
-    setEnvVar('NODE_ENV', 'production')
-    setEnvVar('AUTH_REQUIRE_LOGIN', 'false')
-    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'false')
+  it('redirects pages to sign-in with a local path and query callback', async () => {
     setEnvVar('NEXTAUTH_SECRET', 'test-secret')
 
-    const request = new NextRequest('http://localhost:3000/api/conversations')
-    const response = await middleware(request)
-
-    expect(response.status).toBe(401)
-    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
-    expect(mockDecode).not.toHaveBeenCalled()
-  })
-
-  it('redirects page routes to sign-in in strict mode when token is missing and secret is present', async () => {
-    setEnvVar('AUTH_REQUIRE_LOGIN', 'true')
-    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
-    setEnvVar('NEXTAUTH_SECRET', 'test-secret')
-
-    const request = new NextRequest('http://localhost:3000/settings')
-    const response = await middleware(request)
+    const response = await middleware(
+      new NextRequest('http://localhost:3000/settings?tab=providers'),
+    )
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toContain('/auth/signin')
-    expect(response.headers.get('location')).toContain('callbackUrl=%2Fsettings')
-    expect(mockDecode).not.toHaveBeenCalled()
+    const location = response.headers.get('location')
+    expect(location).toContain('/auth/signin')
+    expect(location).toContain(
+      'callbackUrl=%2Fsettings%3Ftab%3Dproviders',
+    )
   })
 
   it('decodes the secure NextAuth session cookie when present', async () => {
-    setEnvVar('AUTH_REQUIRE_LOGIN', 'true')
-    setEnvVar('NEXT_PUBLIC_AUTH_REQUIRE_LOGIN', 'true')
     setEnvVar('NEXTAUTH_SECRET', ' test-secret ')
     mockDecode.mockResolvedValue({ sub: 'user-123' })
 
@@ -163,7 +136,7 @@ describe('middleware strict-auth routing', () => {
       expect.objectContaining({
         secret: 'test-secret',
         token: 'secure-token-value',
-      })
+      }),
     )
   })
 })

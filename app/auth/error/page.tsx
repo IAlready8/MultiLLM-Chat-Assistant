@@ -15,6 +15,8 @@ const resolveErrorMessage = (error: string | null | undefined) => {
       return 'Sign-in verification failed. Please try again.'
     case 'CredentialsSignin':
       return 'The provided credentials were invalid.'
+    case 'OAuthAccountNotLinked':
+      return 'An account with this email uses a different sign-in method. Sign in with the provider originally used for this account.'
     default:
       return 'Authentication failed. Please try signing in again.'
   }

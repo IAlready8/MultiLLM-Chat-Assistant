@@ -72,17 +72,17 @@ Health contract:
 2. `cp .env.example .env.local`
 3. Set minimum local env:
    - `NEXTAUTH_URL=http://localhost:3000`
-   - `API_KEY_ENCRYPTION_SEED=<32+ char secret>`
-4. Optional strict-auth local parity:
-   - `AUTH_REQUIRE_LOGIN=true`
-   - `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=true`
    - `NEXTAUTH_SECRET=<32+ char secret>`
+   - `API_KEY_ENCRYPTION_SEED=<32+ char secret>`
+   - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/<db_name>`
+4. Configure a Google or GitHub OAuth pair when testing new account creation.
 5. `npm run dev`
 
 Expected outcome:
 - app loads at `http://localhost:3000`
-- guest mode works when strict-auth flags are false
-- strict-auth redirects unauthenticated users when strict-auth flags are true
+- unauthenticated workspace requests redirect to `/auth/signin`
+- `/auth/register` offers only configured OAuth providers
+- existing password accounts can sign in without creating a new user
 
 ## 4. Production-Like Local Gate (Verified Locally)
 
@@ -93,13 +93,6 @@ export NEXTAUTH_URL=http://localhost:3000
 export NEXTAUTH_SECRET=verify-secret-32chars
 export API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars
 export DATABASE_URL=postgresql://<user>@127.0.0.1:5432/<db_name>
-```
-
-Optional parity toggles:
-
-```bash
-export AUTH_REQUIRE_LOGIN=false
-export NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false
 ```
 
 Execution order:
@@ -251,7 +244,8 @@ Triage map:
 - Auth failures or redirect loops:
   - verify `NEXTAUTH_URL`
   - verify `NEXTAUTH_SECRET` or `AUTH_SECRET`
-  - verify strict-auth flags match intended environment
+  - verify the Google/GitHub client ID and secret are a complete pair
+  - verify the provider callback exactly matches the deployed domain
 - Billing routes return unavailable:
   - verify `STRIPE_SECRET_KEY`
   - verify `STRIPE_PRO_PRICE_ID`

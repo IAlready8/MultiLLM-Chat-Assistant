@@ -8,7 +8,6 @@ import { AuthProvider } from "@/components/auth-provider";
 import { AuthGuard } from "@/components/auth-guard";
 import { AcquisitionAttributionCapture } from '@/components/acquisition-attribution-capture'
 import { auth } from "@/lib/auth";
-import { getDemoAccountContext, isStrictAuthRequired } from '@/lib/demo-account'
 import { Toaster } from "@/components/ui/toaster";
 
 type DynamicUsageError = Error & { digest?: string }
@@ -35,29 +34,13 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const demoAccount = getDemoAccountContext()
-  const strictAuth = isStrictAuthRequired()
-
   let session: Session | null = null
 
-  if (!strictAuth && demoAccount.enabled && demoAccount.bypassAuth) {
-    session = {
-      user: {
-        id: demoAccount.id,
-        name: demoAccount.name,
-        email: demoAccount.email,
-        role: 'OWNER',
-        tier: 'ENTERPRISE',
-      },
-      expires: '2999-12-31T23:59:59.999Z',
-    }
-  } else {
-    try {
-      session = await auth()
-    } catch (error) {
-      if (!isDynamicServerUsageError(error)) {
-        console.error('Failed to load session:', error)
-      }
+  try {
+    session = await auth()
+  } catch (error) {
+    if (!isDynamicServerUsageError(error)) {
+      console.error('Failed to load session:', error)
     }
   }
 

@@ -12,6 +12,8 @@ const mockQueryRaw = vi.fn()
 const mockGetCacheDiagnostics = vi.fn()
 const mockGetRateLimitDiagnostics = vi.fn()
 const mockIsStrictAuthRequired = vi.fn()
+const mockGetOAuthConfiguration = vi.fn()
+const mockGetAuthRoleConfiguration = vi.fn()
 const mockGetSidecarDiagnostics = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
@@ -36,8 +38,13 @@ vi.mock('@/lib/sidecar-health', () => ({
   getSidecarDiagnostics: () => mockGetSidecarDiagnostics(),
 }))
 
-vi.mock('@/lib/demo-account', () => ({
+vi.mock('@/lib/auth-policy', () => ({
   isStrictAuthRequired: () => mockIsStrictAuthRequired(),
+  getOAuthConfiguration: () => mockGetOAuthConfiguration(),
+}))
+
+vi.mock('@/lib/auth-roles', () => ({
+  getAuthRoleConfiguration: () => mockGetAuthRoleConfiguration(),
 }))
 
 vi.mock('@/lib/stripe', () => ({
@@ -97,7 +104,16 @@ describe('/api/admin/status route', () => {
       user: { id: 'user-1', role: 'OWNER' },
     })
     mockQueryRaw.mockResolvedValue([{ ok: 1 }])
-    mockIsStrictAuthRequired.mockReturnValue(false)
+    mockIsStrictAuthRequired.mockReturnValue(true)
+    mockGetOAuthConfiguration.mockReturnValue({
+      google: true,
+      github: false,
+      any: true,
+    })
+    mockGetAuthRoleConfiguration.mockReturnValue({
+      ownerCount: 1,
+      adminCount: 0,
+    })
     mockGetCacheDiagnostics.mockReturnValue({
       mode: 'redis',
       status: 'connected',
@@ -200,7 +216,7 @@ describe('/api/admin/status route', () => {
     expect(sidecarCheck.message).toBe('Python sidecar not configured')
   })
 
-  it('returns warning status when database is unavailable and fallback is active', async () => {
+  it('returns warning status when the database is unavailable', async () => {
     mockQueryRaw.mockRejectedValue(
       new Error('Database access is not available in this environment.')
     )
@@ -217,11 +233,10 @@ describe('/api/admin/status route', () => {
     expect(response.status).toBe(200)
     expect(payload.overallStatus).toBe('warning')
     expect(databaseCheck.status).toBe('warning')
-    expect(databaseCheck.message).toContain('in-memory fallback')
+    expect(databaseCheck.message).toContain('persistent account data')
   })
 
-  it('returns error when strict auth is enabled without NEXTAUTH_SECRET', async () => {
-    mockIsStrictAuthRequired.mockReturnValue(true)
+  it('returns error when mandatory auth lacks NEXTAUTH_SECRET', async () => {
     setEnvVar('NEXTAUTH_SECRET', undefined)
 
     const response = await GET(
@@ -237,6 +252,49 @@ describe('/api/admin/status route', () => {
     expect(payload.overallStatus).toBe('error')
     expect(authCheck.status).toBe('error')
     expect(authCheck.message).toContain('NEXTAUTH_SECRET is missing')
+  })
+
+  it('warns when no OAuth account-creation provider is configured', async () => {
+    mockGetOAuthConfiguration.mockReturnValue({
+      google: false,
+      github: false,
+      any: false,
+    })
+
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
+    const payload = await response.json()
+    const authCheck = payload.checks.find(
+      (check: { id: string }) => check.id === 'auth'
+    )
+
+    expect(response.status).toBe(200)
+    expect(payload.overallStatus).toBe('warning')
+    expect(authCheck.status).toBe('warning')
+    expect(authCheck.message).toContain('Google/GitHub account creation')
+  })
+
+  it('warns when no real owner account is configured', async () => {
+    mockGetAuthRoleConfiguration.mockReturnValue({
+      ownerCount: 0,
+      adminCount: 1,
+    })
+
+    const response = await GET(
+      new Request('http://localhost/api/admin/status'),
+      routeContext
+    )
+    const payload = await response.json()
+    const authCheck = payload.checks.find(
+      (check: { id: string }) => check.id === 'auth'
+    )
+
+    expect(response.status).toBe(200)
+    expect(payload.overallStatus).toBe('warning')
+    expect(authCheck.status).toBe('warning')
+    expect(authCheck.message).toContain('AUTH_OWNER_EMAILS')
   })
 
   it('returns warning rate-limit status when Redis is configured but unavailable', async () => {

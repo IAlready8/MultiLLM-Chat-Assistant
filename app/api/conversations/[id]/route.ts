@@ -39,7 +39,7 @@ export async function GET(
   _req: Request,
   context: ConversationRouteContext
 ) {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -70,7 +70,7 @@ export async function POST(
   req: Request,
   context: ConversationRouteContext
 ) {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -153,7 +153,7 @@ export async function PUT(
   req: Request,
   context: ConversationRouteContext
 ) {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -200,7 +200,7 @@ export async function DELETE(
   _req: Request,
   context: ConversationRouteContext
 ) {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 

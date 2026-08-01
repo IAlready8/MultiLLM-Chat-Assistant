@@ -11,23 +11,12 @@ const mockConversationService = {
 }
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/api-key-service', () => ({
   getUserProviderConfigCount: (userId: string) =>
     mockGetUserProviderConfigCount(userId),
-}))
-
-vi.mock('@/lib/demo-account', () => ({
-  createGuestUserRecord: () => ({
-    id: 'guest-local-user',
-    email: 'guest@local.dev',
-  }),
-  getDemoAccountContext: () => ({
-    id: 'demo-user',
-    email: 'demo@local.dev',
-  }),
 }))
 
 vi.mock('@/services/persona-service.db', () => ({
@@ -77,27 +66,7 @@ describe('/api/activation-state route', () => {
       comparisonReadyConversations: 2,
     })
     expect(response.headers.get('Cache-Control')).toBe('no-store')
-    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
-  })
-
-  it('returns zero progress for shared guest users without hitting data stores', async () => {
-    mockGetAuthenticatedUser.mockResolvedValue({
-      user: { id: 'guest-local-user', email: 'guest@local.dev' },
-    })
-
-    const response = await GET()
-
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({
-      configuredProviders: 0,
-      personas: 0,
-      comparisonReadyConversations: 0,
-    })
-    expect(mockGetUserProviderConfigCount).not.toHaveBeenCalled()
-    expect(mockPersonaService.getPersonaCountByUserId).not.toHaveBeenCalled()
-    expect(
-      mockConversationService.getComparisonReadyConversationCountByUserId
-    ).not.toHaveBeenCalled()
+    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith()
   })
 
   it('returns 500 when activation state lookup fails', async () => {

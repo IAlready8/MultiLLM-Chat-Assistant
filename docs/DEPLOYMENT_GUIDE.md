@@ -4,7 +4,7 @@ This is the platform-agnostic deployment reference for the current release basel
 
 ## 1. Core Release Contract
 - production requires Postgres
-- production requires strict auth
+- all environments require authenticated access to protected surfaces
 - production requires `NEXTAUTH_URL`
 - production requires `NEXTAUTH_SECRET` or `AUTH_SECRET`
 - production requires `API_KEY_ENCRYPTION_SEED`

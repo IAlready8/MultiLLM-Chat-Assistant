@@ -8,7 +8,7 @@ const mockDeleteUserProviderConfig = vi.fn()
 const mockRecordAnalyticsEvent = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/api-key-service', () => ({
@@ -71,7 +71,7 @@ describe('/api/config route', () => {
       configuredProviders: ['openai', 'anthropic'],
     })
     expect(response.headers.get('Cache-Control')).toBe('no-store')
-    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
+    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith()
     expect(mockGetUserProviderConfigs).toHaveBeenCalledWith('user-1')
   })
 

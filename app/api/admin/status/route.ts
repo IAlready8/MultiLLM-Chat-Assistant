@@ -9,7 +9,11 @@ import {
   isDatabaseUnavailableError,
 } from '@/lib/db-fallback'
 import { getRateLimitDiagnostics } from '@/lib/rate-limit'
-import { isStrictAuthRequired } from '@/lib/demo-account'
+import {
+  getOAuthConfiguration,
+  isStrictAuthRequired,
+} from '@/lib/auth-policy'
+import { getAuthRoleConfiguration } from '@/lib/auth-roles'
 import {
   isStripeApiConfigured,
   isStripeCheckoutConfigured,
@@ -100,6 +104,8 @@ export const GET = withApiMetrics(async () => {
 
   const release = getReleaseMetadata()
   const strictAuth = isStrictAuthRequired()
+  const oauthConfiguration = getOAuthConfiguration()
+  const roleConfiguration = getAuthRoleConfiguration()
   const hasNextAuthSecret = Boolean(process.env.NEXTAUTH_SECRET?.trim())
   const hasNextAuthUrl = Boolean(
     process.env.NEXTAUTH_URL?.trim() ||
@@ -130,7 +136,7 @@ export const GET = withApiMetrics(async () => {
   } catch (error) {
     databaseStatus = isDatabaseUnavailableError(error) ? 'warning' : 'error'
     databaseMessage = isDatabaseUnavailableError(error)
-      ? 'Database unavailable; running with in-memory fallback'
+      ? 'Database unavailable; persistent account data cannot be accessed'
       : getErrorMessage(error) || 'Database health check failed'
   }
   checks.push(
@@ -146,19 +152,22 @@ export const GET = withApiMetrics(async () => {
 
   const authStart = Date.now()
   let authStatus: CheckStatus = 'ok'
-  let authMessage = strictAuth
-    ? 'Strict authentication mode is enabled and configured'
-    : 'Authentication is operational (guest mode supported)'
+  let authMessage = 'Authentication is required and configured'
 
-  if (strictAuth && !hasNextAuthSecret) {
+  if (!hasNextAuthSecret) {
     authStatus = 'error'
-    authMessage = 'Strict auth is enabled but NEXTAUTH_SECRET is missing'
-  } else if (!hasNextAuthSecret) {
-    authStatus = 'warning'
-    authMessage = 'NEXTAUTH_SECRET is missing; non-strict mode fallback is active'
+    authMessage = 'Authentication is required but NEXTAUTH_SECRET is missing'
   } else if (!hasNextAuthUrl) {
     authStatus = 'warning'
     authMessage = 'NEXTAUTH_URL is missing; callbacks may fail in non-local environments'
+  } else if (!oauthConfiguration.any) {
+    authStatus = 'warning'
+    authMessage =
+      'Authentication is configured, but Google/GitHub account creation is unavailable'
+  } else if (roleConfiguration.ownerCount === 0) {
+    authStatus = 'warning'
+    authMessage =
+      'Authentication is configured, but AUTH_OWNER_EMAILS has no operator account'
   }
 
   checks.push(

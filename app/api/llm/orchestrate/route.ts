@@ -168,7 +168,7 @@ const runLocalFallbackOrchestration = async (
  */
 export async function POST(req: Request) {
   // 1. Authenticate the user
-  const authCheck = await getAuthenticatedUser({ allowGuest: true });
+  const authCheck = await getAuthenticatedUser();
   if (authCheck instanceof NextResponse) return authCheck;
   // const { user } = authCheck // We have the user if we need to log their usage
 

@@ -194,7 +194,7 @@ export default function SettingsPage() {
 
   const resetConfiguration = async () => {
     const confirmed = window.confirm(
-      'Reset local settings and clear saved provider keys for this account/guest?'
+      'Reset local settings and clear saved provider keys for this account?'
     )
     if (!confirmed) {
       return

@@ -17,7 +17,7 @@ Current exact ICP and use case are locked in:
 - Supported providers: OpenAI, Anthropic, Google AI, OpenRouter, Grok,
   Mistral, Ollama, and Kimi (Moonshot AI)
 - Configurable provider keys from app settings
-- Auth modes for demo/guest and strict login
+- Mandatory account authentication with Google/GitHub OAuth and existing-account password login
 - Optional Python orchestration sidecar (`src/core`)
 - CI workflow for type-check, lint, and build
 
@@ -33,26 +33,24 @@ Setup:
 3. Set minimum env for local app usage:
    - `NEXTAUTH_URL`
    - `API_KEY_ENCRYPTION_SEED`
-   - `NEXTAUTH_SECRET` or `AUTH_SECRET` when strict auth is enabled
-   - `AUTH_REQUIRE_LOGIN` / `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN` (optional; defaults to guest-friendly mode)
+   - `NEXTAUTH_SECRET` or `AUTH_SECRET`
+   - `DATABASE_URL`
+   - One OAuth pair (`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`, or GitHub equivalents) when new account creation is required
 4. Start dev server: `npm run dev`
 
 Package manager:
 - `package-lock.json` is the only lockfile and source of truth.
 - CI and Vercel both install with `npm ci`.
 
-## Auth Modes
-- Production:
-  - Strict auth is always enforced in production runtime.
-  - `NEXTAUTH_SECRET` (or `AUTH_SECRET`) and `NEXTAUTH_URL` are required.
-- Guest/demo mode (default for local dev):
-  - `AUTH_REQUIRE_LOGIN=false`
-  - `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false`
-  - Allows using the app and saving provider keys without creating an account.
-- Strict auth mode:
-  - `AUTH_REQUIRE_LOGIN=true`
-  - `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=true`
-  - Requires real session auth and explicit `NEXTAUTH_SECRET`.
+## Authentication
+- Every protected page and API requires a real NextAuth session in every environment.
+- Google and GitHub OAuth create and sign in durable Prisma-backed accounts.
+- Email/password is login-only for existing users with a stored password hash; it never creates a user implicitly.
+- Server-only `AUTH_OWNER_EMAILS` and `AUTH_ADMIN_EMAILS` allowlists assign real operator roles.
+- Public password registration is intentionally disabled until verified email ownership and account recovery are implemented.
+- Demo users, guest identities, auth-bypass flags, and guest-to-user migration are not supported.
+
+See `docs/AUTHENTICATION_SETUP.md` for provider registration, callback URLs, environment configuration, and rollout checks.
 
 ## Scripts
 - `npm run dev`: Start Next.js dev server (webpack mode, default)
@@ -139,6 +137,9 @@ npm run smoke:preview:local
 npm run smoke:preview:local:auth
 ```
 
+The authenticated smoke command requires either `SMOKE_SESSION_COOKIE` or the
+`SMOKE_AUTH_EMAIL` and `SMOKE_AUTH_PASSWORD` of an existing password account.
+
 ## Architecture Snapshot
 - App/UI: Next.js App Router (`app/*`) + reusable components (`components/*`)
 - API layer: route handlers in `app/api/*`
@@ -154,8 +155,8 @@ See full details in `ARCHITECTURE.md` and `PYTHON_INTEGRATION.md`.
 Primary reference: `.env.example`
 
 Key groups:
-- Auth/session: `NEXTAUTH_URL`, `NEXTAUTH_SECRET` (or `AUTH_SECRET`), `AUTH_REQUIRE_LOGIN`, `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
-- Demo/guest behavior: `DEMO_ACCOUNT_*`, `NEXT_PUBLIC_DEMO_ACCOUNT_*`, `GUEST_USER_*`, `NEXT_PUBLIC_GUEST_USER_ID`
+- Auth/session: `NEXTAUTH_URL`, `NEXTAUTH_SECRET` (or `AUTH_SECRET`), `AUTH_OWNER_EMAILS`, optional `AUTH_ADMIN_EMAILS`
+- OAuth account creation: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
 - Provider key encryption: `API_KEY_ENCRYPTION_SEED`
 - Optional Python-sidecar Kimi key: `MOONSHOT_API_KEY`
 - Database: `DATABASE_URL` (required in production)

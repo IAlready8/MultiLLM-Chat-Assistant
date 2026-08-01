@@ -8,7 +8,7 @@ const mockRecordAnalyticsEvent = vi.fn()
 const mockLogError = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/api-key-service', () => ({

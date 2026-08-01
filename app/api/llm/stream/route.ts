@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     }
     const provider = providerRaw.trim().toLowerCase()
 
-    const authCheck = await getAuthenticatedUser({ allowGuest: true })
+    const authCheck = await getAuthenticatedUser()
     if (authCheck instanceof NextResponse) return authCheck
     const userId = authCheck.user.id
 

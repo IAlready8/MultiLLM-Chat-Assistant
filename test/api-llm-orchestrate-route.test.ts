@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const mockGetAuthenticatedUser = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 import { POST } from '@/app/api/llm/orchestrate/route'
@@ -194,7 +194,7 @@ describe('/api/llm/orchestrate route', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('passes allowGuest=true to authenticated-user lookup', async () => {
+  it('requires an authenticated user', async () => {
     const fetchMock = vi.mocked(global.fetch)
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify([]), {
@@ -204,6 +204,6 @@ describe('/api/llm/orchestrate route', () => {
     )
 
     await POST(buildRequest())
-    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
+    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith()
   })
 })

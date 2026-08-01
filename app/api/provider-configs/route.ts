@@ -65,7 +65,7 @@ function buildProviderSettings(
 }
 
 export async function GET() {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -118,7 +118,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -307,7 +307,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 

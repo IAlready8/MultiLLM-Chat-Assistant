@@ -7,7 +7,7 @@ const mockTestProviderKey = vi.fn()
 const mockValidateApiKeyFormat = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/api-key-service', () => ({
@@ -74,7 +74,7 @@ describe('/api/test-api-key route', () => {
       valid: true,
       reason: 'ok',
     })
-    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
+    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith()
     expect(mockGetUserApiKey).toHaveBeenCalledWith('user-1', 'openai')
   })
 
