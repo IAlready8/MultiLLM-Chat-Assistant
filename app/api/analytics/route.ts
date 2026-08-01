@@ -74,6 +74,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   googleai: 'Google AI',
   openrouter: 'OpenRouter',
   grok: 'Grok',
+  kimi: 'Kimi',
 }
 
 const clamp = (value: number, min: number, max: number) =>

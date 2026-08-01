@@ -153,9 +153,10 @@ describe('provider registry', () => {
         'grok',
         'ollama',
         'mistral',
+        'kimi',
       ]),
     )
-    expect(supportedProviderIds).toHaveLength(7)
+    expect(supportedProviderIds).toHaveLength(8)
   })
 
   it('returns an adapter for each supported provider', () => {

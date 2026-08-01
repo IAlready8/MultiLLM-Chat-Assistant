@@ -7,16 +7,21 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
+import { getModelsForProvider } from '@/lib/model-catalog'
+import { providerRegistry } from '@/lib/provider-registry'
 
 type ProviderStatus = 'unknown' | 'connected' | 'disconnected'
 
-const MODEL_OPTIONS: Record<string, string[]> = {
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-  anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
-  googleai: ['gemini-1.5-flash', 'gemini-1.5-pro'],
-  openrouter: ['openrouter/auto', 'gryphe/mythomax-l2-13b'],
-  grok: ['grok-beta', 'grok-2-1212']
-}
+const MODEL_OPTIONS = Object.fromEntries(
+  providerRegistry.map(provider => [
+    provider.id,
+    getModelsForProvider(provider.id).map(model => model.id),
+  ])
+) as Record<string, string[]>
+
+const INITIAL_PROVIDER_STATUS = Object.fromEntries(
+  providerRegistry.map(provider => [provider.id, 'unknown'])
+) as Record<string, ProviderStatus>
 
 export default function ApiTestPage() {
   const [provider, setProvider] = useState('openai')
@@ -25,13 +30,9 @@ export default function ApiTestPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [response, setResponse] = useState('')
   const [apiKey, setApiKey] = useState('')
-  const [providerStatus, setProviderStatus] = useState<Record<string, ProviderStatus>>({
-    openai: 'unknown',
-    anthropic: 'unknown',
-    googleai: 'unknown',
-    openrouter: 'unknown',
-    grok: 'unknown'
-  })
+  const [providerStatus, setProviderStatus] = useState<Record<string, ProviderStatus>>(
+    INITIAL_PROVIDER_STATUS
+  )
   const { toast } = useToast()
 
   const handleProviderChange = (nextProvider: string) => {
@@ -106,11 +107,11 @@ export default function ApiTestPage() {
                 onChange={(e) => handleProviderChange(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic (Claude)</option>
-                <option value="googleai">Google AI (Gemini)</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="grok">Grok (xAI)</option>
+                {providerRegistry.map(providerOption => (
+                  <option key={providerOption.id} value={providerOption.id}>
+                    {providerOption.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -177,15 +178,14 @@ export default function ApiTestPage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {(['openai', 'anthropic', 'googleai', 'openrouter', 'grok'] as const).map((id) => {
-                  const status = providerStatus[id]
+                {providerRegistry.map(providerOption => {
+                  const status = providerStatus[providerOption.id]
                   const label = status === 'connected' ? 'Connected' : status === 'disconnected' ? 'Disconnected' : 'Not tested'
                   const variant = status === 'connected' ? 'default' : status === 'disconnected' ? 'destructive' : 'secondary'
-                  const name = id === 'googleai' ? 'Google AI' : id === 'grok' ? 'Grok (xAI)' : id.charAt(0).toUpperCase() + id.slice(1)
 
                   return (
-                    <Badge key={id} variant={variant}>
-                      {name}: {label}
+                    <Badge key={providerOption.id} variant={variant}>
+                      {providerOption.name}: {label}
                     </Badge>
                   )
                 })}

@@ -13,6 +13,7 @@ import { grokAdapter } from './grok'
 import { openrouterAdapter } from './openrouter'
 import { ollamaAdapter } from './ollama'
 import { mistralAdapter } from './mistral'
+import { kimiAdapter } from './kimi'
 
 const adapters: Record<ProviderId, ProviderAdapter> = {
   openai: openaiAdapter,
@@ -22,6 +23,7 @@ const adapters: Record<ProviderId, ProviderAdapter> = {
   grok: grokAdapter,
   ollama: ollamaAdapter,
   mistral: mistralAdapter,
+  kimi: kimiAdapter,
 }
 
 /**

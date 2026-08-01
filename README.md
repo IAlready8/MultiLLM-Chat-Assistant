@@ -14,7 +14,8 @@ Current exact ICP and use case are locked in:
 
 ## Highlights
 - Multi-provider chat endpoints with streaming support
-- Supported providers: OpenAI, Anthropic, Google AI, OpenRouter, Grok
+- Supported providers: OpenAI, Anthropic, Google AI, OpenRouter, Grok,
+  Mistral, Ollama, and Kimi (Moonshot AI)
 - Configurable provider keys from app settings
 - Auth modes for demo/guest and strict login
 - Optional Python orchestration sidecar (`src/core`)
@@ -156,6 +157,7 @@ Key groups:
 - Auth/session: `NEXTAUTH_URL`, `NEXTAUTH_SECRET` (or `AUTH_SECRET`), `AUTH_REQUIRE_LOGIN`, `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
 - Demo/guest behavior: `DEMO_ACCOUNT_*`, `NEXT_PUBLIC_DEMO_ACCOUNT_*`, `GUEST_USER_*`, `NEXT_PUBLIC_GUEST_USER_ID`
 - Provider key encryption: `API_KEY_ENCRYPTION_SEED`
+- Optional Python-sidecar Kimi key: `MOONSHOT_API_KEY`
 - Database: `DATABASE_URL` (required in production)
 - Optional billing: `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
 - Optional sidecar routing: `PYTHON_CORE_URL`

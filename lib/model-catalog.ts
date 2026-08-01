@@ -367,6 +367,36 @@ export const MODEL_CATALOG: Record<string, ModelInfo[]> = {
       tag: 'reasoning',
     },
   ],
+
+  kimi: [
+    {
+      id: 'kimi-k3',
+      displayName: 'Kimi K3',
+      contextWindow: 1_048_576,
+      isDefault: true,
+      tag: 'flagship',
+    },
+    {
+      id: 'kimi-k2.7-code',
+      displayName: 'Kimi K2.7 Code',
+      contextWindow: 262_144,
+      isDefault: false,
+      tag: 'code',
+    },
+    {
+      id: 'kimi-k2.7-code-highspeed',
+      displayName: 'Kimi K2.7 Code Highspeed',
+      contextWindow: 262_144,
+      isDefault: false,
+      tag: 'fast',
+    },
+    {
+      id: 'kimi-k2.6',
+      displayName: 'Kimi K2.6',
+      contextWindow: 262_144,
+      isDefault: false,
+    },
+  ],
 }
 
 // ---------------------------------------------------------------------------

@@ -93,3 +93,4 @@ export type ProviderId =
   | 'grok'
   | 'ollama'
   | 'mistral'
+  | 'kimi'

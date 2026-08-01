@@ -42,6 +42,7 @@ const CHARS_PER_TOKEN: Record<string, number> = {
   ollama: 4.0,
   grok: 4.0,
   openrouter: 4.0,
+  kimi: 4.0,
   // Fallback for unknown providers
   default: 4.0,
 }
@@ -116,6 +117,12 @@ const CONTEXT_WINDOWS: Record<string, ContextWindowEntry[]> = {
   openrouter: [
     // OpenRouter routes to underlying models - use a safe conservative default
     { pattern: '', tokens: 16_000 },
+  ],
+  kimi: [
+    { pattern: 'kimi-k3', tokens: 1_048_576 },
+    { pattern: 'kimi-k2.7', tokens: 262_144 },
+    { pattern: 'kimi-k2.6', tokens: 262_144 },
+    { pattern: 'kimi', tokens: 262_144 },
   ],
 }
 
