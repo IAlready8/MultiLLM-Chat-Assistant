@@ -58,6 +58,29 @@ export function classifyProviderError(error: unknown): ClassifiedError {
     }
   }
 
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'RATE_001'
+  ) {
+    const retryAfterMs = Number(
+      (error as { context?: { metadata?: { retryAfter?: unknown } } })
+        .context?.metadata?.retryAfter,
+    )
+    const userMessage =
+      'userMessage' in error && typeof error.userMessage === 'string'
+        ? error.userMessage
+        : 'Provider rate limit reached, please retry shortly'
+    return {
+      status: 429,
+      code: 'RATE_LIMITED',
+      error: userMessage,
+      retryAfterSeconds: Number.isFinite(retryAfterMs)
+        ? Math.max(1, Math.ceil(retryAfterMs / 1000))
+        : undefined,
+    }
+  }
+
   const message =
     error instanceof Error ? error.message : 'An internal server error occurred'
   const lower = message.toLowerCase()

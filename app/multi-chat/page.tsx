@@ -863,7 +863,9 @@ export default function MultiChatPage() {
                   chatState.activeInstances.map(instance => (
                     <div key={instance.id} className="p-2 border rounded-md bg-muted/30">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium capitalize">{instance.provider}</span>
+                        <span className="text-xs font-medium">
+                          {getProviderLabel(instance.provider)}
+                        </span>
                         <Button
                           variant="ghost"
                           size="sm"

@@ -4,6 +4,7 @@ import {
   getProviderAdapter,
 } from '@/lib/providers'
 import type { ProviderRequest, ProviderAdapterConfig } from '@/lib/providers'
+import { isProviderApiKeyRequired } from '@/lib/provider-registry'
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -34,7 +35,7 @@ async function resolveAdapterConfig(
   ])
 
   const providerConfig = providerConfigs.find((c: any) => c.provider === provider)
-  if (!providerConfig || !apiKey) {
+  if (!providerConfig || (!apiKey && isProviderApiKeyRequired(provider))) {
     throw new ValidationError(
       `Provider ${provider} not configured`,
       'provider',
@@ -51,7 +52,7 @@ async function resolveAdapterConfig(
     if (settings.xTitle) extraHeaders['X-Title'] = settings.xTitle
   }
 
-  return { apiKey, baseUrl, extraHeaders }
+  return { apiKey: apiKey ?? '', baseUrl, extraHeaders }
 }
 
 export async function sendChatMessage(

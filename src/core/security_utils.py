@@ -54,15 +54,16 @@ def validate_model_name(model: str) -> bool:
     if not model or not isinstance(model, str):
         return False
     
-    # Only allow alphanumeric, hyphens, underscores, and dots
-    if not re.match(r'^[a-zA-Z0-9._-]+$', model):
-        return False
-    
-    # Prevent path traversal
-    if '..' in model or '/' in model or '\\' in model:
-        return False
-    
-    return True
+    # Allow either a plain provider model ID or one Hugging Face-style
+    # namespace separator (organization/model). Each segment must start with
+    # an alphanumeric character, excluding traversal and hidden paths.
+    return bool(
+        re.fullmatch(
+            r'[a-zA-Z0-9][a-zA-Z0-9._-]*'
+            r'(?:/[a-zA-Z0-9][a-zA-Z0-9._-]*)?',
+            model,
+        )
+    ) and '..' not in model and '\\' not in model
 
 
 def validate_temperature(temp: Union[float, int]) -> bool:
@@ -91,7 +92,7 @@ def validate_provider_type(provider: str) -> bool:
     """
     Validate provider type is one of the allowed values
     """
-    allowed_providers = {'openai', 'anthropic', 'google', 'cohere', 'kimi'}
+    allowed_providers = {'openai', 'anthropic', 'google', 'cohere', 'kimi', 'deepseek'}
     return provider.lower() in allowed_providers
 
 

@@ -15,8 +15,9 @@ Current exact ICP and use case are locked in:
 ## Highlights
 - Multi-provider chat endpoints with streaming support
 - Supported providers: OpenAI, Anthropic, Google AI, OpenRouter, Grok,
-  Mistral, Ollama, and Kimi (Moonshot AI)
-- Configurable provider keys from app settings
+  Mistral, Ollama, Kimi (Moonshot AI), and the DeepSeek V4 community endpoint
+- Configurable provider keys from app settings; DeepSeek's shared community
+  endpoint is credentialless
 - Mandatory account authentication with Google/GitHub OAuth and existing-account password login
 - Optional Python orchestration sidecar (`src/core`)
 - CI workflow for type-check, lint, and build
@@ -163,6 +164,12 @@ Key groups:
 - Optional billing: `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
 - Optional sidecar routing: `PYTHON_CORE_URL`
 - Optional app metadata/network tuning: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL`, `LLM_FETCH_TIMEOUT_MS`, `LLM_FETCH_RETRIES`
+
+DeepSeek uses the preconfigured, shared Hugging Face community endpoint for
+`deepseek-ai/DeepSeek-V4-Flash-0731`. It requires no API key and currently
+advertises no usage charge, but it is experimental, rate-limited, has no SLA,
+and is operated by a community host. Never submit private, confidential, or
+sensitive data to it, and do not rely on it as the sole production provider.
 - Optional client secure-storage override: `NEXT_PUBLIC_SECURE_STORAGE_KEY`
 
 ## Deployment

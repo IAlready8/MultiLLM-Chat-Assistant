@@ -48,9 +48,14 @@ Common vars:
 - Provider API keys required by your Python provider implementation
 - `MOONSHOT_API_KEY` when the sidecar should execute Kimi requests
 
-App users configure Kimi from Settings; those encrypted per-user keys are used
-by the primary Next.js chat and stream routes. The optional sidecar uses its own
+App users configure Kimi from Settings; its encrypted per-user key is used by
+the primary Next.js chat and stream routes. The optional sidecar uses its own
 server-only `MOONSHOT_API_KEY` environment variable.
+
+DeepSeek is different: it uses the preconfigured, credentialless Hugging Face
+community endpoint for `deepseek-ai/DeepSeek-V4-Flash-0731`. Both runtimes warn
+that this is a shared public service. Do not submit private or sensitive data,
+and expect rate limits or availability changes.
 
 ## Health and Troubleshooting
 - If `/api/llm/orchestrate` returns `503`, verify sidecar host/port and availability.

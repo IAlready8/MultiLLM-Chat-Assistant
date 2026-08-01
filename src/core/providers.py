@@ -8,9 +8,16 @@ import logging
 # Global LLM Manager instance
 llm_manager = LLMManager()
 
-# Initialize providers if API keys are available
+# Initialize credentialed providers when configured and the credentialless
+# DeepSeek community endpoint unconditionally.
 async def initialize_providers():
-    from .llm_manager import OpenAIProvider, AnthropicProvider, GoogleProvider, KimiProvider
+    from .llm_manager import (
+        AnthropicProvider,
+        DeepSeekProvider,
+        GoogleProvider,
+        KimiProvider,
+        OpenAIProvider,
+    )
 
     if settings.OPENAI_API_KEY:
         await llm_manager.register_provider(ProviderType.OPENAI, OpenAIProvider())
@@ -23,6 +30,8 @@ async def initialize_providers():
 
     if settings.MOONSHOT_API_KEY:
         await llm_manager.register_provider(ProviderType.KIMI, KimiProvider())
+
+    await llm_manager.register_provider(ProviderType.DEEPSEEK, DeepSeekProvider())
 
 
 async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
@@ -97,6 +106,7 @@ def calculate_cost(provider: ProviderType, tokens_used: int) -> float:
         ProviderType.ANTHROPIC: 0.008,  # Example: $0.008 per 1k tokens for Claude
         ProviderType.GOOGLE: 0.0005,  # Example: $0.0005 per 1k tokens for Gemini
         ProviderType.KIMI: 0.009,  # Blended estimate; actual input/output rates differ
+        ProviderType.DEEPSEEK: 0.0,  # Shared community endpoint currently advertises no charge
     }
 
     cost_per_token = cost_per_thousand_tokens.get(provider, 0.002) / 1000

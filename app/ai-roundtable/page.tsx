@@ -972,8 +972,8 @@ export default function AIRoundtablePage() {
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
-                      <div className="text-[11px] text-muted-foreground capitalize">
-                        {agent.provider}
+                      <div className="text-[11px] text-muted-foreground">
+                        {getProviderLabel(agent.provider)}
                       </div>
                       <select
                         value={agent.model}

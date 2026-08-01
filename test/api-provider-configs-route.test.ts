@@ -184,6 +184,26 @@ describe('/api/provider-configs route', () => {
     )
   })
 
+  it('POST stores DeepSeek connection settings without a credential', async () => {
+    const response = await POST(
+      makeRequest({
+        provider: 'deepseek',
+        config: {},
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockStoreUserApiKey).toHaveBeenCalledWith(
+      'user-1',
+      'deepseek',
+      '',
+      expect.objectContaining({
+        models: ['deepseek-ai/DeepSeek-V4-Flash-0731'],
+        rateLimits: { requests: 12, window: 60000 },
+      })
+    )
+  })
+
   it('POST invalidates cached provider configs after save', async () => {
     process.env.ENABLE_API_READ_CACHE = 'true'
     process.env.API_READ_CACHE_TTL_MS = '60000'

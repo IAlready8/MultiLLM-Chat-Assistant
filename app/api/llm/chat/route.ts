@@ -17,10 +17,23 @@ import type { ProviderRequest, ProviderAdapterConfig } from '@/lib/providers'
 // Helpers
 // ---------------------------------------------------------------------------
 
-const jsonErrorResponse = (status: number, error: string, code: string) =>
+const jsonErrorResponse = (
+  status: number,
+  error: string,
+  code: string,
+  retryAfterSeconds?: number,
+) =>
   new NextResponse(
     JSON.stringify({ error, code }),
-    { status, headers: { 'Content-Type': 'application/json' } },
+    {
+      status,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(retryAfterSeconds
+          ? { 'Retry-After': String(retryAfterSeconds) }
+          : {}),
+      },
+    },
   )
 
 const estimatePromptTokens = (messages: any[]): number => {
@@ -247,6 +260,11 @@ export async function POST(req: NextRequest) {
     const context = createErrorContext('/api/llm/chat')
     await errorManager.logError(error as Error, context)
     const mapped = classifyProviderError(error)
-    return jsonErrorResponse(mapped.status, mapped.error, mapped.code)
+    return jsonErrorResponse(
+      mapped.status,
+      mapped.error,
+      mapped.code,
+      mapped.retryAfterSeconds,
+    )
   }
 }

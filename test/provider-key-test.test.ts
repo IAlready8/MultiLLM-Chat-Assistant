@@ -84,6 +84,12 @@ describe('validateApiKeyFormat', () => {
     })
   })
 
+  describe('deepseek', () => {
+    it('does not require a credential', () => {
+      expect(validateApiKeyFormat('deepseek', '')).toBeNull()
+    })
+  })
+
   describe('unknown providers', () => {
     it('accepts any format for unknown providers', () => {
       expect(

@@ -79,6 +79,7 @@ export interface ClassifiedError {
   status: number
   code: string
   error: string
+  retryAfterSeconds?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -94,3 +95,4 @@ export type ProviderId =
   | 'ollama'
   | 'mistral'
   | 'kimi'
+  | 'deepseek'

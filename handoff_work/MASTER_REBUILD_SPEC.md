@@ -201,6 +201,8 @@ Supported provider families in code:
 - Google AI
 - OpenRouter
 - Grok
+- DeepSeek V4 Flash 0731 through a credentialless, shared Hugging Face
+  community endpoint (experimental; never send sensitive data)
 
 Key files:
 - `lib/providers/registry.ts`
@@ -209,6 +211,7 @@ Key files:
 - `lib/providers/googleai.ts`
 - `lib/providers/openrouter.ts`
 - `lib/providers/grok.ts`
+- `lib/providers/deepseek.ts`
 - `app/api/llm/chat/route.ts`
 - `app/api/llm/stream/route.ts`
 - `app/api/llm/orchestrate/route.ts`
