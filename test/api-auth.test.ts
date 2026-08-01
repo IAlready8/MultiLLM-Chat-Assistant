@@ -1,194 +1,100 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
 
-// Mock dependencies before importing the module under test
 const mockAuth = vi.fn()
-const mockCookies = vi.fn()
 
 vi.mock('@/lib/auth', () => ({
   auth: () => mockAuth(),
 }))
 
-vi.mock('next/headers', () => ({
-  cookies: () => mockCookies(),
-}))
-
-vi.mock('@/lib/demo-account', () => ({
-  getDemoAccountContext: () => ({
-    enabled: false,
-    bypassAuth: false,
-    id: 'demo-user',
-    name: 'Demo User',
-    email: 'demo@local.dev',
-    password: 'demo12345',
-  }),
-  isStrictAuthRequired: () => false,
-  createDemoUserRecord: () => ({
-    id: 'demo-user',
-    name: 'Demo User',
-    email: 'demo@local.dev',
-    password: null,
-    emailVerified: null,
-    image: null,
-    createdAt: new Date(0),
-    updatedAt: new Date(0),
-  }),
-  createGuestUserRecord: () => ({
-    id: 'guest-user',
-    name: 'Guest',
-    email: null,
-    password: null,
-    emailVerified: null,
-    image: null,
-    createdAt: new Date(0),
-    updatedAt: new Date(0),
-  }),
-}))
-
-// Import after mocks are set up
 import { getAuthenticatedAdmin, getAuthenticatedUser } from '@/lib/api-auth'
 
-describe('getAuthenticatedUser', () => {
+describe('API authentication', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCookies.mockReturnValue({
-      get: () => undefined,
-    })
   })
 
-  it('returns user when session is valid', async () => {
-    mockCookies.mockReturnValue({
-      get: (name: string) =>
-        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
-    })
+  it('returns the authenticated user from a valid session', async () => {
     mockAuth.mockResolvedValue({
-      user: { id: 'user-123', name: 'Test User', email: 'test@test.com' },
+      user: { id: 'user-123', name: 'Test User', email: 'test@example.com' },
     })
 
     const result = await getAuthenticatedUser()
+
     expect(result).not.toBeInstanceOf(NextResponse)
     expect((result as { user: { id: string } }).user.id).toBe('user-123')
   })
 
-  it('returns guest when allowGuest=true and no session cookie', async () => {
-    const result = await getAuthenticatedUser({ allowGuest: true })
-    expect(result).not.toBeInstanceOf(NextResponse)
-    expect((result as { user: { id: string } }).user.id).toBe('guest-user')
-  })
+  it('returns 401 when no authenticated session exists', async () => {
+    mockAuth.mockResolvedValue(null)
 
-  it('returns 401 when no session and allowGuest=false', async () => {
-    mockCookies.mockReturnValue({
-      get: (name: string) =>
-        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
-    })
-    mockAuth.mockResolvedValue({ user: null })
+    const result = await getAuthenticatedUser()
 
-    const result = await getAuthenticatedUser({ allowGuest: false })
     expect(result).toBeInstanceOf(NextResponse)
     expect((result as NextResponse).status).toBe(401)
+    await expect((result as NextResponse).json()).resolves.toEqual({
+      error: 'Unauthorized',
+    })
   })
 
-  it('returns guest on JWT decryption error with allowGuest=true', async () => {
-    mockCookies.mockReturnValue({
-      get: (name: string) =>
-        name === 'next-auth.session-token' ? { value: 'bad-token' } : undefined,
-    })
+  it('returns 401 when a session token cannot be decrypted', async () => {
     mockAuth.mockRejectedValue(new Error('Invalid compact JWE'))
-
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    const result = await getAuthenticatedUser({ allowGuest: true })
-    expect(result).not.toBeInstanceOf(NextResponse)
-    expect((result as { user: { id: string } }).user.id).toBe('guest-user')
+    const result = await getAuthenticatedUser()
 
-    consoleSpy.mockRestore()
-  })
-
-  it('returns 401 on JWT decryption error without allowGuest', async () => {
-    mockCookies.mockReturnValue({
-      get: (name: string) =>
-        name === 'next-auth.session-token' ? { value: 'bad-token' } : undefined,
-    })
-    mockAuth.mockRejectedValue(new Error('jwt decryption failed'))
-
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    const result = await getAuthenticatedUser({ allowGuest: false })
     expect(result).toBeInstanceOf(NextResponse)
     expect((result as NextResponse).status).toBe(401)
-
+    await expect((result as NextResponse).json()).resolves.toEqual({
+      error: 'Session expired',
+    })
     consoleSpy.mockRestore()
   })
 
-  it('returns 503 on non-JWT errors without allowGuest', async () => {
-    mockCookies.mockReturnValue({
-      get: (name: string) =>
-        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
-    })
+  it('returns 503 when the authentication service fails', async () => {
+    mockAuth.mockResolvedValueOnce({ user: { id: 'reset-log-state' } })
+    await getAuthenticatedUser()
     mockAuth.mockRejectedValue(new Error('Database connection refused'))
-
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const result = await getAuthenticatedUser({ allowGuest: false })
+    const result = await getAuthenticatedUser()
+
     expect(result).toBeInstanceOf(NextResponse)
     expect((result as NextResponse).status).toBe(503)
-
+    await expect((result as NextResponse).json()).resolves.toEqual({
+      error: 'Auth unavailable',
+    })
     consoleSpy.mockRestore()
   })
 
-  it('returns guest on non-JWT errors with allowGuest=true', async () => {
-    mockCookies.mockReturnValue({
-      get: (name: string) =>
-        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
-    })
-    mockAuth.mockRejectedValue(new Error('Database connection refused'))
-
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    const result = await getAuthenticatedUser({ allowGuest: true })
-    expect(result).not.toBeInstanceOf(NextResponse)
-    expect((result as { user: { id: string } }).user.id).toBe('guest-user')
-
-    consoleSpy.mockRestore()
-  })
-
-  it('returns authenticated admin users for OWNER/ADMIN roles', async () => {
-    mockCookies.mockReturnValue({
-      get: (name: string) =>
-        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
-    })
+  it.each(['OWNER', 'ADMIN'])('allows the %s role to use admin routes', async (role) => {
     mockAuth.mockResolvedValue({
       user: {
-        id: 'owner-123',
-        name: 'Owner User',
-        email: 'owner@test.com',
-        role: 'OWNER',
+        id: 'admin-123',
+        name: 'Admin User',
+        email: 'admin@example.com',
+        role,
       },
     })
 
     const result = await getAuthenticatedAdmin()
+
     expect(result).not.toBeInstanceOf(NextResponse)
-    expect((result as { user: { id: string; role: string } }).user).toMatchObject({
-      id: 'owner-123',
-      role: 'OWNER',
-    })
+    expect((result as { user: { role: string } }).user.role).toBe(role)
   })
 
-  it('returns 403 for authenticated non-admin users', async () => {
-    mockCookies.mockReturnValue({
-      get: (name: string) =>
-        name === 'next-auth.session-token' ? { value: 'token' } : undefined,
-    })
+  it('returns 403 for an authenticated non-admin user', async () => {
     mockAuth.mockResolvedValue({
       user: {
         id: 'member-123',
         name: 'Member User',
-        email: 'member@test.com',
+        email: 'member@example.com',
         role: 'MEMBER',
       },
     })
 
     const result = await getAuthenticatedAdmin()
+
     expect(result).toBeInstanceOf(NextResponse)
     expect((result as NextResponse).status).toBe(403)
   })

@@ -104,23 +104,23 @@ describe('PersonaService DB fallback', () => {
         description: 'Fallback persona entry',
         prompt: 'Be precise.',
       },
-      'guest-local-user'
+      'test-user-123'
     )
 
-    const list = await PersonaService.getPersonasByUserId('guest-local-user')
+    const list = await PersonaService.getPersonasByUserId('test-user-123')
     expect(list).toHaveLength(1)
     expect(list[0].id).toBe(created.id)
 
     const updated = await PersonaService.updatePersona(
       created.id,
       { title: 'Guest Persona Updated' },
-      'guest-local-user'
+      'test-user-123'
     )
     expect(updated?.title).toBe('Guest Persona Updated')
 
     const deleted = await PersonaService.deletePersona(
       created.id,
-      'guest-local-user'
+      'test-user-123'
     )
     expect(deleted).toBe(true)
   })

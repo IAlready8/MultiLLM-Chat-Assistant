@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const originalNextAuthSecret = process.env.NEXTAUTH_SECRET
+const originalOwnerEmails = process.env.AUTH_OWNER_EMAILS
 process.env.NEXTAUTH_SECRET = 'test-secret'
 
 const mockCookies = vi.fn()
@@ -50,30 +51,25 @@ vi.mock('@/lib/rate-limit', () => ({
   checkAndConsume: vi.fn(async () => ({ allowed: true })),
 }))
 
+vi.mock('@/lib/credentials-auth', () => ({
+  authorizeCredentials: vi.fn(),
+}))
+
 vi.mock('@/lib/startup-validation', () => ({
   validateStartupEnvironment: vi.fn(),
 }))
 
-vi.mock('@/lib/demo-account', () => ({
-  createDemoAuthUser: vi.fn(),
-  getDemoAccountContext: () => ({
-    enabled: false,
-    bypassAuth: false,
-    id: 'demo-user',
-    name: 'Demo User',
-    email: 'demo@example.com',
-    password: 'demo-password',
-  }),
-  isInMemoryAuthFallbackAllowed: () => false,
-  isDemoCredentials: () => false,
-  isDemoEmail: () => false,
-  isStrictAuthRequired: () => true,
-}))
-
-const { auth, readSessionTokenFromCookieStore } = await import('@/lib/auth')
+const { auth, authOptions, readSessionTokenFromCookieStore } = await import(
+  '@/lib/auth'
+)
 
 afterAll(() => {
   process.env.NEXTAUTH_SECRET = originalNextAuthSecret
+  if (originalOwnerEmails === undefined) {
+    delete process.env.AUTH_OWNER_EMAILS
+  } else {
+    process.env.AUTH_OWNER_EMAILS = originalOwnerEmails
+  }
 })
 
 describe('auth session token reader', () => {
@@ -148,5 +144,25 @@ describe('auth session token reader', () => {
       token: 'encoded-token',
       secret: 'test-secret',
     })
+  })
+
+  it('re-evaluates operator roles from the server-only allowlist', async () => {
+    const jwtCallback = authOptions.callbacks?.jwt
+    expect(jwtCallback).toBeTypeOf('function')
+    const runJwtCallback = jwtCallback as unknown as (input: {
+      token: Record<string, unknown>
+    }) => Promise<Record<string, unknown>>
+    process.env.AUTH_OWNER_EMAILS = 'owner@example.com'
+
+    const ownerToken = await runJwtCallback({
+      token: { email: 'OWNER@example.com', tier: 'FREE' },
+    })
+    expect(ownerToken.role).toBe('OWNER')
+
+    delete process.env.AUTH_OWNER_EMAILS
+    const downgradedToken = await runJwtCallback({
+      token: ownerToken,
+    })
+    expect(downgradedToken.role).toBe('MEMBER')
   })
 })

@@ -33,7 +33,7 @@ const createConvoSchema = z.object({
  * Retrieves all conversations (metadata) for the authenticated user.
  */
 export const GET = withApiMetrics(async (_req: Request) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -57,7 +57,7 @@ export const GET = withApiMetrics(async (_req: Request) => {
  * Creates a new conversation and its first messages.
  */
 export const POST = withApiMetrics(async (req: Request) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 

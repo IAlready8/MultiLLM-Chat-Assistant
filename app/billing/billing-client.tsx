@@ -16,7 +16,6 @@ interface BillingClientProps {
   weeklySavedBriefComparisons: number
   checkoutEnabled: boolean
   portalEnabled: boolean
-  hasDemoBypassAccess: boolean
 }
 
 const formatPeriodEnd = (periodEnd: string | null) => {
@@ -44,7 +43,6 @@ export function BillingClient({
   weeklySavedBriefComparisons,
   checkoutEnabled,
   portalEnabled,
-  hasDemoBypassAccess,
 }: BillingClientProps) {
   const [isLoading, setIsLoading] = useState<'checkout' | 'portal' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -153,11 +151,6 @@ export function BillingClient({
                 {weeklySavedBriefComparisons} weekly saved brief comparisons tracked.
               </p>
             ) : null}
-            {hasDemoBypassAccess ? (
-              <p className="text-sm text-muted-foreground">
-                Demo bypass is active; self-serve billing is disabled in this session.
-              </p>
-            ) : null}
           </div>
           {shouldRecommendUpgrade ? (
             <p className="text-sm font-medium text-amber-600">
@@ -173,7 +166,7 @@ export function BillingClient({
             {tier === 'FREE' ? (
               <Button
                 onClick={handleUpgrade}
-                disabled={isLoading !== null || !checkoutEnabled || hasDemoBypassAccess}
+                disabled={isLoading !== null || !checkoutEnabled}
               >
                 {isLoading === 'checkout' ? 'Starting checkout...' : 'Upgrade to Pro'}
               </Button>
@@ -181,7 +174,7 @@ export function BillingClient({
             {tier === 'PRO' ? (
               <Button
                 onClick={handleManageSubscription}
-                disabled={isLoading !== null || !portalEnabled || hasDemoBypassAccess}
+                disabled={isLoading !== null || !portalEnabled}
               >
                 {isLoading === 'portal' ? 'Opening portal...' : 'Manage Subscription'}
               </Button>

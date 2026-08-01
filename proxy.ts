@@ -5,6 +5,7 @@ import { readSessionTokenFromCookies } from '@/lib/session-cookie'
 
 const PUBLIC_PATHS = new Set([
   '/auth/signin',
+  '/auth/register',
   '/auth/signout',
   '/auth/error',
   '/api/auth',
@@ -37,23 +38,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const isProduction = process.env.NODE_ENV === 'production'
-  const strictAuth =
-    isProduction ||
-    process.env.AUTH_REQUIRE_LOGIN === 'true' ||
-    process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN === 'true'
-
-  // In non-strict mode (demo/guest enabled), allow all requests through
-  if (!strictAuth) {
-    return NextResponse.next()
-  }
-
   const authSecret =
     process.env.NEXTAUTH_SECRET?.trim() || process.env.AUTH_SECRET?.trim()
 
   if (!authSecret) {
     const message =
-      'Authentication misconfigured: set NEXTAUTH_SECRET or AUTH_SECRET when strict auth is enabled.'
+      'Authentication misconfigured: set NEXTAUTH_SECRET or AUTH_SECRET.'
     console.error(message)
 
     if (pathname.startsWith('/api/')) {
@@ -68,7 +58,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(errorUrl)
   }
 
-  // In strict auth mode, verify JWT token exists
+  // Every protected route requires a valid JWT session.
   const sessionToken = readSessionTokenFromCookies(request.cookies.getAll())
   let token = null
   if (sessionToken) {
@@ -89,7 +79,10 @@ export async function proxy(request: NextRequest) {
     }
 
     const signInUrl = new URL('/auth/signin', request.url)
-    signInUrl.searchParams.set('callbackUrl', pathname)
+    signInUrl.searchParams.set(
+      'callbackUrl',
+      `${pathname}${request.nextUrl.search}`,
+    )
     return NextResponse.redirect(signInUrl)
   }
 

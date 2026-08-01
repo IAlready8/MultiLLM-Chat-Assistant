@@ -56,8 +56,8 @@ const getErrorCode = (error: unknown): string | undefined => {
 }
 
 /**
- * Detects FK violations tied to the user relation (common when guest IDs
- * intentionally do not exist as persisted User rows).
+ * Detects FK violations tied to the user relation, including stale or missing
+ * persisted User rows in development fallback scenarios.
  */
 export const isUserForeignKeyConstraintError = (error: unknown): boolean => {
   const message = getErrorMessage(error)

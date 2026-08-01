@@ -32,7 +32,7 @@ const createGoalSchema = z.object({
  * Returns all goals for the authenticated user.
  */
 export const GET = withApiMetrics(async (_req: Request) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -53,7 +53,7 @@ export const GET = withApiMetrics(async (_req: Request) => {
  * Creates a goal for the authenticated user.
  */
 export const POST = withApiMetrics(async (req: Request) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 

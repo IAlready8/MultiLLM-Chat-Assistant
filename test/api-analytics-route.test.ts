@@ -7,18 +7,7 @@ const mockGetWorkflowMetrics = vi.fn()
 const mockRecordAnalyticsEvent = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
-}))
-
-vi.mock('@/lib/demo-account', () => ({
-  createGuestUserRecord: () => ({
-    id: 'guest-local-user',
-    email: 'guest@local.dev',
-  }),
-  getDemoAccountContext: () => ({
-    id: 'demo-user',
-    email: 'demo@local.dev',
-  }),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/services/analytics-service', () => ({
@@ -297,37 +286,6 @@ describe('/api/analytics route', () => {
       comparisonViews: 1,
       comparisonReadyConversations: 1,
     })
-  })
-
-  it('returns empty guest telemetry without recording view events', async () => {
-    mockGetAuthenticatedUser.mockResolvedValue({
-      user: { id: 'guest-local-user', email: 'guest@local.dev' },
-    })
-
-    const response = await GET(
-      new Request('http://localhost/api/analytics?timeframe=7d&source=analytics'),
-      routeContext
-    )
-
-    expect(response.status).toBe(200)
-    const body = await response.json()
-    expect(body.workflowMetrics).toMatchObject({
-      configuredProviders: 0,
-      personas: 0,
-      comparisonReadyConversations: 0,
-      weeklySavedBriefComparisons: 0,
-    })
-    expect(body.meta).toEqual({
-      source: 'empty',
-      eventCount: 0,
-      attribution: {
-        source: null,
-        campaign: null,
-        cohort: null,
-      },
-    })
-    expect(mockGetParsedAnalyticsEvents).not.toHaveBeenCalled()
-    expect(mockRecordAnalyticsEvent).not.toHaveBeenCalled()
   })
 
   it('returns 500 when analytics service throws', async () => {

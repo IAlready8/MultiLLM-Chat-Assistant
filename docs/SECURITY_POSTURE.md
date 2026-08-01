@@ -50,7 +50,7 @@ Optional but security-sensitive subsystems:
 
 Fail-closed rules already enforced in code:
 - production startup rejects missing core auth and encryption secrets
-- strict auth is enforced in production even when local demo flags are false
+- authentication is mandatory in every environment and has no bypass flag
 - Stripe webhook processing rejects missing signatures and missing webhook secret
 - admin routes require authenticated `OWNER` or `ADMIN` users
 
@@ -64,12 +64,14 @@ Primary implementation files:
 
 Security-relevant behaviors already present:
 - production secret resolution fails closed when auth secret is missing
-- strict-auth middleware protects page and API surfaces
+- mandatory-auth middleware protects page and API surfaces
 - `/api/health` and `/api/webhooks/stripe` remain intentionally public
 - session-cookie parsing supports direct and chunked NextAuth cookies
 - JWT decryption failures are treated as unauthenticated, not server-success
 - admin access requires `OWNER` or `ADMIN`
-- guest access is limited to non-strict mode only
+- demo and guest identities are unsupported
+- credentials auth never creates accounts implicitly
+- OAuth account creation requires a complete configured provider pair
 
 Existing proof coverage:
 - `test/api-auth.test.ts`

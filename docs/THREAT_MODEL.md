@@ -30,8 +30,8 @@ Risk:
 - an unauthenticated user reaches protected routes or APIs
 
 Current controls:
-- strict auth enforced in production middleware
-- auth secret required in production
+- mandatory auth enforced by middleware in every environment
+- auth secret required at runtime
 - server-side auth checks on protected API routes
 - admin routes require `OWNER` or `ADMIN`
 

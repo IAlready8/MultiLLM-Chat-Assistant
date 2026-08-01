@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BillingClient } from './billing-client'
-import { getDemoAccountContext } from '@/lib/demo-account'
 import { ConversationService } from '@/services/conversation-service.db'
 import {
   BILLING_PLANS,
@@ -15,24 +14,21 @@ type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
 
 export default async function BillingPage() {
   const session = await auth()
-  const demoAccount = getDemoAccountContext()
-  const hasDemoBypassAccess = demoAccount.enabled && demoAccount.bypassAuth
 
-  if (!session?.user && !hasDemoBypassAccess) {
+  if (!session?.user) {
     redirect('/auth/signin?callbackUrl=/billing')
   }
 
-  const userId = session?.user?.id
-  const weeklySavedBriefComparisons = !hasDemoBypassAccess && userId
+  const userId = session.user.id
+  const weeklySavedBriefComparisons = userId
     ? await ConversationService.getWeeklySavedBriefComparisonCountForRollingDays(
         userId,
         7
       )
     : 0
 
-  const tier: SubscriptionTier = hasDemoBypassAccess
-    ? 'ENTERPRISE'
-    : (session?.user?.tier as SubscriptionTier | undefined) || 'FREE'
+  const tier: SubscriptionTier =
+    (session.user.tier as SubscriptionTier | undefined) || 'FREE'
 
   return (
     <div className="container mx-auto p-4">
@@ -56,7 +52,6 @@ export default async function BillingPage() {
             weeklySavedBriefComparisons={weeklySavedBriefComparisons}
             checkoutEnabled={isStripeCheckoutConfigured}
             portalEnabled={isStripeApiConfigured}
-            hasDemoBypassAccess={hasDemoBypassAccess}
           />
         </CardContent>
       </Card>

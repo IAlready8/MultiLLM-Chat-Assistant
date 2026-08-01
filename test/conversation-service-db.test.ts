@@ -491,7 +491,7 @@ describe('ConversationService DB fallback', () => {
       const { ConversationService } = await loadServiceWithPrismaMock(prismaMock)
 
       await expect(
-        ConversationService.createConversation('guest-local-user', 'Should fail', [
+        ConversationService.createConversation('test-user-123', 'Should fail', [
           {
             role: 'user',
             content: 'hello',

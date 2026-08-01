@@ -37,7 +37,7 @@ export const GET = withApiMetrics(async (
   _req: Request,
   ctx: MetricsRouteContext
 ) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
   const id = await getPersonaIdFromContext(ctx)
@@ -64,7 +64,7 @@ export const PUT = withApiMetrics(async (
   req: Request,
   ctx: MetricsRouteContext
 ) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
   const id = await getPersonaIdFromContext(ctx)
@@ -124,7 +124,7 @@ export const DELETE = withApiMetrics(async (
   _req: Request,
   ctx: MetricsRouteContext
 ) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
   const id = await getPersonaIdFromContext(ctx)

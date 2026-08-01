@@ -36,9 +36,8 @@ From `package.json`:
 - Playwright
 
 ## Code-verified route surface
-- Auth (2):
+- Auth (1):
   - `app/api/auth/[...nextauth]/route.ts`
-  - `app/api/auth/upgrade-guest/route.ts`
 - Config (3):
   - `app/api/config/route.ts`
   - `app/api/provider-configs/route.ts`
@@ -80,8 +79,9 @@ From `package.json`:
   - `app/personas/page.tsx`
   - `app/pipeline/page.tsx`
   - `app/settings/page.tsx`
-- Auth pages (3):
+- Auth pages (4):
   - `app/auth/error/page.tsx`
+  - `app/auth/register/page.tsx`
   - `app/auth/signin/page.tsx`
   - `app/auth/signout/page.tsx`
 - Admin pages (2):
@@ -93,7 +93,7 @@ Every visible surface is explicitly classified.
 
 - Core:
   - Home shell: `app/page.tsx`
-  - Auth UX/routes: `app/auth/error/page.tsx`, `app/auth/signin/page.tsx`, `app/auth/signout/page.tsx`, `app/api/auth/[...nextauth]/route.ts`, `app/api/auth/upgrade-guest/route.ts`
+  - Auth UX/routes: `app/auth/error/page.tsx`, `app/auth/register/page.tsx`, `app/auth/signin/page.tsx`, `app/auth/signout/page.tsx`, `app/api/auth/[...nextauth]/route.ts`
   - Chat/conversations: `app/multi-chat/page.tsx`, `app/api/llm/chat/route.ts`, `app/api/llm/stream/route.ts`, `app/api/conversations/route.ts`, `app/api/conversations/[id]/route.ts`
   - Provider configuration: `app/settings/page.tsx`, `app/api/config/route.ts`, `app/api/provider-configs/route.ts`, `app/api/test-api-key/route.ts`
   - Goals: `app/goal-hub/page.tsx`, `app/api/goals/route.ts`, `app/api/goals/[id]/route.ts`
@@ -120,7 +120,7 @@ Every visible surface is explicitly classified.
 | Surface | Minimal behavior | Persistence expectation | Auth expectation | Error expectation |
 |---|---|---|---|---|
 | Home shell | Page renders and links to supported surfaces | none | public or session-aware render | non-fatal UI fallback |
-| Auth UX/routes | sign-in/sign-out/error routes function; session route works | session store durable in production | strict mode enforces auth; guest only when not strict | invalid credentials/OAuth failure are explicit |
+| Auth UX/routes | sign-in/register/sign-out/error routes function; session route works | users and linked accounts are durable in production | real session required in every environment | invalid credentials/OAuth failure are explicit |
 | Chat/conversations | send prompt, receive response/stream, create/list/load/delete conversation | conversation data durable when DB configured for production | same auth rules as runtime mode | provider/validation/auth errors return deterministic JSON + status |
 | Provider configuration | add/list/remove/test provider keys/configs from settings | encrypted key storage server-side; no plaintext leakage | authenticated in strict mode | invalid key/config returns actionable error |
 | Goals | CRUD works from UI + API | durable in supported production topology | authenticated in strict mode | validation failures return 4xx with message |
@@ -133,7 +133,7 @@ Every visible surface is explicitly classified.
 
 ## 03.1 official production runtime (locked)
 - Postgres: required in production.
-- Strict auth: required in production.
+- Mandatory auth: required in every environment.
 - Stripe: optional (billing feature disabled unless Stripe env + webhook config are present).
 - Python sidecar: optional (core app remains supported without sidecar; orchestrate route may fall back locally).
 - Redis: optional and out-of-contract for core production acceptance.
@@ -150,15 +150,15 @@ Unsupported production shapes:
 | PostgreSQL | Yes | `DATABASE_URL` | `lib/prisma.ts:22,63-83`; Prisma adapter setup in `lib/auth.ts:239` | Core persistence/auth durability cannot be guaranteed; production contract fails |
 | NextAuth secret | Yes | `NEXTAUTH_SECRET` (or `AUTH_SECRET`) | `lib/auth.ts:61-74`; `proxy.ts:48-64` | Strict/prod auth fails closed with configuration error |
 | Provider credentials/config | Yes (for real model calls) | stored via settings APIs and encrypted with `API_KEY_ENCRYPTION_SEED` | `app/api/provider-configs/route.ts`, `app/api/test-api-key/route.ts`, `lib/runtime-secrets.ts:16-28` | Provider calls return actionable config/key errors |
-| OAuth providers (Google/GitHub) | Optional | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `lib/auth.ts:103-116` | OAuth buttons/providers are omitted; credentials auth path remains |
+| OAuth providers (Google/GitHub) | Required for self-service account creation | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | `lib/auth.ts`; `lib/auth-policy.ts` | Existing password accounts can sign in, but new users cannot create accounts |
 | Stripe billing | Optional | `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `NEXTAUTH_URL` | `lib/stripe.ts`; `app/api/subscriptions/route.ts`; `app/api/subscriptions/manage/route.ts`; `app/api/webhooks/stripe/route.ts` | Billing routes return explicit 503 config errors |
 | Python sidecar | Optional | `PYTHON_CORE_URL` | `app/api/llm/orchestrate/route.ts:8,198,243-277` | Orchestrate route falls back to local orchestration with fallback headers |
 | Redis | Optional | `REDIS_URL` | `lib/rate-limit.ts:36-52,139-147`; `lib/cache.ts:106-126` | Cache/rate-limit degrade to in-memory behavior |
 
 ## 03.3 fallback enforcement status
 - Production DB fallback is disabled via fail-fast boot when `DATABASE_URL` is missing (`lib/prisma.ts`).
-- In-memory auth fallback is disabled in strict/production mode (`lib/auth.ts`).
-- Strict auth is enforced in production regardless of auth toggle flags (`lib/demo-account.ts`, `proxy.ts`).
+- Authentication requires a real session in every environment (`lib/api-auth.ts`, `proxy.ts`).
+- Credentials auth verifies existing password hashes and never creates users (`lib/credentials-auth.ts`).
 - In-memory DB fallback helpers now block fallback creation in production (`lib/db-fallback.ts`), including analytics fallback writes (`services/analytics-service.ts`).
 
 ## 04.1 env contract audit
@@ -168,14 +168,12 @@ Unsupported production shapes:
   - `DATABASE_URL`
   - `NEXTAUTH_SECRET` (or `AUTH_SECRET` as alternate)
   - `NEXTAUTH_URL`
+  - `AUTH_OWNER_EMAILS`
   - `API_KEY_ENCRYPTION_SEED`
 - Required-conditional:
-  - OAuth enabled: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
-  - Non-production demo/guest mode: `DEMO_ACCOUNT_ENABLED`, `DEMO_ACCOUNT_BYPASS_AUTH`, `NEXT_PUBLIC_DEMO_ACCOUNT_BYPASS_AUTH`, `DEMO_ACCOUNT_EMAIL`, `DEMO_ACCOUNT_PASSWORD`, `DEMO_ACCOUNT_NAME`, `DEMO_ACCOUNT_ID`, `GUEST_USER_ID`, `GUEST_USER_NAME`, `GUEST_USER_EMAIL`
+  - Self-service account creation: one complete Google or GitHub OAuth credential pair
   - Python sidecar direct provider keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_AI_API_KEY`
   - Redis enabled: `REDIS_URL`
-- Optional:
-  - `AUTH_REQUIRE_LOGIN`, `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
 - Dead (unused by current runtime code paths):
   - `DB_CONNECTION_LIMIT`, `DB_POOL_TIMEOUT`, `DB_SCHEMA_CACHE_SIZE`
   - `OPENROUTER_API_KEY`
@@ -190,7 +188,6 @@ Unsupported production shapes:
 - `PYTHON_CORE_URL`
 - `LLM_FETCH_TIMEOUT_MS`, `LLM_FETCH_RETRIES`
 - `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_APP_NAME`
-- `NEXT_PUBLIC_DEMO_ACCOUNT_ENABLED`, `NEXT_PUBLIC_DEMO_ACCOUNT_EMAIL`, `NEXT_PUBLIC_DEMO_ACCOUNT_PASSWORD`, `NEXT_PUBLIC_GUEST_USER_ID`
 - `NEXT_PUBLIC_SECURE_STORAGE_KEY`
 
 ## 04.2 startup validation implementation
@@ -229,12 +226,11 @@ It does this:
 
 ### Auth
 `proxy.ts` and `lib/auth.ts` together show:
-- strict auth is always enforced in production
-- guest/demo mode exists
-- missing auth secret is fatal in strict mode and production
-- credentials auth exists
-- OAuth providers are conditional on env presence
-- in-memory auth fallback is disabled in strict/production mode
+- authentication is mandatory in every environment
+- missing auth secret is fatal at runtime
+- credentials auth is login-only for existing password users
+- OAuth providers create durable accounts when their complete env pair is present
+- demo, guest, implicit-registration, and in-memory auth fallbacks are removed
 
 ### Python sidecar
 The Python sidecar is **integrated**, not theoretical:

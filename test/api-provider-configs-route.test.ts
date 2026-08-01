@@ -9,7 +9,7 @@ const mockTestProviderKey = vi.fn()
 const mockValidateApiKeyFormat = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/api-key-service', () => ({
@@ -89,7 +89,7 @@ describe('/api/provider-configs route', () => {
       models: ['gpt-4'],
       rateLimits: { requests: 15, window: 60000 },
     })
-    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
+    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith()
   })
 
   it('GET serves cached provider configs when read cache is enabled', async () => {

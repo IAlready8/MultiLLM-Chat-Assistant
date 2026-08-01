@@ -47,7 +47,7 @@ Interpretation:
 
 ### Phase 3: Contract validation
 Focus tests on high-risk contracts:
-1. `middleware.ts` strict-auth public exemptions:
+1. `middleware.ts` mandatory-auth public exemptions:
    - `/api/health`
    - `/api/webhooks/stripe`
 2. Stripe upsert behavior:
@@ -74,7 +74,7 @@ All must pass:
 1. Quality gates: type-check/lint/tests/build.
 2. Smoke tests: all pass.
 3. Production verification script passes including webhook check.
-4. No strict-auth regression for health/webhooks.
+4. No mandatory-auth regression for health/webhooks.
 5. Billing flows continue to work for first-time users (upsert path).
 
 ## Coordination with Claude (parallel work)

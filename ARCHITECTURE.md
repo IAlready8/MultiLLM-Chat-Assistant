@@ -2,7 +2,7 @@
 
 ## Goals
 - Provide a modular multi-LLM platform with clear separation between UI, API, auth, and service layers.
-- Support both strict authenticated usage and guest-friendly local workflows.
+- Require durable authenticated identities for all workspace data.
 - Keep deployment/release flow production-safe with CI, smoke tests, and runtime verification.
 
 ## Core Stack
@@ -34,7 +34,8 @@
 ## API Surface (Key Domains)
 - Auth/session:
   - `/api/auth/[...nextauth]`
-  - `/api/auth/upgrade-guest`
+  - `/auth/signin`
+  - `/auth/register`
 - Provider config and key lifecycle:
   - `/api/config`
   - `/api/provider-configs`
@@ -50,20 +51,21 @@
   - `/api/admin/errors/stats`
 
 ## Authentication Model
-- Production strict auth:
-  - Always enforced in production (independent of toggle flags)
-  - Requires valid session flows
-  - Requires `NEXTAUTH_SECRET` (or `AUTH_SECRET`) + `NEXTAUTH_URL`
-- Strict auth mode (`AUTH_REQUIRE_LOGIN=true` in non-production):
-  - Mirrors production access controls during local/dev verification
-- Guest/demo mode (`AUTH_REQUIRE_LOGIN=false`):
-  - Guest-friendly access paths remain available only outside production
-  - Supports local evaluation without full account setup
+- Authentication is mandatory in production, preview, and local development.
+- Google/GitHub OAuth uses the NextAuth Prisma adapter to create durable users and linked provider accounts.
+- Credentials authentication only verifies an existing user's bcrypt password hash; it never performs implicit registration.
+- Server-only owner/admin email allowlists assign operator roles to real authenticated accounts.
+- Public password registration remains disabled until email verification and account recovery are available.
+- Protected API routes fail closed with `401`, or `503` when session infrastructure is unavailable.
+- `NEXTAUTH_SECRET` (or `AUTH_SECRET`), `NEXTAUTH_URL`, and persistent database access are required.
 
 Primary auth files:
 - `lib/auth.ts`
 - `lib/api-auth.ts`
-- `lib/demo-account.ts`
+- `lib/auth-policy.ts`
+- `lib/auth-roles.ts`
+- `lib/credentials-auth.ts`
+- `components/oauth-provider-buttons.tsx`
 - `proxy.ts`
 
 ## Persistence and Fallback Model
