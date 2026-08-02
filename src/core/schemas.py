@@ -12,6 +12,7 @@ class ProviderRequest(BaseModel):
     prompt: str = Field(..., max_length=10000)
     temperature: float = Field(0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(1000, ge=1, le=4096)
+    reasoning_effort: Literal["off", "low", "high", "max"] = "high"
     # ... other params as needed
 
 
@@ -30,6 +31,7 @@ class ProviderStreamRequest(BaseModel):
     model: str
     temperature: float = Field(0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(1000, ge=1, le=4096)
+    reasoning_effort: Literal["off", "low", "high", "max"] = "high"
 
 class MultiProviderRequest(BaseModel):
     """

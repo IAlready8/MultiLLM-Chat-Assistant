@@ -24,6 +24,7 @@ function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -31,9 +32,13 @@ afterEach(() => {
 describe('deepseekAdapter', () => {
   it('checks the public community models endpoint without authorization', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ object: 'list', data: [] }), {
-        status: 200,
-      }),
+      new Response(
+        JSON.stringify({
+          object: 'list',
+          data: [{ id: 'deepseek-ai/DeepSeek-V4-Flash-0731' }],
+        }),
+        { status: 200 },
+      ),
     )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -47,6 +52,52 @@ describe('deepseekAdapter', () => {
       }),
     )
     expect(fetchMock.mock.calls[0][1]?.headers).not.toHaveProperty('Authorization')
+  })
+
+  it('never forwards credentials or caller-supplied headers to the public endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          object: 'list',
+          data: [{ id: 'deepseek-ai/DeepSeek-V4-Flash-0731' }],
+        }),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await deepseekAdapter.testConnection?.({
+      apiKey: 'must-not-be-sent',
+      baseUrl: 'https://must-not-be-used.invalid/v1',
+      extraHeaders: {
+        Authorization: 'Bearer must-not-be-sent',
+        'X-Private-Token': 'must-not-be-sent',
+      },
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1/models',
+      expect.objectContaining({
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+  })
+
+  it('rejects a models probe when the approved model is missing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ object: 'list', data: [] }), {
+          status: 200,
+        }),
+      ),
+    )
+
+    await expect(
+      deepseekAdapter.testConnection?.(config),
+    ).rejects.toThrow(
+      'DeepSeek community endpoint does not advertise deepseek-ai/DeepSeek-V4-Flash-0731',
+    )
   })
 
   it('uses the same credentialless models probe in Settings', async () => {
@@ -129,6 +180,31 @@ describe('deepseekAdapter', () => {
     expect(chunks).toEqual(['Hel', 'lo'])
   })
 
+  it.each([
+    ['off', undefined],
+    ['low', 'low'],
+    ['high', 'high'],
+    ['max', 'max'],
+  ] as const)('maps reasoning effort %s to the upstream payload', async (effort, expected) => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: 'ok' } }] }),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await deepseekAdapter.chat({ ...request, reasoning_effort: effort }, config)
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    const payload = JSON.parse(init.body as string)
+    if (expected === undefined) {
+      expect(payload).not.toHaveProperty('reasoning_effort')
+    } else {
+      expect(payload.reasoning_effort).toBe(expected)
+    }
+  })
+
   it('rejects malformed successful responses', async () => {
     vi.stubGlobal(
       'fetch',
@@ -166,5 +242,70 @@ describe('deepseekAdapter', () => {
       error: 'Rate limit exceeded. Please wait 17 seconds before trying again.',
       retryAfterSeconds: 17,
     })
+  })
+
+
+  it('converts an HTTP-date Retry-After value to seconds', async () => {
+    vi.setSystemTime(new Date('2026-08-02T12:00:00.000Z'))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: 'Slow down' }), {
+          status: 429,
+          headers: { 'Retry-After': 'Sun, 02 Aug 2026 12:00:19 GMT' },
+        }),
+      ),
+    )
+
+    let error: unknown
+    try {
+      await deepseekAdapter.chat(request, config)
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(classifyProviderError(error).retryAfterSeconds).toBe(19)
+  })
+
+  it('uses a bounded fallback for malformed Retry-After values', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: 'Slow down' }), {
+          status: 429,
+          headers: { 'Retry-After': '17 seconds' },
+        }),
+      ),
+    )
+
+    let error: unknown
+    try {
+      await deepseekAdapter.chat(request, config)
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(classifyProviderError(error).retryAfterSeconds).toBe(5)
+  })
+
+  it('uses the fallback for an unsafe numeric Retry-After value', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: 'Slow down' }), {
+          status: 429,
+          headers: { 'Retry-After': '999999999999999999999999999999' },
+        }),
+      ),
+    )
+
+    let error: unknown
+    try {
+      await deepseekAdapter.chat(request, config)
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(classifyProviderError(error).retryAfterSeconds).toBe(5)
   })
 })

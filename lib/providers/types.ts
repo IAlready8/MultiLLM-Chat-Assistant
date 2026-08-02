@@ -19,6 +19,8 @@ export interface ProviderRequest {
   model?: string
   temperature?: number
   max_tokens?: number
+  /** Provider-specific reasoning mode. `off` omits the upstream field. */
+  reasoning_effort?: 'off' | 'low' | 'high' | 'max'
   /** Opaque userId propagated for logging / analytics; never sent upstream. */
   userId?: string
 }

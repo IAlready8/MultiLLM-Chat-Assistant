@@ -1,4 +1,5 @@
 import { isProviderApiKeyRequired } from './provider-registry'
+import { DEEPSEEK_BASE_URL } from './providers/deepseek'
 
 export const validateApiKeyFormat = (
   provider: string,
@@ -100,7 +101,7 @@ export const testProviderKey = async (provider: string, apiKey: string) => {
         headers: { Authorization: `Bearer ${apiKey}` },
       })
     case 'deepseek':
-      return fetchWithTimeout('https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1/models', {
+      return fetchWithTimeout(`${DEEPSEEK_BASE_URL}/models`, {
         method: 'GET',
       })
     case 'ollama':

@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from '@/lib/api-auth'
 import { getUserApiKey } from '@/lib/api-key-service'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
 import { isProviderApiKeyRequired } from '@/lib/provider-registry'
+import { DEEPSEEK_MODEL_ID } from '@/lib/providers/deepseek'
 
 type HealthStatus = 'ok' | 'invalid' | 'unreachable' | 'rate_limited' | 'provider_error' | 'format'
 
@@ -44,7 +45,34 @@ async function testKey(
     }
 
     if (response.ok) {
-      return buildResult(true, 'API key verified successfully.', 'ok', latencyMs)
+      if (provider === 'deepseek') {
+        const body = await response.json().catch(() => null)
+        const models = Array.isArray(body?.data) ? body.data : []
+        const modelAvailable = models.some(
+          (model: unknown) =>
+            typeof model === 'object' &&
+            model !== null &&
+            'id' in model &&
+            model.id === DEEPSEEK_MODEL_ID,
+        )
+        if (!modelAvailable) {
+          return buildResult(
+            false,
+            'The approved DeepSeek community model is not currently available.',
+            'provider_error',
+            latencyMs,
+          )
+        }
+      }
+
+      return buildResult(
+        true,
+        isProviderApiKeyRequired(provider)
+          ? 'API key verified successfully.'
+          : 'Provider endpoint verified successfully.',
+        'ok',
+        latencyMs,
+      )
     }
 
     if (response.status === 401 || response.status === 403) {

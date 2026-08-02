@@ -7,10 +7,13 @@ import asyncio
 import time
 import hashlib
 import logging
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from enum import Enum
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Literal
 from cachetools import LRUCache
 import httpx
 from .config import settings
@@ -35,6 +38,7 @@ class LLMRequest:
     model: str = ""
     max_tokens: int = 1000
     temperature: float = 0.7
+    reasoning_effort: Literal["off", "low", "high", "max"] = "high"
     # Additional parameters can be added here
 
     def __post_init__(self):
@@ -60,6 +64,11 @@ class LLMRequest:
         # Validate max_tokens
         if not validate_max_tokens(self.max_tokens):
             raise ValueError(f"Invalid max_tokens: {self.max_tokens}. Must be between 1 and 4096")
+
+        if self.reasoning_effort not in {"off", "low", "high", "max"}:
+            raise ValueError(
+                "Invalid reasoning_effort: must be one of off, low, high, max"
+            )
 
 
 @dataclass
@@ -95,7 +104,33 @@ class InvalidAPIKeyError(LLMError):
 
 class RateLimitError(LLMError):
     """Raised when rate limit is exceeded"""
-    pass
+
+    def __init__(self, message: str, retry_after_seconds: Optional[int] = None):
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
+def parse_retry_after_seconds(
+    value: Optional[str],
+    now: Optional[datetime] = None,
+) -> int:
+    """Parse RFC Retry-After delay-seconds or HTTP-date with a safe fallback."""
+
+    if not value:
+        return 5
+
+    normalized = value.strip()
+    if normalized.isdigit():
+        return max(1, int(normalized))
+
+    try:
+        retry_at = parsedate_to_datetime(normalized)
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        current_time = now or datetime.now(timezone.utc)
+        return max(1, math.ceil((retry_at - current_time).total_seconds()))
+    except (TypeError, ValueError, OverflowError):
+        return 5
 
 
 class LLMProvider(ABC):
@@ -583,10 +618,11 @@ class DeepSeekProvider(LLMProvider):
                 "model": request.model or "deepseek-ai/DeepSeek-V4-Flash-0731",
                 "messages": [{"role": "user", "content": request.prompt}],
                 "max_tokens": request.max_tokens,
-                "reasoning_effort": "high",
                 "temperature": request.temperature,
                 "top_p": 0.95,
             }
+            if request.reasoning_effort != "off":
+                payload["reasoning_effort"] = request.reasoning_effort
 
             async with httpx.AsyncClient(
                 base_url=self.base_url,
@@ -596,10 +632,13 @@ class DeepSeekProvider(LLMProvider):
                 response = await client.post("/chat/completions", json=payload)
 
             if response.status_code == 429:
-                retry_after = response.headers.get("retry-after", "a few")
+                retry_after = parse_retry_after_seconds(
+                    response.headers.get("retry-after")
+                )
                 raise RateLimitError(
                     f"DeepSeek community endpoint rate limited; retry after "
-                    f"{retry_after} seconds"
+                    f"{retry_after} seconds",
+                    retry_after_seconds=retry_after,
                 )
             if response.status_code in (401, 403):
                 raise APIConnectionError(
@@ -711,7 +750,9 @@ class LLMManager:
         # Create cache key from request parameters
         try:
             cache_key = hashlib.md5(
-                f"{request.prompt}:{request.provider}:{request.model}:{request.max_tokens}:{request.temperature}".encode()
+                f"{request.prompt}:{request.provider}:{request.model}:"
+                f"{request.max_tokens}:{request.temperature}:"
+                f"{request.reasoning_effort}".encode()
             ).hexdigest()
         except Exception as e:
             logging.warning(f"Failed to create cache key: {str(e)}")

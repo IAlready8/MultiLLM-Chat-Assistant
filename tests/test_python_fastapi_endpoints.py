@@ -152,7 +152,9 @@ class TestChatEndpoint:
             'src.core.main.execute_llm_request', new_callable=AsyncMock
         ) as mock_execute:
             mock_redis_client.side_effect = Exception("Redis unavailable")
-            mock_execute.side_effect = RateLimitError("Rate limit exceeded")
+            mock_execute.side_effect = RateLimitError(
+                "Rate limit exceeded", retry_after_seconds=17
+            )
             
             request_data = {
                 "provider": "openai",
@@ -165,6 +167,7 @@ class TestChatEndpoint:
             response = client.post("/api/v1/llm/chat", json=request_data)
             
             assert response.status_code == 429  # Too Many Requests
+            assert response.headers["retry-after"] == "17"
             data = response.json()
             assert "Rate limit exceeded" in data["detail"]
 
@@ -568,7 +571,9 @@ class TestStreamEndpoint:
     @pytest.mark.asyncio
     async def test_stream_endpoint_rate_limit_error(self, client):
         with patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
-            mock_execute.side_effect = RateLimitError("Rate limit exceeded")
+            mock_execute.side_effect = RateLimitError(
+                "Rate limit exceeded", retry_after_seconds=17
+            )
 
             response = client.post(
                 "/api/v1/llm/stream",
@@ -586,6 +591,7 @@ class TestStreamEndpoint:
                     "type": "error",
                     "error": "Provider rate limit reached, please retry shortly",
                     "code": "RATE_LIMITED",
+                    "retryAfterSeconds": 17,
                 }
             ]
 

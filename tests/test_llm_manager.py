@@ -124,6 +124,21 @@ class TestLLMManager:
         assert "50.00%" in stats["cache_hit_rate"]
 
     @pytest.mark.asyncio
+    async def test_reasoning_effort_is_part_of_cache_identity(self, llm_manager):
+        provider = MockProvider("reasoning-provider")
+        await llm_manager.register_provider(ProviderType.OPENAI, provider)
+
+        common = {
+            "prompt": "Compare reasoning modes",
+            "provider": ProviderType.OPENAI,
+            "model": "reasoning-model",
+        }
+        await llm_manager.generate(LLMRequest(**common, reasoning_effort="off"))
+        await llm_manager.generate(LLMRequest(**common, reasoning_effort="max"))
+
+        assert provider.call_count == 2
+
+    @pytest.mark.asyncio
     async def test_provider_selection(self, llm_manager, sample_request):
         """Test that requests use their explicitly selected provider."""
 

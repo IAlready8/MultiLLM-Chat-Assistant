@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
       model,
       temperature,
       max_tokens,
+      reasoning_effort,
       stream = true,
     } = body
 
@@ -111,6 +112,17 @@ export async function POST(req: NextRequest) {
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return jsonErrorResponse(400, 'Messages are required', 'VALIDATION_ERROR')
+    }
+
+    if (
+      reasoning_effort !== undefined &&
+      !['off', 'low', 'high', 'max'].includes(reasoning_effort)
+    ) {
+      return jsonErrorResponse(
+        400,
+        'reasoning_effort must be one of: off, low, high, max',
+        'VALIDATION_ERROR',
+      )
     }
 
     // Resolve adapter from shared provider registry
@@ -170,6 +182,7 @@ export async function POST(req: NextRequest) {
       model: resolvedModel,
       temperature,
       max_tokens,
+      reasoning_effort,
       userId,
     }
 
