@@ -27,6 +27,7 @@
     "coverage": "vitest run --coverage --passWithNoTests",
     "lint": "eslint . --max-warnings=0",
     "ops:alias:check": "node scripts/alias-commit-guard.mjs",
+    "ops:auth:check": "node scripts/auth-provider-guard.mjs",
     "auth:audit-legacy-users": "node scripts/audit-legacy-auth-users.mjs",
     "auth:delete-legacy-user": "node scripts/delete-legacy-auth-user.mjs",
     "postinstall": "prisma generate",

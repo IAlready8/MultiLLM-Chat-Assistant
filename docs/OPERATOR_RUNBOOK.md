@@ -179,12 +179,14 @@ Execution order used in live proof:
 4. Promote the deployment to the canonical alias:
    - `npx vercel promote <deployment-id> --yes -S itsokialready8`
 5. Verify on the canonical production URL:
-   - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app --expected-commit-sha <full-release-commit-sha> --expected-version <exact-release-version>`
+   - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app --expected-commit-sha <full-release-commit-sha> --expected-version <exact-release-version> --require-oauth-provider google`
 6. Run smoke:
    - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
 7. Run the credential-free canonical alias guard:
    - `npm run ops:alias:check -- --base-url https://multi-llm-chat-assistant.vercel.app --expected-commit-sha <full-release-commit-sha> --expected-version <exact-release-version>`
-8. If billing-ready proof is in scope:
+8. Run the credential-free canonical OAuth callback guard:
+   - `npm run ops:auth:check -- --base-url https://multi-llm-chat-assistant.vercel.app --provider google`
+9. If billing-ready proof is in scope:
    - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app --require-stripe --check-webhook`
 
 Live proof captured:

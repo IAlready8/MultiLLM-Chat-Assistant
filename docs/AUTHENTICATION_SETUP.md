@@ -92,13 +92,36 @@ Preview and Production are separate scopes. Production credentials should not
 be copied into Preview unless the preview callback URL is intentionally
 registered with the provider.
 
+## Callback Verification
+
+Provider discovery is credential-free and is the safest way to prove that
+NextAuth is constructing URLs for the intended deployment. For production
+Google OAuth, run:
+
+```bash
+npm run ops:auth:check -- \
+  --base-url https://multi-llm-chat-assistant.vercel.app \
+  --provider google
+```
+
+The guard fails when the provider is absent, is not OAuth, the endpoint redirects
+or times out, or the advertised sign-in/callback URL is derived from a different
+domain. It never prints the OAuth client secret. The equivalent manual GitHub
+workflow, **Ops - Production Auth Provider Guard**, is bound to the canonical
+production domain so an operator cannot accidentally verify a preview URL.
+
+This guard proves provider availability and callback construction. It does not
+replace the provider-console allowlist: Google must still contain the same exact
+callback URI under **Authorized redirect URIs**.
+
 ## Safe Rollout Order
 
 1. Register the OAuth application with the exact canonical callback URL.
 2. Add the provider ID and secret directly to Vercel Production.
 3. Add the real operator email to `AUTH_OWNER_EMAILS` in Vercel Production.
-4. Confirm `/api/auth/providers` lists the intended provider and never exposes a
-   client secret.
+4. Run `npm run ops:auth:check -- --base-url <deployment-url> --provider
+   <provider-id>` to confirm the provider and exact callback URL. The discovery
+   response must never expose a client secret.
 5. Deploy the reviewed commit to a preview with its own registered OAuth client,
    or validate the credential-independent auth UI and route enforcement.
 6. Run type-check, lint, unit tests, coverage, build, and unauthenticated smoke.
@@ -120,6 +143,9 @@ registered with the provider.
 - Unknown and incorrect password attempts receive the same sign-in failure.
 - `OAuthAccountNotLinked` must not be bypassed automatically; it protects an
   existing account from being linked solely by matching an email address.
+- `npm run verify:prod -- --base-url <url> --require-oauth-provider google`
+  verifies both the configured production env pair and the public canonical
+  callback contract when Google account creation is release-blocking.
 
 ## Password Registration Follow-up
 

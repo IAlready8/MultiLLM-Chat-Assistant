@@ -1,0 +1,34 @@
+name: Ops - Production Auth Provider Guard
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: OAuth provider ID required on the canonical production domain
+        required: true
+        default: google
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Verify OAuth Callback
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Verify canonical OAuth provider
+        env:
+          BASE_URL: https://multi-llm-chat-assistant.vercel.app
+          OAUTH_PROVIDER_ID: ${{ inputs.provider }}
+        run: node scripts/auth-provider-guard.mjs
