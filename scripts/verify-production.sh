@@ -8,6 +8,7 @@ REQUIRE_SIDECAR=false
 CHECK_WEBHOOK=false
 EXPECTED_COMMIT_SHA=""
 EXPECTED_VERSION=""
+REQUIRE_OAUTH_PROVIDER=""
 USE_VERCEL_CURL="${USE_VERCEL_CURL:-false}"
 VERCEL_CURL_DEPLOYMENT="${VERCEL_CURL_DEPLOYMENT:-}"
 
@@ -23,13 +24,15 @@ Options:
   --check-webhook        Validate webhook endpoint behavior on --base-url
   --expected-commit-sha  Require /api/health release.commitSha to match a full SHA
   --expected-version     Require /api/health release.version to match exactly
+  --require-oauth-provider  Require one OAuth provider and its canonical callback URL
   --help                 Show this help
 
 Examples:
   bash scripts/verify-production.sh --base-url https://example.vercel.app
   bash scripts/verify-production.sh --base-url https://example.vercel.app \
     --expected-commit-sha 0123456789abcdef0123456789abcdef01234567 \
-    --expected-version 0.2.0-private-pilot.3
+    --expected-version 0.2.0-private-pilot.3 \
+    --require-oauth-provider google
   bash scripts/verify-production.sh --apply-migrations --require-stripe --require-sidecar
 
 Protected Vercel preview support:
@@ -151,6 +154,14 @@ while [[ $# -gt 0 ]]; do
       EXPECTED_VERSION="${2:-}"
       shift 2
       ;;
+    --require-oauth-provider)
+      if [[ -z "${2:-}" ]]; then
+        echo "ERROR: --require-oauth-provider requires a provider ID."
+        exit 1
+      fi
+      REQUIRE_OAUTH_PROVIDER="${2:-}"
+      shift 2
+      ;;
     --help)
       print_help
       exit 0
@@ -183,6 +194,11 @@ if [[ -n "${EXPECTED_COMMIT_SHA}" && -z "${BASE_URL}" ]]; then
   exit 1
 fi
 
+if [[ -n "${REQUIRE_OAUTH_PROVIDER}" && -z "${BASE_URL}" ]]; then
+  echo "ERROR: --require-oauth-provider requires --base-url."
+  exit 1
+fi
+
 if [[ -n "${EXPECTED_COMMIT_SHA}" && ! "${EXPECTED_COMMIT_SHA}" =~ ^[0-9a-fA-F]{40}$ ]]; then
   echo "ERROR: --expected-commit-sha must be exactly 40 hexadecimal characters."
   exit 1
@@ -195,6 +211,23 @@ require_env API_KEY_ENCRYPTION_SEED
 resolve_database_url
 ensure_pair_or_empty GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
 ensure_pair_or_empty GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET
+
+if [[ -n "${REQUIRE_OAUTH_PROVIDER}" ]]; then
+  case "${REQUIRE_OAUTH_PROVIDER}" in
+    google)
+      require_env GOOGLE_CLIENT_ID
+      require_env GOOGLE_CLIENT_SECRET
+      ;;
+    github)
+      require_env GITHUB_CLIENT_ID
+      require_env GITHUB_CLIENT_SECRET
+      ;;
+    *)
+      echo "ERROR: --require-oauth-provider supports google or github."
+      exit 1
+      ;;
+  esac
+fi
 
 STRIPE_SECRET="${STRIPE_SECRET_KEY:-}"
 STRIPE_PRICE="${STRIPE_PRO_PRICE_ID:-}"
@@ -359,6 +392,22 @@ const commitSha = verifyReleasePayload(payload, process.env.EXPECTED_COMMIT_SHA)
 const version = verifyReleaseVersion(payload, process.env.EXPECTED_VERSION)
 console.log(`Release commit matches expected full SHA: ${commitSha}`)
 console.log(`Release version matches expected value: ${version}`)
+NODE
+  fi
+
+  if [[ -n "${REQUIRE_OAUTH_PROVIDER}" ]]; then
+    echo "==> Checking canonical OAuth provider callback"
+    AUTH_PROVIDERS_JSON="$(remote_request "${BASE_URL}/api/auth/providers" -fsS)"
+    AUTH_PROVIDERS_JSON="${AUTH_PROVIDERS_JSON}" BASE_URL="${BASE_URL}" OAUTH_PROVIDER_ID="${REQUIRE_OAUTH_PROVIDER}" node --input-type=module <<'NODE'
+import { verifyAuthProviderPayload } from './scripts/auth-provider-guard.mjs'
+
+const payload = JSON.parse(process.env.AUTH_PROVIDERS_JSON || '{}')
+const result = verifyAuthProviderPayload(payload, {
+  baseUrl: process.env.BASE_URL,
+  providerId: process.env.OAUTH_PROVIDER_ID,
+})
+console.log(`OAuth provider available: ${result.providerId} (${result.name})`)
+console.log(`OAuth callback matches canonical URL: ${result.callbackUrl}`)
 NODE
   fi
 
