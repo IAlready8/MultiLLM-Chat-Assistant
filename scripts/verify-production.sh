@@ -7,6 +7,7 @@ REQUIRE_STRIPE=false
 REQUIRE_SIDECAR=false
 CHECK_WEBHOOK=false
 EXPECTED_COMMIT_SHA=""
+EXPECTED_VERSION=""
 USE_VERCEL_CURL="${USE_VERCEL_CURL:-false}"
 VERCEL_CURL_DEPLOYMENT="${VERCEL_CURL_DEPLOYMENT:-}"
 
@@ -21,12 +22,14 @@ Options:
   --require-sidecar      Require PYTHON_CORE_URL and verify sidecar health
   --check-webhook        Validate webhook endpoint behavior on --base-url
   --expected-commit-sha  Require /api/health release.commitSha to match a full SHA
+  --expected-version     Require /api/health release.version to match exactly
   --help                 Show this help
 
 Examples:
   bash scripts/verify-production.sh --base-url https://example.vercel.app
   bash scripts/verify-production.sh --base-url https://example.vercel.app \
-    --expected-commit-sha 0123456789abcdef0123456789abcdef01234567
+    --expected-commit-sha 0123456789abcdef0123456789abcdef01234567 \
+    --expected-version 0.2.0-private-pilot.3
   bash scripts/verify-production.sh --apply-migrations --require-stripe --require-sidecar
 
 Protected Vercel preview support:
@@ -140,6 +143,14 @@ while [[ $# -gt 0 ]]; do
       EXPECTED_COMMIT_SHA="${2:-}"
       shift 2
       ;;
+    --expected-version)
+      if [[ -z "${2:-}" ]]; then
+        echo "ERROR: --expected-version requires a value."
+        exit 1
+      fi
+      EXPECTED_VERSION="${2:-}"
+      shift 2
+      ;;
     --help)
       print_help
       exit 0
@@ -157,8 +168,18 @@ if [[ "${CHECK_WEBHOOK}" == "true" && -z "${BASE_URL}" ]]; then
   exit 1
 fi
 
+if [[ -n "${EXPECTED_COMMIT_SHA}" && -z "${EXPECTED_VERSION}" ]]; then
+  echo "ERROR: --expected-commit-sha and --expected-version must be provided together."
+  exit 1
+fi
+
+if [[ -n "${EXPECTED_VERSION}" && -z "${EXPECTED_COMMIT_SHA}" ]]; then
+  echo "ERROR: --expected-commit-sha and --expected-version must be provided together."
+  exit 1
+fi
+
 if [[ -n "${EXPECTED_COMMIT_SHA}" && -z "${BASE_URL}" ]]; then
-  echo "ERROR: --expected-commit-sha requires --base-url."
+  echo "ERROR: release identity checks require --base-url."
   exit 1
 fi
 
@@ -326,13 +347,18 @@ console.log(
 NODE
 
   if [[ -n "${EXPECTED_COMMIT_SHA}" ]]; then
-    echo "==> Checking deployment release commit"
-    HEALTH_JSON="${HEALTH_JSON}" EXPECTED_COMMIT_SHA="${EXPECTED_COMMIT_SHA}" node --input-type=module <<'NODE'
-import { verifyReleasePayload } from './scripts/alias-commit-guard.mjs'
+    echo "==> Checking deployment release identity"
+    HEALTH_JSON="${HEALTH_JSON}" EXPECTED_COMMIT_SHA="${EXPECTED_COMMIT_SHA}" EXPECTED_VERSION="${EXPECTED_VERSION}" node --input-type=module <<'NODE'
+import {
+  verifyReleasePayload,
+  verifyReleaseVersion,
+} from './scripts/alias-commit-guard.mjs'
 
 const payload = JSON.parse(process.env.HEALTH_JSON || '{}')
 const commitSha = verifyReleasePayload(payload, process.env.EXPECTED_COMMIT_SHA)
+const version = verifyReleaseVersion(payload, process.env.EXPECTED_VERSION)
 console.log(`Release commit matches expected full SHA: ${commitSha}`)
+console.log(`Release version matches expected value: ${version}`)
 NODE
   fi
 

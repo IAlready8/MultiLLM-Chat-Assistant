@@ -3,13 +3,12 @@ name: Ops - Production Alias Guard
 on:
   workflow_dispatch:
     inputs:
-      production_url:
-        description: Canonical production base URL
-        required: true
-        default: https://multi-llm-chat-assistant.vercel.app
-        type: string
       expected_commit_sha:
         description: Exact 40-character commit SHA expected in production
+        required: true
+        type: string
+      expected_version:
+        description: Exact release version expected in production
         required: true
         type: string
 
@@ -33,6 +32,7 @@ jobs:
 
       - name: Verify canonical alias release
         env:
-          BASE_URL: ${{ inputs.production_url }}
+          BASE_URL: https://multi-llm-chat-assistant.vercel.app
           EXPECTED_COMMIT_SHA: ${{ inputs.expected_commit_sha }}
+          EXPECTED_VERSION: ${{ inputs.expected_version }}
         run: node scripts/alias-commit-guard.mjs
