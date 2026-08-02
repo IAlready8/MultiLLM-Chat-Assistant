@@ -20,6 +20,7 @@ interface LLMStreamRequest {
   provider: string
   messages: Array<{ role: string; content: string }>
   model?: string
+  reasoning_effort?: 'off' | 'low' | 'high' | 'max'
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest) {
     const providerRaw = body?.provider
     const messages = body?.messages
     const model = body?.model
+    const reasoningEffort = body?.reasoning_effort
 
     if (
       typeof providerRaw !== 'string' ||
@@ -89,6 +91,16 @@ export async function POST(request: NextRequest) {
       messages.length === 0
     ) {
       return jsonErrorResponse(400, 'Provider and messages are required', 'VALIDATION_ERROR')
+    }
+    if (
+      reasoningEffort !== undefined &&
+      !['off', 'low', 'high', 'max'].includes(reasoningEffort)
+    ) {
+      return jsonErrorResponse(
+        400,
+        'reasoning_effort must be one of: off, low, high, max',
+        'VALIDATION_ERROR',
+      )
     }
     const provider = providerRaw.trim().toLowerCase()
 
@@ -149,6 +161,7 @@ export async function POST(request: NextRequest) {
     const providerRequest: ProviderRequest = {
       messages: messages as any,
       model: model || providerModels[0],
+      reasoning_effort: reasoningEffort,
       userId,
     }
 

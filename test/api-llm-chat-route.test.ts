@@ -133,6 +133,27 @@ describe('/api/llm/chat route', () => {
     })
   })
 
+  it('rejects unsupported reasoning effort values before provider lookup', async () => {
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'deepseek',
+          reasoning_effort: 'extreme',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'reasoning_effort must be one of: off, low, high, max',
+      code: 'VALIDATION_ERROR',
+    })
+    expect(mockGetUserProviderConfigs).not.toHaveBeenCalled()
+  })
+
   it('returns unsupported provider error', async () => {
     const response = await POST(
       new NextRequest('http://localhost/api/llm/chat', {

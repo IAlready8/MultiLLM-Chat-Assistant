@@ -88,10 +88,13 @@ def _classify_stream_error(error: Exception) -> dict:
         }
 
     if isinstance(error, RateLimitError) or "rate limit" in lower or "http 429" in lower:
-        return {
+        payload = {
             "code": "RATE_LIMITED",
             "error": "Provider rate limit reached, please retry shortly",
         }
+        if isinstance(error, RateLimitError) and error.retry_after_seconds:
+            payload["retryAfterSeconds"] = error.retry_after_seconds
+        return payload
 
     if isinstance(error, APIConnectionError) or "timeout" in lower or "timed out" in lower or "abort" in lower:
         return {
@@ -244,7 +247,12 @@ async def post_chat(request: ProviderRequest):
         raise HTTPException(status_code=401, detail=str(e))
     except RateLimitError as e:
         log.warning(f"Rate limit error: {str(e)}")
-        raise HTTPException(status_code=429, detail=str(e))
+        headers = (
+            {"Retry-After": str(e.retry_after_seconds)}
+            if e.retry_after_seconds
+            else None
+        )
+        raise HTTPException(status_code=429, detail=str(e), headers=headers)
     except APIConnectionError as e:
         log.error(f"API connection error: {str(e)}")
         raise HTTPException(status_code=502, detail=str(e))
@@ -317,6 +325,7 @@ async def post_stream(request: ProviderStreamRequest):
                 prompt=_messages_to_prompt(request.messages),
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,
+                reasoning_effort=request.reasoning_effort,
             )
             response = await execute_llm_request(provider_request)
 
@@ -336,13 +345,7 @@ async def post_stream(request: ProviderStreamRequest):
             yield _stream_event({"type": "done"})
         except Exception as exc:
             error_payload = _classify_stream_error(exc)
-            yield _stream_event(
-                {
-                    "type": "error",
-                    "error": error_payload["error"],
-                    "code": error_payload["code"],
-                }
-            )
+            yield _stream_event({"type": "error", **error_payload})
 
     return StreamingResponse(
         event_generator(),

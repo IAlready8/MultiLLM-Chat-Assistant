@@ -1,6 +1,6 @@
 from .schemas import ProviderRequest, ProviderResponse
 from .config import settings
-from .llm_manager import LLMManager, LLMRequest, ProviderType
+from .llm_manager import LLMError, LLMManager, LLMRequest, ProviderType
 from .security_utils import scrub_sensitive_info
 import time
 import logging
@@ -49,7 +49,8 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
             provider=ProviderType(req.provider),
             model=req.model,
             max_tokens=req.max_tokens,
-            temperature=req.temperature
+            temperature=req.temperature,
+            reasoning_effort=req.reasoning_effort,
         )
 
         # Execute using the LLM manager
@@ -80,6 +81,8 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
             cost_usd=0.0,
             latency_ms=int((time.monotonic() - start_time) * 1000)
         )
+    except LLMError:
+        raise
     except Exception as e:
         # Handle unexpected errors
         logging.error(f"Error executing LLM request: {str(e)}", exc_info=True)

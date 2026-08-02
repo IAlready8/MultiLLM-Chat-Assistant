@@ -164,13 +164,17 @@ Key groups:
 - Optional billing: `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
 - Optional sidecar routing: `PYTHON_CORE_URL`
 - Optional app metadata/network tuning: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL`, `LLM_FETCH_TIMEOUT_MS`, `LLM_FETCH_RETRIES`
+- Optional client secure-storage override: `NEXT_PUBLIC_SECURE_STORAGE_KEY`
 
 DeepSeek uses the preconfigured, shared Hugging Face community endpoint for
 `deepseek-ai/DeepSeek-V4-Flash-0731`. It requires no API key and currently
 advertises no usage charge, but it is experimental, rate-limited, has no SLA,
 and is operated by a community host. Never submit private, confidential, or
 sensitive data to it, and do not rely on it as the sole production provider.
-- Optional client secure-storage override: `NEXT_PUBLIC_SECURE_STORAGE_KEY`
+DeepSeek chat and stream requests accept `reasoning_effort` values `off`,
+`low`, `high`, or `max`; omitted values retain the existing `high` default,
+while `off` omits the upstream reasoning field. Rate-limit responses preserve
+the endpoint's `Retry-After` delay for clients.
 
 ## Deployment
 - Operator runbook: `docs/OPERATOR_RUNBOOK.md`

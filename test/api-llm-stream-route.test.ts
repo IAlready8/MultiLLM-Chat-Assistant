@@ -110,6 +110,25 @@ describe('/api/llm/stream route', () => {
     })
   })
 
+  it('rejects unsupported reasoning effort values before authentication', async () => {
+    const response = await POST(
+      makeRequest(
+        JSON.stringify({
+          provider: 'deepseek',
+          reasoning_effort: 'extreme',
+          messages: [{ role: 'user', content: 'hi' }],
+        })
+      )
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'reasoning_effort must be one of: off, low, high, max',
+      code: 'VALIDATION_ERROR',
+    })
+    expect(mockGetAuthenticatedUser).not.toHaveBeenCalled()
+  })
+
   it('returns unsupported provider error', async () => {
     const response = await POST(
       makeRequest(JSON.stringify({ provider: 'unknown', messages: [{ role: 'user', content: 'hi' }] }))
