@@ -1,16 +1,5 @@
 import { logger } from '@/lib/logger'
-
-// Conditional import for Redis
-let createClient: any = null
-
-try {
-  const redis = require('redis')
-  createClient = redis.createClient
-} catch (error) {
-  logger.warn('rate_limit_redis_module_unavailable', {
-    reason: 'Redis package unavailable; using in-memory rate limiting',
-  })
-}
+import { createClient } from 'redis'
 
 type Key = string
 
@@ -32,12 +21,12 @@ export interface RateLimitDiagnostics {
 const hits = new Map<Key, number[]>()
 
 // Redis client instance
-let redisClient: any = null
+let redisClient: ReturnType<typeof createClient> | null = null
 let isRedisConnected = false
 
 // Initialize Redis connection if REDIS_URL is provided
 async function initRedis() {
-  if (!process.env.REDIS_URL || redisClient || !createClient) return
+  if (!process.env.REDIS_URL || redisClient) return
 
   try {
     redisClient = createClient({
@@ -86,6 +75,30 @@ function checkAndConsumeInMemory(key: Key, cfg: LimitConfig) {
   return { allowed: true as const, remaining: Math.max(0, cfg.max - recent.length), retryAfterMs: 0 }
 }
 
+const REDIS_SLIDING_WINDOW_SCRIPT = `
+local key = KEYS[1]
+local timestamp = tonumber(ARGV[1])
+local window_ms = tonumber(ARGV[2])
+local max_requests = tonumber(ARGV[3])
+local member = ARGV[4]
+
+redis.call('ZREMRANGEBYSCORE', key, 0, timestamp - window_ms)
+local current_count = redis.call('ZCARD', key)
+
+if current_count >= max_requests then
+  local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+  local retry_after_ms = 0
+  if #oldest >= 2 then
+    retry_after_ms = math.max(0, window_ms - (timestamp - tonumber(oldest[2])))
+  end
+  return {0, math.max(0, max_requests - current_count), retry_after_ms}
+end
+
+redis.call('ZADD', key, timestamp, member)
+redis.call('PEXPIRE', key, window_ms + 10000)
+return {1, math.max(0, max_requests - current_count - 1), 0}
+`
+
 // Redis-based implementation
 async function checkAndConsumeRedis(key: Key, cfg: LimitConfig) {
   if (!redisClient || !isRedisConnected) {
@@ -94,40 +107,22 @@ async function checkAndConsumeRedis(key: Key, cfg: LimitConfig) {
 
   try {
     const timestamp = now()
-    const windowStart = timestamp - cfg.windowMs
-
-    // Use Redis transactions for atomic operations
-    const multi = redisClient.multi()
-
-    // Remove old entries outside the window
-    multi.zRemRangeByScore(key, 0, windowStart)
-
-    // Count current requests in window
-    multi.zCard(key)
-
-    // Add current request
-    multi.zAdd(key, { score: timestamp, value: `${timestamp}-${Math.random()}` })
-
-    // Set expiration to clean up old keys automatically
-    multi.expire(key, Math.ceil(cfg.windowMs / 1000) + 10)
-
-    const results = await multi.exec()
-
-    // The second result (index 1) is the count from zcard
-    const currentCount = Number(results[1])
-
-    if (currentCount >= cfg.max) {
-      // Get the oldest timestamp to calculate retry time
-      const oldest = await redisClient.zRangeWithScores(key, 0, 0)
-      const retryAfterMs =
-        oldest.length > 0 ? cfg.windowMs - (timestamp - oldest[0].score) : 0
-      return { allowed: false as const, remaining: Math.max(0, cfg.max - currentCount), retryAfterMs }
-    }
+    const member = `${timestamp}-${Math.random()}`
+    const result = await redisClient.eval(REDIS_SLIDING_WINDOW_SCRIPT, {
+      keys: [key],
+      arguments: [
+        String(timestamp),
+        String(cfg.windowMs),
+        String(cfg.max),
+        member,
+      ],
+    }) as Array<number | string>
+    const [allowed, remaining, retryAfterMs] = result.map(Number)
 
     return {
-      allowed: true as const,
-      remaining: Math.max(0, cfg.max - currentCount),
-      retryAfterMs: 0,
+      allowed: allowed === 1,
+      remaining: Math.max(0, remaining),
+      retryAfterMs: Math.max(0, retryAfterMs),
     }
   } catch (error) {
     logger.warn('rate_limit_redis_request_failed', {
@@ -147,11 +142,6 @@ export async function checkAndConsume(key: Key, cfg: LimitConfig) {
 
 export function resetAll() {
   hits.clear()
-  if (redisClient && isRedisConnected) {
-    redisClient.flushAll().catch((error: unknown) => {
-      logger.warn('rate_limit_redis_flush_failed', { error })
-    })
-  }
 }
 
 export function getRateLimitDiagnostics(): RateLimitDiagnostics {

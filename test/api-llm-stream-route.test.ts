@@ -192,6 +192,9 @@ describe('/api/llm/stream route', () => {
     )
 
     expect(second.status).toBe(429)
+    const retryAfter = Number(second.headers.get('Retry-After'))
+    expect(retryAfter).toBeGreaterThan(0)
+    expect(retryAfter).toBeLessThanOrEqual(60)
     await expect(second.json()).resolves.toEqual({
       error: 'Rate limit exceeded',
       code: 'RATE_LIMITED',

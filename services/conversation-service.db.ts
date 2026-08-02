@@ -27,6 +27,9 @@ const db = createDbAvailabilityTracker()
 const getFallbackUserStore = (userId: string) =>
   getOrCreateUserStore(fallbackConversations, userId)
 
+const peekFallbackUserStore = (userId: string) =>
+  fallbackConversations.get(userId)
+
 const createId = (prefix: string) => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `${prefix}-${crypto.randomUUID()}`
@@ -45,7 +48,7 @@ const toConversation = (conversation: ConversationWithMessages): Conversation =>
 }
 
 const countComparisonReadyFallbackConversations = (userId: string) =>
-  Array.from(getFallbackUserStore(userId).values()).filter(conversation =>
+  Array.from(peekFallbackUserStore(userId)?.values() ?? []).filter(conversation =>
     conversation.messages.some(
       message => message.role === 'assistant' && Boolean(message.provider)
     )
@@ -55,7 +58,7 @@ const countWeeklySavedBriefComparisonFallbackConversations = (
   userId: string,
   updatedSince: Date
 ) =>
-  Array.from(getFallbackUserStore(userId).values()).filter(
+  Array.from(peekFallbackUserStore(userId)?.values() ?? []).filter(
     conversation =>
       conversation.messages.some(
         message =>
