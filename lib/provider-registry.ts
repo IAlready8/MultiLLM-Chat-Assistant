@@ -4,6 +4,8 @@ export interface ProviderMeta {
   placeholder: string
   description: string
   requiresApiKey: boolean
+  /** False when the provider does not accept a user credential at all. */
+  acceptsApiKey?: boolean
 }
 
 export const providerRegistry: ProviderMeta[] = [
@@ -62,6 +64,14 @@ export const providerRegistry: ProviderMeta[] = [
     placeholder: 'Kimi API key',
     description: 'Long-context Kimi models for reasoning, writing, and coding.',
     requiresApiKey: true,
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek V4 Community',
+    placeholder: 'No API key required',
+    description: 'Shared public community endpoint. Do not submit private or sensitive data.',
+    requiresApiKey: false,
+    acceptsApiKey: false,
   },
 ]
 

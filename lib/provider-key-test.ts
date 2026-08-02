@@ -37,6 +37,8 @@ export const validateApiKeyFormat = (
       return null
     case 'kimi':
       return null
+    case 'deepseek':
+      return null
     case 'ollama':
       return null
     default:
@@ -96,6 +98,10 @@ export const testProviderKey = async (provider: string, apiKey: string) => {
       return fetchWithTimeout('https://api.moonshot.ai/v1/models', {
         method: 'GET',
         headers: { Authorization: `Bearer ${apiKey}` },
+      })
+    case 'deepseek':
+      return fetchWithTimeout('https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1/models', {
+        method: 'GET',
       })
     case 'ollama':
       return fetchWithTimeout('http://localhost:11434/api/tags', {

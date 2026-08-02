@@ -26,10 +26,23 @@ interface LLMStreamRequest {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const jsonErrorResponse = (status: number, error: string, code: string) =>
+const jsonErrorResponse = (
+  status: number,
+  error: string,
+  code: string,
+  retryAfterSeconds?: number,
+) =>
   new Response(
     JSON.stringify({ error, code }),
-    { status, headers: { 'Content-Type': 'application/json' } },
+    {
+      status,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(retryAfterSeconds
+          ? { 'Retry-After': String(retryAfterSeconds) }
+          : {}),
+      },
+    },
   )
 
 const safeRecordEvent = async (event: {
@@ -183,6 +196,7 @@ export async function POST(request: NextRequest) {
           type: 'error',
           error: mappedError.error,
           code: mappedError.code,
+          retryAfterSeconds: mappedError.retryAfterSeconds,
           details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         })
 
@@ -214,6 +228,11 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Streaming API error:', error)
     const mappedError = classifyProviderError(error)
-    return jsonErrorResponse(mappedError.status, mappedError.error, mappedError.code)
+    return jsonErrorResponse(
+      mappedError.status,
+      mappedError.error,
+      mappedError.code,
+      mappedError.retryAfterSeconds,
+    )
   }
 }

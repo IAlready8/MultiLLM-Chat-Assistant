@@ -57,4 +57,24 @@ describe('recent provider model catalog', () => {
       getContextWindowLimit('anthropic', 'claude-haiku-4-5-20251001'),
     ).toBe(200_000)
   })
+
+  it('exposes only the served DeepSeek community model and deployment limit', () => {
+    expect(getModelsForProvider('deepseek').map((model) => model.id)).toEqual([
+      'deepseek-ai/DeepSeek-V4-Flash-0731',
+    ])
+    expect(defaultProviderModels.deepseek).toEqual([
+      'deepseek-ai/DeepSeek-V4-Flash-0731',
+    ])
+    expect(getDefaultModel('deepseek')).toBe(
+      'deepseek-ai/DeepSeek-V4-Flash-0731',
+    )
+    expect(
+      getContextWindowLimit(
+        'deepseek',
+        'deepseek-ai/DeepSeek-V4-Flash-0731',
+      ),
+    ).toBe(
+      393_216,
+    )
+  })
 })

@@ -63,7 +63,7 @@ export interface ProviderConfig {
 }
 
 /**
- * Store an encrypted API key for a user and provider
+ * Store a provider configuration, encrypting a credential only when present.
  */
 export async function storeUserApiKey(
   userId: string,
@@ -71,8 +71,9 @@ export async function storeUserApiKey(
   apiKey: string,
   settings?: Record<string, any>
 ): Promise<ProviderConfig> {
-  const encryptionKey = await getEncryptionKey()
-  const encryptedApiKey = await aesGcmEncrypt(encryptionKey, apiKey)
+  const encryptedApiKey = apiKey
+    ? await aesGcmEncrypt(await getEncryptionKey(), apiKey)
+    : null
 
   const saveToFallback = () => {
     const store = getFallbackUserStore(userId)

@@ -24,6 +24,7 @@ class ProviderType(str, Enum):
     GOOGLE = "google"
     COHERE = "cohere"
     KIMI = "kimi"
+    DEEPSEEK = "deepseek"
 
 
 @dataclass
@@ -561,6 +562,114 @@ class KimiProvider(LLMProvider):
 
     def health_check(self) -> bool:
         return settings.MOONSHOT_API_KEY is not None
+
+
+class DeepSeekProvider(LLMProvider):
+    """Credentialless DeepSeek V4 Flash community endpoint provider."""
+
+    def __init__(self):
+        self.base_url = (
+            "https://q5dh1rfszfym23hj.us-east-2.aws.endpoints."
+            "huggingface.cloud/v1"
+        )
+        self.headers = {"Content-Type": "application/json"}
+        self.timeout = 120.0
+
+    async def generate(self, request: LLMRequest) -> LLMResponse:
+        start_time = time.time()
+
+        try:
+            payload = {
+                "model": request.model or "deepseek-ai/DeepSeek-V4-Flash-0731",
+                "messages": [{"role": "user", "content": request.prompt}],
+                "max_tokens": request.max_tokens,
+                "reasoning_effort": "high",
+                "temperature": request.temperature,
+                "top_p": 0.95,
+            }
+
+            async with httpx.AsyncClient(
+                base_url=self.base_url,
+                headers=self.headers,
+                timeout=self.timeout,
+            ) as client:
+                response = await client.post("/chat/completions", json=payload)
+
+            if response.status_code == 429:
+                retry_after = response.headers.get("retry-after", "a few")
+                raise RateLimitError(
+                    f"DeepSeek community endpoint rate limited; retry after "
+                    f"{retry_after} seconds"
+                )
+            if response.status_code in (401, 403):
+                raise APIConnectionError(
+                    f"DeepSeek community endpoint rejected the request: {response.text}"
+                )
+            if response.status_code >= 500:
+                raise APIConnectionError(f"DeepSeek server error: {response.text}")
+            if not response.is_success:
+                response.raise_for_status()
+
+            try:
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+                if not isinstance(content, str):
+                    raise TypeError("DeepSeek response content is not text")
+            except (ValueError, KeyError, IndexError, TypeError) as exc:
+                logging.error(f"Unexpected response format from DeepSeek: {exc}")
+                return LLMResponse(
+                    content="Error: Unexpected response format from DeepSeek API",
+                    provider=ProviderType.DEEPSEEK,
+                    model=request.model,
+                    tokens_used=0,
+                    latency_ms=(time.time() - start_time) * 1000,
+                )
+
+            usage = data.get("usage") or {}
+            tokens_used = usage.get("total_tokens")
+            if not isinstance(tokens_used, int):
+                tokens_used = len(request.prompt.split()) + len(content.split())
+
+            return LLMResponse(
+                content=content,
+                provider=ProviderType.DEEPSEEK,
+                model=data.get(
+                    "model",
+                    request.model or "deepseek-ai/DeepSeek-V4-Flash-0731",
+                ),
+                tokens_used=tokens_used,
+                latency_ms=(time.time() - start_time) * 1000,
+            )
+        except httpx.TimeoutException:
+            return LLMResponse(
+                content="Error: DeepSeek API request timed out",
+                provider=ProviderType.DEEPSEEK,
+                model=request.model,
+                tokens_used=0,
+                latency_ms=(time.time() - start_time) * 1000,
+            )
+        except httpx.RequestError as exc:
+            return LLMResponse(
+                content=f"Error connecting to DeepSeek API: {str(exc)}",
+                provider=ProviderType.DEEPSEEK,
+                model=request.model,
+                tokens_used=0,
+                latency_ms=(time.time() - start_time) * 1000,
+            )
+        except RateLimitError:
+            raise
+        except Exception as exc:
+            logging.exception(f"Unexpected error in DeepSeek provider: {str(exc)}")
+            return LLMResponse(
+                content=f"Error calling DeepSeek API: {str(exc)}",
+                provider=ProviderType.DEEPSEEK,
+                model=request.model,
+                tokens_used=0,
+                latency_ms=(time.time() - start_time) * 1000,
+            )
+
+    def health_check(self) -> bool:
+        return True
 
 
 class LLMManager:

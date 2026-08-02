@@ -142,6 +142,25 @@ describe('/api/config route', () => {
     expect(mockDeleteUserProviderConfig).not.toHaveBeenCalled()
   })
 
+  it('POST connects DeepSeek without storing a user credential', async () => {
+    const response = await POST(
+      makePostRequest({ provider: 'DeepSeek' })
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ success: true })
+    expect(mockStoreUserApiKey).toHaveBeenCalledWith(
+      'user-1',
+      'deepseek',
+      '',
+      expect.objectContaining({
+        models: ['deepseek-ai/DeepSeek-V4-Flash-0731'],
+        rateLimits: { requests: 12, window: 60000 },
+      })
+    )
+    expect(mockDeleteUserProviderConfig).not.toHaveBeenCalled()
+  })
+
   it('POST clears optional-key provider config when clear flag is set', async () => {
     const response = await POST(
       makePostRequest({ provider: 'Ollama', apiKey: '', clear: true })

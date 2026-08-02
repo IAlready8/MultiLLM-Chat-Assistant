@@ -17,6 +17,7 @@ describe('config-schemas provider registry', () => {
     expect(ids).toContain('ollama')
     expect(ids).toContain('mistral')
     expect(ids).toContain('kimi')
+    expect(ids).toContain('deepseek')
   })
 
   it('providerRegistry entries have required fields', () => {
@@ -25,6 +26,18 @@ describe('config-schemas provider registry', () => {
       expect(provider.name).toBeTruthy()
       expect(provider.placeholder).toBeTruthy()
     }
+  })
+
+  it('marks DeepSeek as a credentialless public connection', () => {
+    const deepseek = providerRegistry.find((provider) => provider.id === 'deepseek')
+    expect(deepseek).toMatchObject({
+      requiresApiKey: false,
+      acceptsApiKey: false,
+    })
+    expect(defaultRateLimits.deepseek).toEqual({
+      requests: 12,
+      window: 60000,
+    })
   })
 
   it('supportedProviderIds matches providerRegistry', () => {

@@ -57,9 +57,12 @@ async function testKey(
     }
 
     if (response.status === 429) {
+      const retryAfter = response.headers?.get?.('retry-after') ?? null
       return buildResult(
         false,
-        'Rate limited while verifying key. Try again shortly.',
+        retryAfter
+          ? `Shared endpoint rate limited. Retry after ${retryAfter} seconds.`
+          : 'Shared endpoint rate limited. Try again shortly.',
         'rate_limited',
         latencyMs
       )

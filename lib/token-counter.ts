@@ -21,6 +21,7 @@
  * Mistral (BPE):    ~4.0 chars/token (uses same family as Llama tokenizer)
  * Ollama (varies):  ~4.0 chars/token (conservative fallback)
  * Grok / OpenRouter: ~4.0 chars/token
+ * DeepSeek:         ~4.0 chars/token (conservative estimate)
  *
  * CONTEXT WINDOW LIMITS
  * ----------------------
@@ -43,6 +44,7 @@ const CHARS_PER_TOKEN: Record<string, number> = {
   grok: 4.0,
   openrouter: 4.0,
   kimi: 4.0,
+  deepseek: 4.0,
   // Fallback for unknown providers
   default: 4.0,
 }
@@ -128,6 +130,10 @@ const CONTEXT_WINDOWS: Record<string, ContextWindowEntry[]> = {
     { pattern: 'kimi-k2.7', tokens: 262_144 },
     { pattern: 'kimi-k2.6', tokens: 262_144 },
     { pattern: 'kimi', tokens: 262_144 },
+  ],
+  deepseek: [
+    { pattern: 'deepseek-v4-flash-0731', tokens: 393_216 },
+    { pattern: 'deepseek', tokens: 393_216 },
   ],
 }
 

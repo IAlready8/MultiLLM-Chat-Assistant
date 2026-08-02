@@ -108,6 +108,7 @@ describe('AIRoundtablePage history behavior', () => {
     expect(
       screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
     ).toBeVisible()
+    expect(screen.getByRole('button', { name: /DeepSeek/i })).toBeVisible()
     expect(screen.getByRole('option', { name: 'GPT-5.6 Sol' })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /Claude \(Anthropic\)/i }))
@@ -125,6 +126,11 @@ describe('AIRoundtablePage history behavior', () => {
       screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
     )
     expect(screen.getByRole('option', { name: 'Kimi K3' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /DeepSeek/i }))
+    expect(
+      screen.getByRole('option', { name: 'DeepSeek V4 Flash 0731 — Free Community' })
+    ).toBeVisible()
   })
 
   it('hydrates a saved Roundtable only after the user clicks a history item', async () => {

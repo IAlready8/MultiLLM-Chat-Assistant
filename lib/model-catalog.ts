@@ -446,6 +446,16 @@ export const MODEL_CATALOG: Record<string, ModelInfo[]> = {
       isDefault: false,
     },
   ],
+
+  deepseek: [
+    {
+      id: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+      displayName: 'DeepSeek V4 Flash 0731 — Free Community',
+      contextWindow: 393_216,
+      isDefault: true,
+      tag: 'experimental',
+    },
+  ],
 }
 
 // ---------------------------------------------------------------------------
