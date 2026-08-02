@@ -141,8 +141,22 @@ export async function POST(request: NextRequest) {
       defaultProviderModels[provider as keyof typeof defaultProviderModels] ||
       []
 
-    if (!checkProviderRateLimit(userId, provider, providerRateLimits)) {
-      return jsonErrorResponse(429, 'Rate limit exceeded', 'RATE_LIMITED')
+    const rateLimit = await checkProviderRateLimit(
+      userId,
+      provider,
+      providerRateLimits,
+    )
+    if (!rateLimit.allowed) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil(rateLimit.retryAfterMs / 1000),
+      )
+      return jsonErrorResponse(
+        429,
+        'Rate limit exceeded',
+        'RATE_LIMITED',
+        retryAfterSeconds,
+      )
     }
 
     // Resolve adapter from shared provider runtime

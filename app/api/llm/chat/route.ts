@@ -164,8 +164,22 @@ export async function POST(req: NextRequest) {
       : providerModels[0]
     analyticsModel = resolvedModel || analyticsModel
 
-    if (!checkProviderRateLimit(userId, provider, providerRateLimits)) {
-      return jsonErrorResponse(429, 'Rate limit exceeded', 'RATE_LIMITED')
+    const rateLimit = await checkProviderRateLimit(
+      userId,
+      provider,
+      providerRateLimits,
+    )
+    if (!rateLimit.allowed) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil(rateLimit.retryAfterMs / 1000),
+      )
+      return jsonErrorResponse(
+        429,
+        'Rate limit exceeded',
+        'RATE_LIMITED',
+        retryAfterSeconds,
+      )
     }
 
     const defaultBaseUrl = provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : undefined

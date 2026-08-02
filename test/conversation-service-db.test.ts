@@ -13,6 +13,7 @@ type PrismaMock = {
     delete: ReturnType<typeof vi.fn>
   }
   message: {
+    findMany: ReturnType<typeof vi.fn>
     deleteMany: ReturnType<typeof vi.fn>
   }
   $transaction: ReturnType<typeof vi.fn>
@@ -27,6 +28,7 @@ const makePrismaMock = (): PrismaMock => ({
     delete: vi.fn().mockRejectedValue(DB_UNAVAILABLE_ERROR),
   },
   message: {
+    findMany: vi.fn().mockRejectedValue(DB_UNAVAILABLE_ERROR),
     deleteMany: vi.fn().mockRejectedValue(DB_UNAVAILABLE_ERROR),
   },
   $transaction: vi.fn().mockRejectedValue(DB_UNAVAILABLE_ERROR),
@@ -206,6 +208,7 @@ const makeStatefulPrismaMock = (): PrismaMock => {
   }
 
   const message = {
+    findMany: vi.fn(),
     deleteMany: vi.fn().mockImplementation(async ({ where }: { where: { conversationId: string } }) => {
       const before = state.messages.length
       state.messages = state.messages.filter(
@@ -412,6 +415,7 @@ describe('ConversationService DB fallback', () => {
         delete: vi.fn(),
       },
       message: {
+        findMany: vi.fn(),
         deleteMany: vi.fn(),
       },
       $transaction: vi.fn(),
@@ -445,6 +449,7 @@ describe('ConversationService DB fallback', () => {
         delete: vi.fn(),
       },
       message: {
+        findMany: vi.fn(),
         deleteMany: vi.fn(),
       },
       $transaction: vi.fn(),
@@ -483,6 +488,7 @@ describe('ConversationService DB fallback', () => {
           delete: vi.fn(),
         },
         message: {
+          findMany: vi.fn(),
           deleteMany: vi.fn(),
         },
         $transaction: vi.fn(),
@@ -500,6 +506,56 @@ describe('ConversationService DB fallback', () => {
           },
         ])
       ).rejects.toThrow('Foreign key constraint failed')
+    } finally {
+      env.NODE_ENV = previousNodeEnv
+    }
+  })
+
+  it('keeps production activation counts DB-first without creating fallback stores', async () => {
+    const env = process.env as Record<string, string | undefined>
+    const previousNodeEnv = env.NODE_ENV
+    env.NODE_ENV = 'production'
+
+    try {
+      const prismaMock: PrismaMock = {
+        conversation: {
+          findMany: vi.fn(),
+          findFirst: vi.fn(),
+          create: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn(),
+        },
+        message: {
+          findMany: vi.fn().mockResolvedValue([
+            { conversationId: 'conversation-1' },
+          ]),
+          deleteMany: vi.fn(),
+        },
+        $transaction: vi.fn(),
+      }
+
+      const { ConversationService } = await loadServiceWithPrismaMock(prismaMock)
+      const count =
+        await ConversationService.getComparisonReadyConversationCountByUserId(
+          'user-1'
+        )
+
+      expect(count).toBe(1)
+      expect(prismaMock.message.findMany).toHaveBeenCalledWith({
+        where: {
+          role: 'assistant',
+          provider: { not: null },
+          conversation: { userId: 'user-1' },
+        },
+        distinct: ['conversationId'],
+        select: { conversationId: true },
+      })
+      const store = (
+        globalThis as {
+          __multiLlmConversationFallbackStore?: Map<string, Map<string, unknown>>
+        }
+      ).__multiLlmConversationFallbackStore
+      expect(store?.size ?? 0).toBe(0)
     } finally {
       env.NODE_ENV = previousNodeEnv
     }
