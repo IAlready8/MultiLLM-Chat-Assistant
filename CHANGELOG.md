@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-private-pilot.3] - 2026-08-02
+
+### Added
+
+- Kimi as a first-class provider across encrypted Settings configuration,
+  chat, streaming, model selectors, workflows, analytics, and the optional
+  Python sidecar.
+- Current OpenAI and Anthropic model options across catalog-backed selectors,
+  including GPT-5.6 and the Claude 5 family.
+- DeepSeek V4 Flash as a credentialless provider through the supplied public,
+  community-hosted Hugging Face endpoint, with privacy warnings, streaming,
+  reasoning-effort support, conservative rate limiting, and `Retry-After`
+  handling.
+
+### Changed
+
+- Replaced demo and guest access with durable OAuth-first accounts, strict
+  authenticated sessions, owner/admin allowlists, and guarded legacy-user
+  cleanup.
+- Kept public password registration disabled until verified email ownership,
+  reset, and account-recovery controls are implemented.
+
+### Fixed
+
+- Buffered shared SSE chunks that arrive across network-packet boundaries.
+- Allowed production verification to resolve the first valid PostgreSQL URL
+  from the supported Vercel environment variables while still failing closed
+  when no valid URL exists.
+
+### Release scope
+
+- Production Google OAuth account creation and sign-in were manually verified.
+- Production DeepSeek selection, request streaming, and response rendering were
+  manually verified with non-sensitive test data.
+- The DeepSeek endpoint remains shared, public, rate-limited, and without an
+  SLA; sensitive or private prompts must not be submitted.
+
 ## [0.2.0-private-pilot.2] - 2026-07-30
 
 ### Security
