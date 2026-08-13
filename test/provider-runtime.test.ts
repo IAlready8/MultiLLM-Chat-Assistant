@@ -7,8 +7,10 @@
  * 3. Provider unsupported / not-configured / auth / rate-limit scenarios
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { classifyProviderError } from '@/lib/providers/errors'
+import { ProviderEndpointError } from '@/lib/provider-endpoint'
+import { ollamaAdapter } from '@/lib/providers/ollama'
 import { getProviderAdapter, supportedProviderIds } from '@/lib/providers/registry'
 
 // ---------------------------------------------------------------------------
@@ -135,6 +137,84 @@ describe('classifyProviderError', () => {
   it('precedence: upstream 429 is checked before timeout keywords', () => {
     const result = classifyProviderError(new Error('HTTP 429: timed out'))
     expect(result.code).toBe('RATE_LIMITED')
+  })
+
+  it('rejects a blocked Ollama base before the adapter network try block', async () => {
+    let thrown: unknown
+    try {
+      await ollamaAdapter.chat(
+        {
+          messages: [{ role: 'user', content: 'ping' }],
+        },
+        { apiKey: '', baseUrl: 'http://169.254.169.254:11434' },
+      )
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(ProviderEndpointError)
+    expect(classifyProviderError(thrown)).toEqual({
+      status: 400,
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+      error: 'Configured provider endpoint is not allowed',
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('preserves redirect-blocked errors from the Ollama connection probe', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'http://localhost:11434/api/tags' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      ollamaAdapter.testConnection!({
+        apiKey: '',
+        baseUrl: 'http://localhost:11434',
+      }),
+    ).rejects.toBeInstanceOf(ProviderEndpointError)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves redirect-blocked errors from the Ollama chat adapter', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'http://localhost:11434/api/chat' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      ollamaAdapter.chat(
+        { messages: [{ role: 'user', content: 'ping' }] },
+        { apiKey: '', baseUrl: 'http://localhost:11434' },
+      ),
+    ).rejects.toBeInstanceOf(ProviderEndpointError)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves redirect-blocked errors from the Ollama stream adapter', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'http://localhost:11434/api/chat' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const stream = ollamaAdapter.stream(
+      { messages: [{ role: 'user', content: 'ping' }] },
+      { apiKey: '', baseUrl: 'http://localhost:11434' },
+    )
+    await expect(stream.next()).rejects.toBeInstanceOf(ProviderEndpointError)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
 

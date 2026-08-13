@@ -12,8 +12,8 @@ import type {
   ChatCompletion,
 } from './types'
 import { throwUpstreamError, requireBody, parseSSEStream } from './util'
+import { getProviderBaseUrl, providerFetch } from '@/lib/provider-endpoint'
 
-const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
 const DEFAULT_MODEL = 'gpt-3.5-turbo'
 const TIMEOUT_MS = 60_000
 
@@ -48,8 +48,8 @@ export const openaiAdapter: ProviderAdapter = {
   id: 'openai',
 
   async testConnection(config: ProviderAdapterConfig): Promise<void> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
-    const response = await fetch(`${baseUrl}/models`, {
+    const baseUrl = getProviderBaseUrl('openai', config.baseUrl)
+    const response = await providerFetch('openai', `${baseUrl}/models`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
@@ -67,9 +67,9 @@ export const openaiAdapter: ProviderAdapter = {
     request: ProviderRequest,
     config: ProviderAdapterConfig,
   ): Promise<ChatCompletion> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const baseUrl = getProviderBaseUrl('openai', config.baseUrl)
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const response = await providerFetch('openai', `${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -94,9 +94,9 @@ export const openaiAdapter: ProviderAdapter = {
     request: ProviderRequest,
     config: ProviderAdapterConfig,
   ): AsyncGenerator<string, void, undefined> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const baseUrl = getProviderBaseUrl('openai', config.baseUrl)
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const response = await providerFetch('openai', `${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

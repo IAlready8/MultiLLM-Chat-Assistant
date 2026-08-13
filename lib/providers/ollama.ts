@@ -10,8 +10,8 @@
  * path exposes.
  *
  * No API key is required. The apiKey field in ProviderAdapterConfig is
- * accepted but ignored. If your Ollama instance is remote or behind a
- * proxy, pass its full origin as config.baseUrl.
+ * accepted but ignored. Custom remote Ollama endpoints are intentionally not
+ * supported by this adapter.
  *
  * testConnection() calls GET /api/tags, which returns the list of locally
  * pulled models. It throws if Ollama is not running or unreachable. This
@@ -31,8 +31,12 @@ import type {
   ChatCompletion,
 } from './types'
 import { LLMProviderError, createErrorContext } from '@/lib/error-system'
+import {
+  getProviderBaseUrl,
+  providerFetch,
+  ProviderEndpointError,
+} from '@/lib/provider-endpoint'
 
-const DEFAULT_BASE_URL = 'http://localhost:11434'
 const DEFAULT_MODEL = 'llama3'
 const TIMEOUT_MS = 120_000 // Local inference can be slow on CPU
 
@@ -102,15 +106,16 @@ export const ollamaAdapter: ProviderAdapter = {
    * GET /api/tags returns { models: [{name, ...}] } when Ollama is running.
    */
   async testConnection(config: ProviderAdapterConfig): Promise<void> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const baseUrl = getProviderBaseUrl('ollama', config.baseUrl)
     let response: Response
     try {
-      response = await fetch(`${baseUrl}/api/tags`, {
+      response = await providerFetch('ollama', `${baseUrl}/api/tags`, {
         method: 'GET',
         headers: buildHeaders(config),
         signal: AbortSignal.timeout(10_000),
-      })
+      }, { baseUrl })
     } catch (err: unknown) {
+      if (err instanceof ProviderEndpointError) throw err
       const msg = err instanceof Error ? err.message : String(err)
       throw new LLMProviderError(
         'ollama',
@@ -129,18 +134,19 @@ export const ollamaAdapter: ProviderAdapter = {
     request: ProviderRequest,
     config: ProviderAdapterConfig,
   ): Promise<ChatCompletion> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const baseUrl = getProviderBaseUrl('ollama', config.baseUrl)
     const payload = buildChatPayload(request, false)
 
     let response: Response
     try {
-      response = await fetch(`${baseUrl}/api/chat`, {
+      response = await providerFetch('ollama', `${baseUrl}/api/chat`, {
         method: 'POST',
         headers: buildHeaders(config),
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(TIMEOUT_MS),
-      })
+      }, { baseUrl })
     } catch (err: unknown) {
+      if (err instanceof ProviderEndpointError) throw err
       const msg = err instanceof Error ? err.message : String(err)
       throw new LLMProviderError(
         'ollama',
@@ -181,18 +187,19 @@ export const ollamaAdapter: ProviderAdapter = {
     request: ProviderRequest,
     config: ProviderAdapterConfig,
   ): AsyncGenerator<string, void, undefined> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const baseUrl = getProviderBaseUrl('ollama', config.baseUrl)
     const payload = buildChatPayload(request, true)
 
     let response: Response
     try {
-      response = await fetch(`${baseUrl}/api/chat`, {
+      response = await providerFetch('ollama', `${baseUrl}/api/chat`, {
         method: 'POST',
         headers: buildHeaders(config),
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(TIMEOUT_MS),
-      })
+      }, { baseUrl })
     } catch (err: unknown) {
+      if (err instanceof ProviderEndpointError) throw err
       const msg = err instanceof Error ? err.message : String(err)
       throw new LLMProviderError(
         'ollama',

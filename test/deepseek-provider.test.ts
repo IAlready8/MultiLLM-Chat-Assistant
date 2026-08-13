@@ -68,7 +68,8 @@ describe('deepseekAdapter', () => {
 
     await deepseekAdapter.testConnection?.({
       apiKey: 'must-not-be-sent',
-      baseUrl: 'https://must-not-be-used.invalid/v1',
+      baseUrl:
+        'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1',
       extraHeaders: {
         Authorization: 'Bearer must-not-be-sent',
         'X-Private-Token': 'must-not-be-sent',

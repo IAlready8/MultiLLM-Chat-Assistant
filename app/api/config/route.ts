@@ -14,6 +14,7 @@ import {
   apiReadCacheKey,
   invalidateApiReadCache,
 } from '@/lib/api-read-cache'
+import { getProviderBaseUrl, ProviderEndpointError } from '@/lib/provider-endpoint'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    getProviderBaseUrl(provider, undefined)
     await storeUserApiKey(user.id, provider, apiKey, settings)
     invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
     try {
@@ -108,6 +110,12 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof ProviderEndpointError) {
+      return NextResponse.json(
+        { error: 'Provider endpoint is not allowed', code: error.code },
+        { status: 400 }
+      )
+    }
     console.error('Failed to store API key.')
     return NextResponse.json(
       { error: 'Failed to store API key securely' },

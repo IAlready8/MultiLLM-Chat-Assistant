@@ -33,8 +33,8 @@ import type {
   ChatCompletion,
 } from './types'
 import { throwUpstreamError, requireBody, parseSSEStream } from './util'
+import { getProviderBaseUrl, providerFetch } from '@/lib/provider-endpoint'
 
-const DEFAULT_BASE_URL = 'https://api.mistral.ai/v1'
 const DEFAULT_MODEL = 'mistral-small-latest'
 const TIMEOUT_MS = 60_000
 
@@ -78,8 +78,8 @@ export const mistralAdapter: ProviderAdapter = {
    * GET /v1/models returns the list of available models when the key is valid.
    */
   async testConnection(config: ProviderAdapterConfig): Promise<void> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
-    const response = await fetch(`${baseUrl}/models`, {
+    const baseUrl = getProviderBaseUrl('mistral', config.baseUrl)
+    const response = await providerFetch('mistral', `${baseUrl}/models`, {
       method: 'GET',
       headers: buildHeaders(config),
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -98,8 +98,8 @@ export const mistralAdapter: ProviderAdapter = {
     request: ProviderRequest,
     config: ProviderAdapterConfig,
   ): Promise<ChatCompletion> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const baseUrl = getProviderBaseUrl('mistral', config.baseUrl)
+    const response = await providerFetch('mistral', `${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: buildHeaders(config),
       body: JSON.stringify(buildPayload(request, false)),
@@ -136,8 +136,8 @@ export const mistralAdapter: ProviderAdapter = {
     request: ProviderRequest,
     config: ProviderAdapterConfig,
   ): AsyncGenerator<string, void, undefined> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const baseUrl = getProviderBaseUrl('mistral', config.baseUrl)
+    const response = await providerFetch('mistral', `${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: buildHeaders(config),
       body: JSON.stringify(buildPayload(request, true)),

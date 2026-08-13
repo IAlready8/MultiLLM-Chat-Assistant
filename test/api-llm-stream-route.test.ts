@@ -169,6 +169,58 @@ describe('/api/llm/stream route', () => {
     })
   })
 
+  it('emits a coded error for a legacy stored private provider endpoint', async () => {
+    mockGetUserProviderConfigs.mockResolvedValue([
+      {
+        provider: 'openai',
+        settings: { baseUrl: 'http://[::1]:8080/admin' },
+      },
+    ])
+
+    const response = await POST(
+      makeRequest(
+        JSON.stringify({
+          provider: 'openai',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      ),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Configured provider endpoint is not allowed',
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+    })
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['private endpoint', 'http://169.254.169.254:11434'],
+    ['public custom endpoint', 'https://ollama.example.com'],
+    ['wrong-port localhost', 'http://localhost:8080'],
+  ])('rejects a legacy Ollama %s before opening an NDJSON stream', async (_label, baseUrl) => {
+    mockGetUserProviderConfigs.mockResolvedValue([
+      { provider: 'ollama', settings: { baseUrl } },
+    ])
+
+    const response = await POST(
+      makeRequest(
+        JSON.stringify({
+          provider: 'ollama',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      ),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Configured provider endpoint is not allowed',
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+    })
+    expect(response.headers.get('Content-Type')).not.toBe('application/x-ndjson')
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
   it('applies scoped rate limiting per user/provider', async () => {
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-rate-limit' } })
     mockGetUserProviderConfigs.mockResolvedValue([
