@@ -6,6 +6,18 @@ import { z } from 'zod';
 // This MUST be 127.0.0.1 (localhost) because the Next.js server
 // and the Python server are running on the *same machine*.
 const PYTHON_CORE_URL = process.env.PYTHON_CORE_URL || 'http://127.0.0.1:8008';
+const LOCAL_FALLBACK_ORIGIN = 'http://127.0.0.1:3000'
+const ORCHESTRATION_FALLBACK_ERROR_CODE = 'ORCHESTRATION_FALLBACK_UNAVAILABLE'
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
+
+class OrchestrationFallbackError extends Error {
+  readonly code = ORCHESTRATION_FALLBACK_ERROR_CODE
+
+  constructor(message = 'A trusted application origin is unavailable.') {
+    super(message)
+    this.name = 'OrchestrationFallbackError'
+  }
+}
 
 // Define the schema for the incoming request from the client
 const orchestrateRequestSchema = z.object({
@@ -84,32 +96,64 @@ const toProviderResult = (
   }
 }
 
-const resolveBaseUrl = (req: Request): string => {
-  const host = req.headers.get('host') || 'localhost:3000'
-  const forwardedProto = req.headers.get('x-forwarded-proto')
-  const protocol =
-    forwardedProto ||
-    (host.includes('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https')
-  return `${protocol}://${host}`
+const resolveTrustedAppOrigin = (): string => {
+  // A Vercel preview must not reuse a production NEXTAUTH_URL with a preview
+  // session cookie. Disable this fallback rather than guessing a safe target.
+  if (process.env.VERCEL_ENV === 'preview') {
+    throw new OrchestrationFallbackError(
+      'Local orchestration fallback is disabled in preview deployments.',
+    )
+  }
+
+  const configuredOrigin = process.env.NEXTAUTH_URL?.trim()
+  if (!configuredOrigin) {
+    if (process.env.NODE_ENV !== 'production') return LOCAL_FALLBACK_ORIGIN
+    throw new OrchestrationFallbackError(
+      'NEXTAUTH_URL is required for the local orchestration fallback.',
+    )
+  }
+
+  let parsedOrigin: URL
+  try {
+    parsedOrigin = new URL(configuredOrigin)
+  } catch {
+    throw new OrchestrationFallbackError('NEXTAUTH_URL is invalid.')
+  }
+
+  if (
+    (parsedOrigin.protocol !== 'http:' && parsedOrigin.protocol !== 'https:') ||
+    parsedOrigin.origin === 'null' ||
+    parsedOrigin.username ||
+    parsedOrigin.password ||
+    parsedOrigin.search ||
+    parsedOrigin.hash
+  ) {
+    throw new OrchestrationFallbackError('NEXTAUTH_URL is invalid.')
+  }
+
+  return parsedOrigin.origin
 }
 
 const runLocalFallbackOrchestration = async (
   requestData: OrchestrateRequest,
   req: Request
 ): Promise<ProviderResult[]> => {
-  const baseUrl = resolveBaseUrl(req)
+  const trustedOrigin = resolveTrustedAppOrigin()
   const cookieHeader = req.headers.get('cookie') || ''
   const results: ProviderResult[] = []
 
   for (const request of requestData.requests) {
     const startedAt = Date.now()
-    const chatResponse = await fetch(`${baseUrl}/api/llm/chat`, {
+    const chatResponse = await fetch(`${trustedOrigin}/api/llm/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        // The destination is the validated server-side origin above; never
+        // derive it from Host or X-Forwarded-Proto request headers.
         ...(cookieHeader ? { cookie: cookieHeader } : {}),
       },
+      redirect: 'error',
       body: JSON.stringify({
         provider: request.provider,
         model: request.model,
@@ -122,6 +166,12 @@ const runLocalFallbackOrchestration = async (
         ],
       }),
     })
+
+    if (REDIRECT_STATUSES.has(chatResponse.status)) {
+      throw new OrchestrationFallbackError(
+        'The local orchestration fallback received an unexpected redirect.',
+      )
+    }
 
     const latencyMs = Date.now() - startedAt
     const fallbackPrompt = request.prompt || requestData.prompt
@@ -160,6 +210,34 @@ const runLocalFallbackOrchestration = async (
   }
 
   return results
+}
+
+const localFallbackResponse = async (
+  requestData: OrchestrateRequest,
+  req: Request,
+  fallbackHeader: string,
+): Promise<NextResponse> => {
+  try {
+    const fallbackResults = await runLocalFallbackOrchestration(requestData, req)
+    return NextResponse.json(fallbackResults, {
+      status: 200,
+      headers: { 'x-orchestration-fallback': fallbackHeader },
+    })
+  } catch (error: unknown) {
+    if (error instanceof OrchestrationFallbackError) {
+      console.error('Local orchestration fallback unavailable:', error.message)
+    } else {
+      console.error('Local orchestration fallback request failed')
+    }
+
+    return NextResponse.json(
+      {
+        error: 'Local orchestration fallback unavailable',
+        code: ORCHESTRATION_FALLBACK_ERROR_CODE,
+      },
+      { status: 503 },
+    )
+  }
 }
 
 /**
@@ -242,11 +320,7 @@ export async function POST(req: Request) {
 
       // When Python is unavailable or unhealthy, use local fallback orchestration.
       if (statusCode >= 502 || pythonResponse.status >= 500) {
-        const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
-        return NextResponse.json(fallbackResults, {
-          status: 200,
-          headers: { 'x-orchestration-fallback': 'local' },
-        })
+        return localFallbackResponse(validation.data, req, 'local')
       }
 
       return NextResponse.json(
@@ -262,22 +336,17 @@ export async function POST(req: Request) {
     const data = await pythonResponse.json();
     return NextResponse.json(data);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle different types of errors
-    if (error.name === 'AbortError') {
+    if (error instanceof Error && error.name === 'AbortError') {
       console.error('Request to Python service timed out, using local fallback');
-      const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
-      return NextResponse.json(fallbackResults, {
-        status: 200,
-        headers: { 'x-orchestration-fallback': 'local-timeout' },
-      })
-    } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      return localFallbackResponse(validation.data, req, 'local-timeout')
+    } else if (
+      error instanceof TypeError &&
+      error.message.includes('fetch')
+    ) {
       console.error('Network error connecting to Python service, using local fallback:', error.message);
-      const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
-      return NextResponse.json(fallbackResults, {
-        status: 200,
-        headers: { 'x-orchestration-fallback': 'local-network' },
-      })
+      return localFallbackResponse(validation.data, req, 'local-network')
     } else {
       console.error('Unexpected error connecting to Python service:', error);
       return NextResponse.json(
