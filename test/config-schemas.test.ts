@@ -28,12 +28,14 @@ describe('config-schemas provider registry', () => {
     }
   })
 
-  it('marks DeepSeek as a credentialless public connection', () => {
+  it('marks DeepSeek as an official provider-billed BYOK connection', () => {
     const deepseek = providerRegistry.find((provider) => provider.id === 'deepseek')
     expect(deepseek).toMatchObject({
-      requiresApiKey: false,
-      acceptsApiKey: false,
+      name: 'DeepSeek',
+      requiresApiKey: true,
     })
+    expect(deepseek?.description).toContain('Official BYOK API')
+    expect(deepseek?.description).toContain('billed by DeepSeek')
     expect(defaultRateLimits.deepseek).toEqual({
       requests: 12,
       window: 60000,

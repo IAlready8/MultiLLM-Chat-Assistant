@@ -5,10 +5,11 @@ import { classifyProviderError } from '@/lib/providers/errors'
 import type { ProviderRequest } from '@/lib/providers/types'
 import { testProviderKey } from '@/lib/provider-key-test'
 
-const config = { apiKey: '' }
+const TEST_API_KEY = 'deepseek-test-key-not-secret'
+const config = { apiKey: TEST_API_KEY }
 const request: ProviderRequest = {
   messages: [{ role: 'user', content: 'Hello' }],
-  model: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+  model: 'deepseek-v4-flash',
   temperature: 0.2,
   max_tokens: 2048,
 }
@@ -30,12 +31,12 @@ afterEach(() => {
 })
 
 describe('deepseekAdapter', () => {
-  it('checks the public community models endpoint without authorization', async () => {
+  it('checks the official models endpoint with server-side bearer authentication', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
           object: 'list',
-          data: [{ id: 'deepseek-ai/DeepSeek-V4-Flash-0731' }],
+          data: [{ id: 'deepseek-v4-flash' }, { id: 'deepseek-v4-pro' }],
         }),
         { status: 200 },
       ),
@@ -45,21 +46,23 @@ describe('deepseekAdapter', () => {
     await deepseekAdapter.testConnection?.(config)
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1/models',
+      'https://api.deepseek.com/models',
       expect.objectContaining({
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${TEST_API_KEY}`,
+        },
       }),
     )
-    expect(fetchMock.mock.calls[0][1]?.headers).not.toHaveProperty('Authorization')
   })
 
-  it('never forwards credentials or caller-supplied headers to the public endpoint', async () => {
+  it('never forwards caller-supplied headers to the official endpoint', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
           object: 'list',
-          data: [{ id: 'deepseek-ai/DeepSeek-V4-Flash-0731' }],
+          data: [{ id: 'deepseek-v4-flash' }, { id: 'deepseek-v4-pro' }],
         }),
         { status: 200 },
       ),
@@ -67,21 +70,24 @@ describe('deepseekAdapter', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await deepseekAdapter.testConnection?.({
-      apiKey: 'must-not-be-sent',
-      baseUrl:
-        'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1',
+      apiKey: TEST_API_KEY,
+      baseUrl: 'https://api.deepseek.com',
       extraHeaders: {
-        Authorization: 'Bearer must-not-be-sent',
+        Authorization: 'Bearer caller-supplied-value',
         'X-Private-Token': 'must-not-be-sent',
       },
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1/models',
+      'https://api.deepseek.com/models',
       expect.objectContaining({
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${TEST_API_KEY}`,
+        },
       }),
     )
+    expect(fetchMock.mock.calls[0][1]?.headers).not.toHaveProperty('X-Private-Token')
   })
 
   it('rejects a models probe when the approved model is missing', async () => {
@@ -97,29 +103,61 @@ describe('deepseekAdapter', () => {
     await expect(
       deepseekAdapter.testConnection?.(config),
     ).rejects.toThrow(
-      'DeepSeek community endpoint does not advertise deepseek-ai/DeepSeek-V4-Flash-0731',
+      'DeepSeek API does not advertise: deepseek-v4-flash, deepseek-v4-pro',
     )
   })
 
-  it('uses the same credentialless models probe in Settings', async () => {
+  it('requires an API key before making a provider request', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    let error: unknown
+    try {
+      await deepseekAdapter.chat(request, { apiKey: '   ' })
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(classifyProviderError(error)).toEqual({
+      status: 401,
+      code: 'PROVIDER_AUTH_ERROR',
+      error: 'Provider rejected the configured API key',
+    })
+  })
+
+  it('rejects the retired community model before making a provider request', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      deepseekAdapter.chat(
+        { ...request, model: 'deepseek-ai/DeepSeek-V4-Flash-0731' },
+        config,
+      ),
+    ).rejects.toThrow('HTTP 400: Unsupported DeepSeek model')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('uses the same authenticated models probe in Settings', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(testProviderKey('deepseek', '')).resolves.toMatchObject({
+    await expect(testProviderKey('deepseek', TEST_API_KEY)).resolves.toMatchObject({
       ok: true,
     })
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1/models',
+      'https://api.deepseek.com/models',
       expect.objectContaining({
         method: 'GET',
+        headers: { Authorization: `Bearer ${TEST_API_KEY}` },
       }),
     )
-    expect(fetchMock.mock.calls[0][1]?.headers).toBeUndefined()
   })
 
-  it('sends the community endpoint reasoning and sampling payload', async () => {
+  it('sends the official default-thinking and sampling payload', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -150,10 +188,11 @@ describe('deepseekAdapter', () => {
     const init = fetchMock.mock.calls[0][1] as RequestInit
     const payload = JSON.parse(init.body as string)
     expect(payload).toEqual({
-      model: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+      model: 'deepseek-v4-flash',
       messages: request.messages,
       stream: false,
       max_tokens: 2048,
+      thinking: { type: 'enabled' },
       reasoning_effort: 'high',
       temperature: 0.2,
       top_p: 0.95,
@@ -201,9 +240,54 @@ describe('deepseekAdapter', () => {
     const payload = JSON.parse(init.body as string)
     if (expected === undefined) {
       expect(payload).not.toHaveProperty('reasoning_effort')
+      expect(payload.thinking).toEqual({ type: 'disabled' })
     } else {
       expect(payload.reasoning_effort).toBe(expected)
+      expect(payload.thinking).toEqual({ type: 'enabled' })
     }
+  })
+
+  it('deliberately defaults unspecified reasoning to enabled/high', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: 'ok' } }] }),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await deepseekAdapter.chat({ ...request, reasoning_effort: undefined }, config)
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'high',
+    })
+  })
+
+  it('does not include an API key echoed by an upstream error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: TEST_API_KEY } }), {
+          status: 401,
+        }),
+      ),
+    )
+
+    let error: unknown
+    try {
+      await deepseekAdapter.chat(request, config)
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).not.toContain(TEST_API_KEY)
+    expect(classifyProviderError(error)).toMatchObject({
+      status: 401,
+      code: 'PROVIDER_AUTH_ERROR',
+    })
   })
 
   it('rejects malformed successful responses', async () => {
@@ -219,7 +303,7 @@ describe('deepseekAdapter', () => {
     )
   })
 
-  it('preserves Retry-After when the shared endpoint returns 429', async () => {
+  it('preserves Retry-After when the official endpoint returns 429', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

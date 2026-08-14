@@ -42,6 +42,55 @@ describe('provider endpoint policy', () => {
     )
   })
 
+  it('allows only the exact official DeepSeek origin and base path', () => {
+    expect(getProviderBaseUrl('deepseek', undefined)).toBe(
+      'https://api.deepseek.com',
+    )
+    expect(getProviderBaseUrl('deepseek', 'https://api.deepseek.com/')).toBe(
+      'https://api.deepseek.com',
+    )
+
+    for (const configured of [
+      'http://api.deepseek.com',
+      'https://api.deepseek.com/v1',
+      'https://api.deepseek.com.evil.example',
+      'https://evil.example/api.deepseek.com',
+      'https://api.deepseek.com:8443',
+      'https://user:pass@api.deepseek.com',
+      'https://api.deepseek.com?target=http://127.0.0.1',
+      'https://api.deepseek.com#fragment',
+      'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1',
+      'http://127.0.0.1:8080',
+      'http://169.254.169.254',
+    ]) {
+      expect(() => getProviderBaseUrl('deepseek', configured)).toThrow(
+        ProviderEndpointError,
+      )
+    }
+  })
+
+  it('refuses redirects from the official DeepSeek endpoint', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 307,
+        headers: { location: 'https://api.deepseek.com/models' },
+      }),
+    )
+    const lookup = vi.fn().mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+    ])
+
+    await expect(
+      providerFetch(
+        'deepseek',
+        'https://api.deepseek.com/models',
+        { headers: { Authorization: 'Bearer test-key' } },
+        { fetchImpl, lookup },
+      ),
+    ).rejects.toMatchObject({ code: 'PROVIDER_ENDPOINT_BLOCKED' })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
   it('allows only the local Ollama endpoint outside production', () => {
     vi.stubEnv('NODE_ENV', 'development')
 

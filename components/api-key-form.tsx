@@ -248,10 +248,8 @@ export default function ApiKeyForm() {
 
       const provider = providers.find(p => p.id === providerId);
       toast({
-        title: provider?.acceptsApiKey === false ? "Connection Removed" : "API Key Cleared",
-        description: provider?.acceptsApiKey === false
-          ? `${provider.name} has been disconnected.`
-          : `${provider?.name} API key has been removed.`,
+        title: "API Key Cleared",
+        description: `${provider?.name} API key has been removed.`,
       });
       setConfiguredProviders(prev => prev.filter(p => p !== providerId));
       setApiKeys(prev => ({ ...prev, [providerId]: "" }));
@@ -348,15 +346,7 @@ export default function ApiKeyForm() {
             {renderHealthBadge(provider.id)}
           </div>
           <div className="flex gap-2">
-            {provider.acceptsApiKey === false ? (
-              <div
-                className="flex flex-1 items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
-                role="note"
-              >
-                No API key required. This shared public endpoint is experimental; never submit private or sensitive data.
-              </div>
-            ) : (
-              <div className="relative flex-1">
+            <div className="relative flex-1">
               <Input
                 id={`${provider.id}-api-key`}
                 type={showKeys[provider.id] ? "text" : "password"}
@@ -376,8 +366,7 @@ export default function ApiKeyForm() {
                 {showKeys[provider.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 <span className="sr-only">{showKeys[provider.id] ? "Hide" : "Show"} API key</span>
               </Button>
-              </div>
-            )}
+            </div>
             <Button
               onClick={() => handleSaveKey(provider.id)}
               disabled={
@@ -394,7 +383,7 @@ export default function ApiKeyForm() {
                 disabled={testing[provider.id]}
                 variant="outline"
                 size="sm"
-                title={provider.acceptsApiKey === false ? "Test connection" : "Test saved API key"}
+                title="Test saved API key"
               >
                 {testing[provider.id] ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

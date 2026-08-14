@@ -58,23 +58,21 @@ describe('recent provider model catalog', () => {
     ).toBe(200_000)
   })
 
-  it('exposes only the served DeepSeek community model and deployment limit', () => {
+  it('exposes the official DeepSeek V4 models and published context window', () => {
     expect(getModelsForProvider('deepseek').map((model) => model.id)).toEqual([
-      'deepseek-ai/DeepSeek-V4-Flash-0731',
+      'deepseek-v4-flash',
+      'deepseek-v4-pro',
     ])
     expect(defaultProviderModels.deepseek).toEqual([
-      'deepseek-ai/DeepSeek-V4-Flash-0731',
+      'deepseek-v4-flash',
+      'deepseek-v4-pro',
     ])
-    expect(getDefaultModel('deepseek')).toBe(
-      'deepseek-ai/DeepSeek-V4-Flash-0731',
+    expect(getDefaultModel('deepseek')).toBe('deepseek-v4-flash')
+    expect(getContextWindowLimit('deepseek', 'deepseek-v4-flash')).toBe(
+      1_000_000,
     )
-    expect(
-      getContextWindowLimit(
-        'deepseek',
-        'deepseek-ai/DeepSeek-V4-Flash-0731',
-      ),
-    ).toBe(
-      393_216,
+    expect(getContextWindowLimit('deepseek', 'deepseek-v4-pro')).toBe(
+      1_000_000,
     )
   })
 })

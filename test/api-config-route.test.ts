@@ -142,9 +142,12 @@ describe('/api/config route', () => {
     expect(mockDeleteUserProviderConfig).not.toHaveBeenCalled()
   })
 
-  it('POST connects DeepSeek without storing a user credential', async () => {
+  it('POST stores the DeepSeek user credential and official models', async () => {
     const response = await POST(
-      makePostRequest({ provider: 'DeepSeek' })
+      makePostRequest({
+        provider: 'DeepSeek',
+        apiKey: 'deepseek-test-key-12345',
+      })
     )
 
     expect(response.status).toBe(200)
@@ -152,9 +155,9 @@ describe('/api/config route', () => {
     expect(mockStoreUserApiKey).toHaveBeenCalledWith(
       'user-1',
       'deepseek',
-      '',
+      'deepseek-test-key-12345',
       expect.objectContaining({
-        models: ['deepseek-ai/DeepSeek-V4-Flash-0731'],
+        models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
         rateLimits: { requests: 12, window: 60000 },
       })
     )

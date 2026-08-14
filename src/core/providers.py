@@ -8,12 +8,12 @@ import logging
 # Global LLM Manager instance
 llm_manager = LLMManager()
 
-# Initialize credentialed providers when configured and the credentialless
-# DeepSeek community endpoint unconditionally.
+# Initialize sidecar providers with server-side credentials when configured.
+# DeepSeek is intentionally excluded: its BYOK credential remains encrypted
+# per user in the primary Next.js runtime and is never forwarded here.
 async def initialize_providers():
     from .llm_manager import (
         AnthropicProvider,
-        DeepSeekProvider,
         GoogleProvider,
         KimiProvider,
         OpenAIProvider,
@@ -30,9 +30,6 @@ async def initialize_providers():
 
     if settings.MOONSHOT_API_KEY:
         await llm_manager.register_provider(ProviderType.KIMI, KimiProvider())
-
-    await llm_manager.register_provider(ProviderType.DEEPSEEK, DeepSeekProvider())
-
 
 async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
     """
@@ -65,7 +62,12 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
             content=response.content,
             prompt_tokens=max(1, response.tokens_used // 2),  # Estimate prompt tokens
             completion_tokens=max(1, response.tokens_used // 2),  # Estimate completion tokens
-            cost_usd=calculate_cost(response.provider, response.tokens_used),  # Calculate based on provider/model
+            cost_usd=calculate_cost(response.provider, response.tokens_used),
+            cost_label=(
+                "Provider-billed"
+                if response.provider == ProviderType.DEEPSEEK
+                else None
+            ),
             latency_ms=latency_ms
         )
     except ValueError as e:
@@ -98,7 +100,7 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
         )
 
 
-def calculate_cost(provider: ProviderType, tokens_used: int) -> float:
+def calculate_cost(provider: ProviderType, tokens_used: int) -> float | None:
     """
     Calculate estimated cost based on provider and tokens used.
     This is a simplified calculation - in production, use actual pricing.
@@ -109,8 +111,10 @@ def calculate_cost(provider: ProviderType, tokens_used: int) -> float:
         ProviderType.ANTHROPIC: 0.008,  # Example: $0.008 per 1k tokens for Claude
         ProviderType.GOOGLE: 0.0005,  # Example: $0.0005 per 1k tokens for Gemini
         ProviderType.KIMI: 0.009,  # Blended estimate; actual input/output rates differ
-        ProviderType.DEEPSEEK: 0.0,  # Shared community endpoint currently advertises no charge
     }
+
+    if provider == ProviderType.DEEPSEEK:
+        return None
 
     cost_per_token = cost_per_thousand_tokens.get(provider, 0.002) / 1000
     return cost_per_token * tokens_used

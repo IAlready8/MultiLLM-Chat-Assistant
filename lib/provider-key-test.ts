@@ -120,6 +120,7 @@ export const testProviderKey = async (
     case 'deepseek':
       return fetchWithTimeout('deepseek', `${DEEPSEEK_BASE_URL}/models`, {
         method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
       })
     case 'ollama':
       {

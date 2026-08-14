@@ -1,10 +1,4 @@
-/**
- * DeepSeek V4 Flash community provider adapter.
- *
- * This is a shared, public, community-operated Hugging Face endpoint. It is
- * OpenAI Chat Completions compatible and requires no credential. Do not send
- * private or sensitive data to it.
- */
+/** Official DeepSeek BYOK provider adapter. */
 
 import type {
   ChatCompletion,
@@ -12,19 +6,48 @@ import type {
   ProviderAdapterConfig,
   ProviderRequest,
 } from './types'
-import { parseSSEStream, requireBody, throwUpstreamError } from './util'
-import { RateLimitError, createErrorContext } from '@/lib/error-system'
+import { parseSSEStream, requireBody } from './util'
+import {
+  LLMProviderError,
+  RateLimitError,
+  createErrorContext,
+} from '@/lib/error-system'
 import { getProviderBaseUrl, providerFetch } from '@/lib/provider-endpoint'
 
-export const DEEPSEEK_BASE_URL =
-  'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1'
-export const DEEPSEEK_MODEL_ID = 'deepseek-ai/DeepSeek-V4-Flash-0731'
+export const DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
+export const DEEPSEEK_MODEL_IDS = [
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+] as const
+export const DEEPSEEK_MODEL_ID = DEEPSEEK_MODEL_IDS[0]
 const TIMEOUT_MS = 120_000
 const DEFAULT_RETRY_AFTER_MS = 5_000
 
-function buildHeaders(): Record<string, string> {
+function resolveModel(model: string | undefined): string {
+  const resolvedModel = model || DEEPSEEK_MODEL_ID
+  if (!DEEPSEEK_MODEL_IDS.some((modelId) => modelId === resolvedModel)) {
+    throw new LLMProviderError(
+      'deepseek',
+      'HTTP 400: Unsupported DeepSeek model',
+      createErrorContext('/api/llm', undefined, { provider: 'deepseek' }),
+    )
+  }
+  return resolvedModel
+}
+
+function buildHeaders(apiKey: string): Record<string, string> {
+  const normalizedApiKey = apiKey.trim()
+  if (!normalizedApiKey) {
+    throw new LLMProviderError(
+      'deepseek',
+      'HTTP 401: DeepSeek API key is required',
+      createErrorContext('/api/llm', undefined, { provider: 'deepseek' }),
+    )
+  }
+
   return {
     'Content-Type': 'application/json',
+    Authorization: `Bearer ${normalizedApiKey}`,
   }
 }
 
@@ -33,7 +56,7 @@ function buildPayload(
   stream: boolean,
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {
-    model: request.model || DEEPSEEK_MODEL_ID,
+    model: resolveModel(request.model),
     messages: request.messages,
     stream,
     max_tokens: request.max_tokens ?? 4096,
@@ -41,10 +64,12 @@ function buildPayload(
     top_p: 0.95,
   }
 
-  // The community deployment treats an omitted field as non-reasoning mode.
-  // Preserve the existing high-effort default unless callers explicitly opt out.
-  if (request.reasoning_effort !== 'off') {
-    payload.reasoning_effort = request.reasoning_effort ?? 'high'
+  const reasoningEffort = request.reasoning_effort ?? 'high'
+  if (reasoningEffort === 'off') {
+    payload.thinking = { type: 'disabled' }
+  } else {
+    payload.thinking = { type: 'enabled' }
+    payload.reasoning_effort = reasoningEffort
   }
 
   return payload
@@ -79,7 +104,7 @@ async function throwDeepSeekError(
     )
 
     throw new RateLimitError(
-      'HTTP 429: DeepSeek community endpoint rate limit reached',
+      'HTTP 429: DeepSeek API rate limit reached',
       retryAfterMs,
       createErrorContext('/api/llm', undefined, {
         provider: 'deepseek',
@@ -89,7 +114,14 @@ async function throwDeepSeekError(
     )
   }
 
-  return await throwUpstreamError('deepseek', response, streaming)
+  throw new LLMProviderError(
+    'deepseek',
+    `HTTP ${response.status}`,
+    createErrorContext('/api/llm', undefined, {
+      provider: 'deepseek',
+      streaming,
+    }),
+  )
 }
 
 export const deepseekAdapter: ProviderAdapter = {
@@ -99,7 +131,7 @@ export const deepseekAdapter: ProviderAdapter = {
     const baseUrl = getProviderBaseUrl('deepseek', config.baseUrl)
     const response = await providerFetch('deepseek', `${baseUrl}/models`, {
       method: 'GET',
-      headers: buildHeaders(),
+      headers: buildHeaders(config.apiKey),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
 
@@ -109,17 +141,23 @@ export const deepseekAdapter: ProviderAdapter = {
 
     const data = await response.json().catch(() => null)
     const models = Array.isArray(data?.data) ? data.data : null
-    if (
-      !models ||
-      !models.some((model: unknown) =>
-        typeof model === 'object' &&
-        model !== null &&
-        'id' in model &&
-        model.id === DEEPSEEK_MODEL_ID
-      )
-    ) {
+    const advertisedModelIds = new Set(
+      models
+        ?.map((model: unknown) =>
+          typeof model === 'object' && model !== null && 'id' in model
+            ? model.id
+            : null,
+        )
+        .filter((modelId: unknown): modelId is string =>
+          typeof modelId === 'string',
+        ) ?? [],
+    )
+    const missingModelIds = DEEPSEEK_MODEL_IDS.filter(
+      (modelId) => !advertisedModelIds.has(modelId),
+    )
+    if (missingModelIds.length > 0) {
       throw new SyntaxError(
-        `DeepSeek community endpoint does not advertise ${DEEPSEEK_MODEL_ID}`,
+        `DeepSeek API does not advertise: ${missingModelIds.join(', ')}`,
       )
     }
   },
@@ -134,7 +172,7 @@ export const deepseekAdapter: ProviderAdapter = {
       `${baseUrl}/chat/completions`,
       {
         method: 'POST',
-        headers: buildHeaders(),
+        headers: buildHeaders(config.apiKey),
         body: JSON.stringify(buildPayload(request, false)),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       },
@@ -171,7 +209,7 @@ export const deepseekAdapter: ProviderAdapter = {
       `${baseUrl}/chat/completions`,
       {
         method: 'POST',
-        headers: buildHeaders(),
+        headers: buildHeaders(config.apiKey),
         body: JSON.stringify(buildPayload(request, true)),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       },

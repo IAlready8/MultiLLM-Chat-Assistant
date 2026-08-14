@@ -3,7 +3,7 @@ import { getAuthenticatedUser } from '@/lib/api-auth'
 import { getUserApiKey } from '@/lib/api-key-service'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
 import { isProviderApiKeyRequired } from '@/lib/provider-registry'
-import { DEEPSEEK_MODEL_ID } from '@/lib/providers/deepseek'
+import { DEEPSEEK_MODEL_IDS } from '@/lib/providers/deepseek'
 
 type HealthStatus = 'ok' | 'invalid' | 'unreachable' | 'rate_limited' | 'provider_error' | 'format'
 
@@ -48,17 +48,24 @@ async function testKey(
       if (provider === 'deepseek') {
         const body = await response.json().catch(() => null)
         const models = Array.isArray(body?.data) ? body.data : []
-        const modelAvailable = models.some(
-          (model: unknown) =>
-            typeof model === 'object' &&
-            model !== null &&
-            'id' in model &&
-            model.id === DEEPSEEK_MODEL_ID,
+        const advertisedModelIds = new Set(
+          models
+            .map((model: unknown) =>
+              typeof model === 'object' && model !== null && 'id' in model
+                ? model.id
+                : null,
+            )
+            .filter((modelId: unknown): modelId is string =>
+              typeof modelId === 'string',
+            ),
         )
-        if (!modelAvailable) {
+        const missingModelIds = DEEPSEEK_MODEL_IDS.filter(
+          (modelId) => !advertisedModelIds.has(modelId),
+        )
+        if (missingModelIds.length > 0) {
           return buildResult(
             false,
-            'The approved DeepSeek community model is not currently available.',
+            'The approved DeepSeek models are not currently available.',
             'provider_error',
             latencyMs,
           )
@@ -89,8 +96,8 @@ async function testKey(
       return buildResult(
         false,
         retryAfter
-          ? `Shared endpoint rate limited. Retry after ${retryAfter} seconds.`
-          : 'Shared endpoint rate limited. Try again shortly.',
+          ? `Provider rate limited. Retry after ${retryAfter} seconds.`
+          : 'Provider rate limited. Try again shortly.',
         'rate_limited',
         latencyMs
       )

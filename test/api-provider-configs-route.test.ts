@@ -363,7 +363,7 @@ describe('/api/provider-configs route', () => {
     )
   })
 
-  it('POST stores DeepSeek connection settings without a credential', async () => {
+  it('POST rejects DeepSeek configuration without a credential', async () => {
     const response = await POST(
       makeRequest({
         provider: 'deepseek',
@@ -371,13 +371,31 @@ describe('/api/provider-configs route', () => {
       })
     )
 
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      errors: [
+        { path: 'apiKey', message: 'API key is required and must be valid' },
+      ],
+    })
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('POST stores the official DeepSeek models with the user credential', async () => {
+    const response = await POST(
+      makeRequest({
+        provider: 'deepseek',
+        config: { apiKey: 'deepseek-test-key-12345' },
+      })
+    )
+
     expect(response.status).toBe(200)
     expect(mockStoreUserApiKey).toHaveBeenCalledWith(
       'user-1',
       'deepseek',
-      '',
+      'deepseek-test-key-12345',
       expect.objectContaining({
-        models: ['deepseek-ai/DeepSeek-V4-Flash-0731'],
+        models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
         rateLimits: { requests: 12, window: 60000 },
       })
     )

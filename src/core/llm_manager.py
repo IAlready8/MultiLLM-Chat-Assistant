@@ -7,11 +7,8 @@ import asyncio
 import time
 import hashlib
 import logging
-import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 from enum import Enum
 from typing import Dict, List, Optional, Any, Union, Literal
 from cachetools import LRUCache
@@ -108,29 +105,6 @@ class RateLimitError(LLMError):
     def __init__(self, message: str, retry_after_seconds: Optional[int] = None):
         super().__init__(message)
         self.retry_after_seconds = retry_after_seconds
-
-
-def parse_retry_after_seconds(
-    value: Optional[str],
-    now: Optional[datetime] = None,
-) -> int:
-    """Parse RFC Retry-After delay-seconds or HTTP-date with a safe fallback."""
-
-    if not value:
-        return 5
-
-    normalized = value.strip()
-    if normalized.isdigit():
-        return max(1, int(normalized))
-
-    try:
-        retry_at = parsedate_to_datetime(normalized)
-        if retry_at.tzinfo is None:
-            retry_at = retry_at.replace(tzinfo=timezone.utc)
-        current_time = now or datetime.now(timezone.utc)
-        return max(1, math.ceil((retry_at - current_time).total_seconds()))
-    except (TypeError, ValueError, OverflowError):
-        return 5
 
 
 class LLMProvider(ABC):
@@ -597,118 +571,6 @@ class KimiProvider(LLMProvider):
 
     def health_check(self) -> bool:
         return settings.MOONSHOT_API_KEY is not None
-
-
-class DeepSeekProvider(LLMProvider):
-    """Credentialless DeepSeek V4 Flash community endpoint provider."""
-
-    def __init__(self):
-        self.base_url = (
-            "https://q5dh1rfszfym23hj.us-east-2.aws.endpoints."
-            "huggingface.cloud/v1"
-        )
-        self.headers = {"Content-Type": "application/json"}
-        self.timeout = 120.0
-
-    async def generate(self, request: LLMRequest) -> LLMResponse:
-        start_time = time.time()
-
-        try:
-            payload = {
-                "model": request.model or "deepseek-ai/DeepSeek-V4-Flash-0731",
-                "messages": [{"role": "user", "content": request.prompt}],
-                "max_tokens": request.max_tokens,
-                "temperature": request.temperature,
-                "top_p": 0.95,
-            }
-            if request.reasoning_effort != "off":
-                payload["reasoning_effort"] = request.reasoning_effort
-
-            async with httpx.AsyncClient(
-                base_url=self.base_url,
-                headers=self.headers,
-                timeout=self.timeout,
-            ) as client:
-                response = await client.post("/chat/completions", json=payload)
-
-            if response.status_code == 429:
-                retry_after = parse_retry_after_seconds(
-                    response.headers.get("retry-after")
-                )
-                raise RateLimitError(
-                    f"DeepSeek community endpoint rate limited; retry after "
-                    f"{retry_after} seconds",
-                    retry_after_seconds=retry_after,
-                )
-            if response.status_code in (401, 403):
-                raise APIConnectionError(
-                    f"DeepSeek community endpoint rejected the request: {response.text}"
-                )
-            if response.status_code >= 500:
-                raise APIConnectionError(f"DeepSeek server error: {response.text}")
-            if not response.is_success:
-                response.raise_for_status()
-
-            try:
-                data = response.json()
-                content = data["choices"][0]["message"]["content"]
-                if not isinstance(content, str):
-                    raise TypeError("DeepSeek response content is not text")
-            except (ValueError, KeyError, IndexError, TypeError) as exc:
-                logging.error(f"Unexpected response format from DeepSeek: {exc}")
-                return LLMResponse(
-                    content="Error: Unexpected response format from DeepSeek API",
-                    provider=ProviderType.DEEPSEEK,
-                    model=request.model,
-                    tokens_used=0,
-                    latency_ms=(time.time() - start_time) * 1000,
-                )
-
-            usage = data.get("usage") or {}
-            tokens_used = usage.get("total_tokens")
-            if not isinstance(tokens_used, int):
-                tokens_used = len(request.prompt.split()) + len(content.split())
-
-            return LLMResponse(
-                content=content,
-                provider=ProviderType.DEEPSEEK,
-                model=data.get(
-                    "model",
-                    request.model or "deepseek-ai/DeepSeek-V4-Flash-0731",
-                ),
-                tokens_used=tokens_used,
-                latency_ms=(time.time() - start_time) * 1000,
-            )
-        except httpx.TimeoutException:
-            return LLMResponse(
-                content="Error: DeepSeek API request timed out",
-                provider=ProviderType.DEEPSEEK,
-                model=request.model,
-                tokens_used=0,
-                latency_ms=(time.time() - start_time) * 1000,
-            )
-        except httpx.RequestError as exc:
-            return LLMResponse(
-                content=f"Error connecting to DeepSeek API: {str(exc)}",
-                provider=ProviderType.DEEPSEEK,
-                model=request.model,
-                tokens_used=0,
-                latency_ms=(time.time() - start_time) * 1000,
-            )
-        except RateLimitError:
-            raise
-        except Exception as exc:
-            logging.exception(f"Unexpected error in DeepSeek provider: {str(exc)}")
-            return LLMResponse(
-                content=f"Error calling DeepSeek API: {str(exc)}",
-                provider=ProviderType.DEEPSEEK,
-                model=request.model,
-                tokens_used=0,
-                latency_ms=(time.time() - start_time) * 1000,
-            )
-
-    def health_check(self) -> bool:
-        return True
 
 
 class LLMManager:

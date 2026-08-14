@@ -4,8 +4,6 @@ export interface ProviderMeta {
   placeholder: string
   description: string
   requiresApiKey: boolean
-  /** False when the provider does not accept a user credential at all. */
-  acceptsApiKey?: boolean
 }
 
 export const providerRegistry: ProviderMeta[] = [
@@ -67,11 +65,10 @@ export const providerRegistry: ProviderMeta[] = [
   },
   {
     id: 'deepseek',
-    name: 'DeepSeek V4 Community',
-    placeholder: 'No API key required',
-    description: 'Shared public community endpoint. Do not submit private or sensitive data.',
-    requiresApiKey: false,
-    acceptsApiKey: false,
+    name: 'DeepSeek',
+    placeholder: 'DeepSeek API key',
+    description: 'Official BYOK API. Usage is billed by DeepSeek to your DeepSeek account.',
+    requiresApiKey: true,
   },
 ]
 

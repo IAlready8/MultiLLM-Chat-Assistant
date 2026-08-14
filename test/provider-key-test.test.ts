@@ -88,8 +88,11 @@ describe('validateApiKeyFormat', () => {
   })
 
   describe('deepseek', () => {
-    it('does not require a credential', () => {
-      expect(validateApiKeyFormat('deepseek', '')).toBeNull()
+    it('requires a non-empty credential without assuming an undocumented prefix', () => {
+      expect(validateApiKeyFormat('deepseek', '')).toBe('API key is too short.')
+      expect(
+        validateApiKeyFormat('deepseek', 'deepseek-test-key-12345'),
+      ).toBeNull()
     })
   })
 
@@ -123,6 +126,25 @@ describe('testProviderKey', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://127.0.0.2:11434/api/tags',
       expect.objectContaining({ redirect: 'error' }),
+    )
+  })
+
+  it('authenticates the official DeepSeek models probe', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue(new Response(null, { status: 200 }))
+
+    const response = await testProviderKey(
+      'deepseek',
+      'deepseek-test-key-12345',
+    )
+
+    expect(response).toMatchObject({ status: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.deepseek.com/models',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer deepseek-test-key-12345' },
+        redirect: 'error',
+      }),
     )
   })
 })

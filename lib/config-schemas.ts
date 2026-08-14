@@ -54,7 +54,6 @@ export const kimiConfigSchema = providerConfigSchema.extend({
 }).optional()
 
 export const deepseekConfigSchema = providerConfigSchema.extend({
-  apiKey: z.string().default(''),
   maxTokens: z.number().min(1).max(393216).default(4096),
 }).optional()
 

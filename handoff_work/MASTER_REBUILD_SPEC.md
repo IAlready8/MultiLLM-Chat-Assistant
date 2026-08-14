@@ -201,8 +201,8 @@ Supported provider families in code:
 - Google AI
 - OpenRouter
 - Grok
-- DeepSeek V4 Flash 0731 through a credentialless, shared Hugging Face
-  community endpoint (experimental; never send sensitive data)
+- DeepSeek V4 Flash and Pro through the official API using encrypted per-user
+  BYOK credentials; DeepSeek bills the user's provider account
 
 Key files:
 - `lib/providers/registry.ts`

@@ -59,7 +59,10 @@ describe('MultiChatPage provider model picker', () => {
 
     await user.click(screen.getByRole('button', { name: /DeepSeek/i }))
     expect(
-      screen.getByRole('option', { name: 'DeepSeek V4 Flash 0731 — Free Community' })
+      screen.getByRole('option', { name: 'DeepSeek V4 Flash' })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('option', { name: 'DeepSeek V4 Pro' })
     ).toBeVisible()
   })
 })

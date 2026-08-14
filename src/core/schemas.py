@@ -7,7 +7,7 @@ class ProviderRequest(BaseModel):
     """
     Request model for a single LLM provider.
     """
-    provider: Literal["openai", "anthropic", "cohere", "google", "kimi", "deepseek"]
+    provider: Literal["openai", "anthropic", "cohere", "google", "kimi"]
     model: str
     prompt: str = Field(..., max_length=10000)
     temperature: float = Field(0.7, ge=0.0, le=2.0)
@@ -26,7 +26,7 @@ class StreamMessage(BaseModel):
 class ProviderStreamRequest(BaseModel):
     """Request model for streaming chat completions."""
 
-    provider: Literal["openai", "anthropic", "cohere", "google", "kimi", "deepseek"]
+    provider: Literal["openai", "anthropic", "cohere", "google", "kimi"]
     messages: List[StreamMessage] = Field(..., min_length=1)
     model: str
     temperature: float = Field(0.7, ge=0.0, le=2.0)
@@ -49,7 +49,8 @@ class ProviderResponse(BaseModel):
     content: str
     prompt_tokens: int
     completion_tokens: int
-    cost_usd: float
+    cost_usd: Optional[float]
+    cost_label: Optional[str] = None
     latency_ms: int
     
 class HealthResponse(BaseModel):
