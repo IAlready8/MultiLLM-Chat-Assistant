@@ -1,5 +1,10 @@
 import { isProviderApiKeyRequired } from './provider-registry'
 import { DEEPSEEK_BASE_URL } from './providers/deepseek'
+import { getProviderBaseUrl, providerFetch } from './provider-endpoint'
+
+export type ProviderKeyTestOptions = {
+  baseUrl?: unknown
+}
 
 export const validateApiKeyFormat = (
   provider: string,
@@ -48,33 +53,44 @@ export const validateApiKeyFormat = (
 }
 
 const fetchWithTimeout = async (
+  provider: string,
   url: string,
   init: RequestInit,
-  timeoutMs = 10000
+  timeoutMs = 10000,
+  options: ProviderKeyTestOptions = {},
 ) => {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    return await fetch(url, { ...init, signal: controller.signal })
+    return await providerFetch(
+      provider,
+      url,
+      { ...init, signal: controller.signal },
+      options,
+    )
   } finally {
     clearTimeout(timeout)
   }
 }
 
-export const testProviderKey = async (provider: string, apiKey: string) => {
+export const testProviderKey = async (
+  provider: string,
+  apiKey: string,
+  options: ProviderKeyTestOptions = {},
+) => {
   switch (provider) {
     case 'openai':
-      return fetchWithTimeout('https://api.openai.com/v1/models', {
+      return fetchWithTimeout('openai', 'https://api.openai.com/v1/models', {
         method: 'GET',
         headers: { Authorization: `Bearer ${apiKey}` },
       })
     case 'openrouter':
-      return fetchWithTimeout('https://openrouter.ai/api/v1/models', {
+      return fetchWithTimeout('openrouter', 'https://openrouter.ai/api/v1/models', {
         method: 'GET',
         headers: { Authorization: `Bearer ${apiKey}` },
       })
     case 'anthropic':
-      return fetchWithTimeout('https://api.anthropic.com/v1/models', {
+      return fetchWithTimeout('anthropic', 'https://api.anthropic.com/v1/models', {
         method: 'GET',
         headers: {
           'x-api-key': apiKey,
@@ -83,6 +99,7 @@ export const testProviderKey = async (provider: string, apiKey: string) => {
       })
     case 'googleai':
       return fetchWithTimeout(
+        'googleai',
         `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(
           apiKey
         )}`,
@@ -91,24 +108,33 @@ export const testProviderKey = async (provider: string, apiKey: string) => {
     case 'grok':
       return null
     case 'mistral':
-      return fetchWithTimeout('https://api.mistral.ai/v1/models', {
+      return fetchWithTimeout('mistral', 'https://api.mistral.ai/v1/models', {
         method: 'GET',
         headers: { Authorization: `Bearer ${apiKey}` },
       })
     case 'kimi':
-      return fetchWithTimeout('https://api.moonshot.ai/v1/models', {
+      return fetchWithTimeout('kimi', 'https://api.moonshot.ai/v1/models', {
         method: 'GET',
         headers: { Authorization: `Bearer ${apiKey}` },
       })
     case 'deepseek':
-      return fetchWithTimeout(`${DEEPSEEK_BASE_URL}/models`, {
+      return fetchWithTimeout('deepseek', `${DEEPSEEK_BASE_URL}/models`, {
         method: 'GET',
       })
     case 'ollama':
-      return fetchWithTimeout('http://localhost:11434/api/tags', {
-        method: 'GET',
-        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
-      })
+      {
+        const baseUrl = getProviderBaseUrl('ollama', options.baseUrl)
+        return fetchWithTimeout(
+          'ollama',
+          `${baseUrl}/api/tags`,
+          {
+            method: 'GET',
+            headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+          },
+          10000,
+          { baseUrl },
+        )
+      }
     default:
       return null
   }

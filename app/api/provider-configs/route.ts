@@ -13,6 +13,11 @@ import {
   cachedJsonResponse,
   invalidateApiReadCache,
 } from '@/lib/api-read-cache'
+import {
+  getProviderBaseUrl,
+  PROVIDER_ENDPOINT_ERROR_CODE,
+  ProviderEndpointError,
+} from '@/lib/provider-endpoint'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
@@ -142,7 +147,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!config || typeof config !== 'object') {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
       return NextResponse.json(
         { error: 'Config object is required' },
         { status: 400 }
@@ -163,12 +168,27 @@ export async function POST(request: NextRequest) {
     }
 
     const settings = buildProviderSettings(provider, config as Record<string, unknown>)
+    const configuredBaseUrl = settings.baseUrl
+    const resolvedBaseUrl = getProviderBaseUrl(provider, configuredBaseUrl)
+    if (typeof configuredBaseUrl === 'string' && configuredBaseUrl.trim()) {
+      settings.baseUrl = resolvedBaseUrl
+    }
 
     await storeUserApiKey(user.id, provider, apiKey, settings)
     invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
 
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
+    if (error instanceof ProviderEndpointError) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: PROVIDER_ENDPOINT_ERROR_CODE,
+          errors: [{ path: 'baseUrl', message: 'Provider endpoint is not allowed' }],
+        },
+        { status: 400 }
+      )
+    }
     console.error('Error updating provider config:', error)
     return NextResponse.json(
       { error: 'Failed to update provider configuration' },
@@ -202,11 +222,18 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    if (!config || typeof config !== 'object') {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
       return NextResponse.json(
         { error: 'Config object is required' },
         { status: 400 }
       )
+    }
+
+    const settings = buildProviderSettings(provider, config as Record<string, unknown>)
+    const configuredBaseUrl = settings.baseUrl
+    const resolvedBaseUrl = getProviderBaseUrl(provider, configuredBaseUrl)
+    if (typeof configuredBaseUrl === 'string' && configuredBaseUrl.trim()) {
+      settings.baseUrl = resolvedBaseUrl
     }
 
     // Validate API key format if provided
@@ -246,7 +273,9 @@ export async function PUT(request: NextRequest) {
 
     const startTime = Date.now()
     try {
-      const response = await testProviderKey(provider, apiKey)
+      const response = await testProviderKey(provider, apiKey, {
+        baseUrl: resolvedBaseUrl,
+      })
       const latency = Date.now() - startTime
 
       if (!response) {
@@ -283,8 +312,6 @@ export async function PUT(request: NextRequest) {
 
     // If connection test passed, store the config
     if (connectionTest.success) {
-      const settings = buildProviderSettings(provider, config as Record<string, unknown>)
-
       await storeUserApiKey(user.id, provider, apiKey, settings)
       invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
     }
@@ -298,6 +325,16 @@ export async function PUT(request: NextRequest) {
       { status: connectionTest.success ? 200 : 400 }
     )
   } catch (error) {
+    if (error instanceof ProviderEndpointError) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: PROVIDER_ENDPOINT_ERROR_CODE,
+          errors: [{ path: 'baseUrl', message: 'Provider endpoint is not allowed' }],
+        },
+        { status: 400 }
+      )
+    }
     console.error('Error validating provider config:', error)
     return NextResponse.json(
       { error: 'Failed to validate provider configuration' },

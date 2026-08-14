@@ -11,6 +11,7 @@ import {
   classifyProviderError,
 } from '@/lib/providers'
 import type { ProviderRequest, ProviderAdapterConfig } from '@/lib/providers'
+import { getProviderBaseUrl } from '@/lib/provider-endpoint'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -163,8 +164,7 @@ export async function POST(request: NextRequest) {
     const adapter = getProviderAdapter(provider)!
 
     // Build adapter config from provider settings
-    const defaultBaseUrl = provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : undefined
-    const baseUrl = settings.baseUrl || defaultBaseUrl
+    const baseUrl = getProviderBaseUrl(provider, settings.baseUrl)
     const extraHeaders: Record<string, string> = {}
     if (provider === 'openrouter') {
       if (settings.httpReferer) extraHeaders['HTTP-Referer'] = settings.httpReferer

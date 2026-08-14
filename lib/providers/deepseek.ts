@@ -14,6 +14,7 @@ import type {
 } from './types'
 import { parseSSEStream, requireBody, throwUpstreamError } from './util'
 import { RateLimitError, createErrorContext } from '@/lib/error-system'
+import { getProviderBaseUrl, providerFetch } from '@/lib/provider-endpoint'
 
 export const DEEPSEEK_BASE_URL =
   'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1'
@@ -94,8 +95,9 @@ async function throwDeepSeekError(
 export const deepseekAdapter: ProviderAdapter = {
   id: 'deepseek',
 
-  async testConnection(_config: ProviderAdapterConfig): Promise<void> {
-    const response = await fetch(`${DEEPSEEK_BASE_URL}/models`, {
+  async testConnection(config: ProviderAdapterConfig): Promise<void> {
+    const baseUrl = getProviderBaseUrl('deepseek', config.baseUrl)
+    const response = await providerFetch('deepseek', `${baseUrl}/models`, {
       method: 'GET',
       headers: buildHeaders(),
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -124,10 +126,12 @@ export const deepseekAdapter: ProviderAdapter = {
 
   async chat(
     request: ProviderRequest,
-    _config: ProviderAdapterConfig,
+    config: ProviderAdapterConfig,
   ): Promise<ChatCompletion> {
-    const response = await fetch(
-      `${DEEPSEEK_BASE_URL}/chat/completions`,
+    const baseUrl = getProviderBaseUrl('deepseek', config.baseUrl)
+    const response = await providerFetch(
+      'deepseek',
+      `${baseUrl}/chat/completions`,
       {
         method: 'POST',
         headers: buildHeaders(),
@@ -159,10 +163,12 @@ export const deepseekAdapter: ProviderAdapter = {
 
   async *stream(
     request: ProviderRequest,
-    _config: ProviderAdapterConfig,
+    config: ProviderAdapterConfig,
   ): AsyncGenerator<string, void, undefined> {
-    const response = await fetch(
-      `${DEEPSEEK_BASE_URL}/chat/completions`,
+    const baseUrl = getProviderBaseUrl('deepseek', config.baseUrl)
+    const response = await providerFetch(
+      'deepseek',
+      `${baseUrl}/chat/completions`,
       {
         method: 'POST',
         headers: buildHeaders(),

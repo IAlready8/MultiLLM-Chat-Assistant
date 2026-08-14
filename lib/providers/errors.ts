@@ -7,6 +7,7 @@
  */
 
 import { NotImplementedError } from '@/lib/error-system'
+import { PROVIDER_ENDPOINT_ERROR_CODE } from '@/lib/provider-endpoint'
 import type { ClassifiedError } from './types'
 
 // ---------------------------------------------------------------------------
@@ -78,6 +79,18 @@ export function classifyProviderError(error: unknown): ClassifiedError {
       retryAfterSeconds: Number.isFinite(retryAfterMs)
         ? Math.max(1, Math.ceil(retryAfterMs / 1000))
         : undefined,
+    }
+  }
+
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    (error as { code?: unknown }).code === PROVIDER_ENDPOINT_ERROR_CODE
+  ) {
+    return {
+      status: 400,
+      code: PROVIDER_ENDPOINT_ERROR_CODE,
+      error: 'Configured provider endpoint is not allowed',
     }
   }
 

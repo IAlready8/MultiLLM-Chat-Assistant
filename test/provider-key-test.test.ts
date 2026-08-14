@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest'
-import { validateApiKeyFormat } from '@/lib/provider-key-test'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import {
+  testProviderKey,
+  validateApiKeyFormat,
+} from '@/lib/provider-key-test'
 
 describe('validateApiKeyFormat', () => {
   it('rejects keys shorter than 10 characters', () => {
@@ -96,5 +99,30 @@ describe('validateApiKeyFormat', () => {
         validateApiKeyFormat('some-future-provider', 'any-key-format-123')
       ).toBeNull()
     })
+  })
+})
+
+describe('testProviderKey', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('uses the configured local Ollama endpoint for the connection probe', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue(new Response(null, { status: 200 }))
+
+    const response = await testProviderKey('ollama', '', {
+      baseUrl: 'http://127.0.0.2:11434',
+    })
+
+    expect(response).toMatchObject({ status: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.2:11434/api/tags',
+      expect.objectContaining({ redirect: 'error' }),
+    )
   })
 })

@@ -206,6 +206,66 @@ describe('/api/llm/chat route', () => {
     })
   })
 
+  it('rejects a legacy stored provider endpoint before making an upstream request', async () => {
+    mockGetUserProviderConfigs.mockResolvedValue([
+      {
+        provider: 'openai',
+        settings: { baseUrl: 'http://169.254.169.254/latest/meta-data' },
+      },
+    ])
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          stream: false,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Configured provider endpoint is not allowed',
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+    })
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['private endpoint', 'http://169.254.169.254:11434'],
+    ['public custom endpoint', 'https://ollama.example.com'],
+    ['wrong-port localhost', 'http://localhost:8080'],
+  ])('rejects a legacy Ollama %s before making an upstream request', async (_label, baseUrl) => {
+    mockGetUserProviderConfigs.mockResolvedValue([
+      { provider: 'ollama', settings: { baseUrl } },
+    ])
+
+    for (const stream of [false, true]) {
+      const response = await POST(
+        new NextRequest('http://localhost/api/llm/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: 'ollama',
+            stream,
+            messages: [{ role: 'user', content: 'hi' }],
+          }),
+        }),
+      )
+
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toEqual({
+        error: 'Configured provider endpoint is not allowed',
+        code: 'PROVIDER_ENDPOINT_BLOCKED',
+      })
+    }
+
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
   it('returns INTERNAL_ERROR when provider config lookup throws', async () => {
     mockGetUserProviderConfigs.mockRejectedValue(
       new Error('database unavailable during provider lookup')

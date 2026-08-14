@@ -25,8 +25,11 @@ vi.mock('@/lib/api-key-service', () => ({
 }))
 
 vi.mock('@/lib/provider-key-test', () => ({
-  testProviderKey: (provider: string, apiKey: string) =>
-    mockTestProviderKey(provider, apiKey),
+  testProviderKey: (
+    provider: string,
+    apiKey: string,
+    options: { baseUrl?: unknown },
+  ) => mockTestProviderKey(provider, apiKey, options),
   validateApiKeyFormat: (provider: string, apiKey: string) =>
     mockValidateApiKeyFormat(provider, apiKey),
 }))
@@ -52,6 +55,7 @@ const makeRequest = (
 describe('/api/provider-configs route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.unstubAllEnvs()
     delete process.env.ENABLE_API_READ_CACHE
     delete process.env.API_READ_CACHE_TTL_MS
     clearApiReadCache()
@@ -157,6 +161,181 @@ describe('/api/provider-configs route', () => {
         organization: 'org_123',
         models: ['gpt-4'],
       })
+    )
+  })
+
+  it('POST rejects nested baseUrl values that target loopback', async () => {
+    const response = await POST(
+      makeRequest({
+        provider: 'openai',
+        config: {
+          apiKey: 'sk-test-1234567890',
+          settings: { baseUrl: 'http://127.0.0.1:8080/v1' },
+        },
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      success: false,
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+      errors: [{ path: 'baseUrl', message: 'Provider endpoint is not allowed' }],
+    })
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('PUT rejects a provider lookalike origin before testing the API key', async () => {
+    const response = await PUT(
+      makeRequest(
+        {
+          provider: 'openai',
+          config: {
+            apiKey: 'sk-test-1234567890',
+            baseUrl: 'https://api.openai.com.evil.example/v1',
+          },
+        },
+        'PUT',
+      ),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+      errors: [{ path: 'baseUrl', message: 'Provider endpoint is not allowed' }],
+    })
+    expect(mockTestProviderKey).not.toHaveBeenCalled()
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['private top-level endpoint', { baseUrl: 'http://169.254.169.254:11434' }],
+    [
+      'private nested endpoint',
+      { settings: { baseUrl: 'http://192.168.1.1:11434' } },
+    ],
+    ['public remote endpoint', { baseUrl: 'https://ollama.example.com' }],
+    ['wrong Ollama port', { baseUrl: 'http://localhost:8080' }],
+  ])('POST rejects %s before persistence', async (_label, config) => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    process.env.API_READ_CACHE_TTL_MS = '60000'
+    mockGetUserProviderConfigs.mockResolvedValue([])
+    await GET()
+
+    const response = await POST(
+      makeRequest({ provider: 'ollama', config: { apiKey: '', ...config } }),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+      errors: [{ path: 'baseUrl', message: 'Provider endpoint is not allowed' }],
+    })
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+
+    const cachedRead = await GET()
+    expect(cachedRead.headers.get('X-Read-Cache')).toBe('hit')
+  })
+
+  it('POST rejects Ollama in production mode before persistence', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+
+    const response = await POST(
+      makeRequest({
+        provider: 'ollama',
+        config: { apiKey: '', baseUrl: 'http://localhost:11434' },
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+    })
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['private top-level endpoint', { baseUrl: 'http://169.254.169.254:11434' }],
+    [
+      'private nested endpoint',
+      { settings: { baseUrl: 'http://10.0.0.1:11434' } },
+    ],
+    ['public remote endpoint', { baseUrl: 'https://ollama.example.com' }],
+    ['wrong Ollama port', { baseUrl: 'http://localhost:8080' }],
+  ])('PUT rejects %s before connection testing', async (_label, config) => {
+    const response = await PUT(
+      makeRequest(
+        { provider: 'ollama', config: { apiKey: '', ...config } },
+        'PUT',
+      ),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+      errors: [{ path: 'baseUrl', message: 'Provider endpoint is not allowed' }],
+    })
+    expect(mockTestProviderKey).not.toHaveBeenCalled()
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('PUT rejects Ollama in production mode before connection testing', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+
+    const response = await PUT(
+      makeRequest(
+        {
+          provider: 'ollama',
+          config: { apiKey: '', baseUrl: 'http://localhost:11434' },
+        },
+        'PUT',
+      ),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+    })
+    expect(mockTestProviderKey).not.toHaveBeenCalled()
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('validates the effective top-level baseUrl after nested settings merge', async () => {
+    const rejected = await POST(
+      makeRequest({
+        provider: 'ollama',
+        config: {
+          apiKey: '',
+          baseUrl: 'http://169.254.169.254:11434',
+          settings: { baseUrl: 'http://localhost:11434' },
+        },
+      }),
+    )
+
+    expect(rejected.status).toBe(400)
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+
+    const accepted = await POST(
+      makeRequest({
+        provider: 'ollama',
+        config: {
+          apiKey: '',
+          baseUrl: 'http://localhost:11434',
+          settings: { baseUrl: 'http://169.254.169.254:11434' },
+        },
+      }),
+    )
+
+    expect(accepted.status).toBe(200)
+    expect(mockStoreUserApiKey).toHaveBeenCalledWith(
+      'user-1',
+      'ollama',
+      '',
+      expect.objectContaining({ baseUrl: 'http://localhost:11434' }),
     )
   })
 
@@ -280,6 +459,36 @@ describe('/api/provider-configs route', () => {
     const body = await response.json()
     expect(body.success).toBe(false)
     expect(body.connectionTest.reason).toBe('rate_limited')
+  })
+
+  it('PUT passes the resolved Ollama endpoint to the connection test', async () => {
+    mockTestProviderKey.mockResolvedValue({ ok: true, status: 200 })
+
+    const response = await PUT(
+      makeRequest(
+        {
+          provider: 'ollama',
+          config: {
+            apiKey: '',
+            baseUrl: 'http://127.0.0.2:11434',
+          },
+        },
+        'PUT',
+      ),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockTestProviderKey).toHaveBeenCalledWith(
+      'ollama',
+      '',
+      { baseUrl: 'http://127.0.0.2:11434' },
+    )
+    expect(mockStoreUserApiKey).toHaveBeenCalledWith(
+      'user-1',
+      'ollama',
+      '',
+      expect.objectContaining({ baseUrl: 'http://127.0.0.2:11434' }),
+    )
   })
 
   it('DELETE clears provider config for authenticated user', async () => {

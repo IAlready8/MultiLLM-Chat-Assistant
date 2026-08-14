@@ -13,9 +13,9 @@ import type {
   ProviderMessage,
 } from './types'
 import { throwUpstreamError, requireBody, parseSSEStream } from './util'
+import { getProviderBaseUrl, providerFetch } from '@/lib/provider-endpoint'
 
 const DEFAULT_MODEL = 'gemini-1.5-flash'
-const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
 const TIMEOUT_MS = 60_000
 
 function buildGeminiPayload(messages: ProviderMessage[], request: ProviderRequest) {
@@ -43,7 +43,8 @@ export const googleaiAdapter: ProviderAdapter = {
   id: 'googleai',
 
   async testConnection(config: ProviderAdapterConfig): Promise<void> {
-    const response = await fetch(`${BASE_URL}/models?key=${config.apiKey}`, {
+    const baseUrl = getProviderBaseUrl('googleai', config.baseUrl)
+    const response = await providerFetch('googleai', `${baseUrl}/models?key=${config.apiKey}`, {
       method: 'GET',
       headers: {
         ...config.extraHeaders,
@@ -62,9 +63,11 @@ export const googleaiAdapter: ProviderAdapter = {
   ): Promise<ChatCompletion> {
     const model = request.model || DEFAULT_MODEL
     const payload = buildGeminiPayload(request.messages, request)
+    const baseUrl = getProviderBaseUrl('googleai', config.baseUrl)
 
-    const response = await fetch(
-      `${BASE_URL}/models/${model}:generateContent?key=${config.apiKey}`,
+    const response = await providerFetch(
+      'googleai',
+      `${baseUrl}/models/${model}:generateContent?key=${config.apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...config.extraHeaders },
@@ -93,11 +96,13 @@ export const googleaiAdapter: ProviderAdapter = {
   ): AsyncGenerator<string, void, undefined> {
     const model = request.model || DEFAULT_MODEL
     const payload = buildGeminiPayload(request.messages, request)
+    const baseUrl = getProviderBaseUrl('googleai', config.baseUrl)
 
     // BUG FIX: Added AbortSignal.timeout that was previously missing for
     // Google AI streaming, which could hang indefinitely on network issues.
-    const response = await fetch(
-      `${BASE_URL}/models/${model}:streamGenerateContent?alt=sse&key=${config.apiKey}`,
+    const response = await providerFetch(
+      'googleai',
+      `${baseUrl}/models/${model}:streamGenerateContent?alt=sse&key=${config.apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...config.extraHeaders },

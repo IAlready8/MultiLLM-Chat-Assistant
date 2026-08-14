@@ -9,8 +9,8 @@ import type {
   ChatCompletion,
 } from './types'
 import { throwUpstreamError, requireBody, parseSSEStream } from './util'
+import { getProviderBaseUrl, providerFetch } from '@/lib/provider-endpoint'
 
-const DEFAULT_BASE_URL = 'https://api.anthropic.com'
 const DEFAULT_MODEL = 'claude-3-sonnet-20240229'
 const ANTHROPIC_VERSION = '2023-06-01'
 const TIMEOUT_MS = 60_000
@@ -34,8 +34,8 @@ export const anthropicAdapter: ProviderAdapter = {
   id: 'anthropic',
 
   async testConnection(config: ProviderAdapterConfig): Promise<void> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
-    const response = await fetch(`${baseUrl}/v1/models`, {
+    const baseUrl = getProviderBaseUrl('anthropic', config.baseUrl)
+    const response = await providerFetch('anthropic', `${baseUrl}/v1/models`, {
       method: 'GET',
       headers: {
         'x-api-key': config.apiKey,
@@ -54,10 +54,10 @@ export const anthropicAdapter: ProviderAdapter = {
     request: ProviderRequest,
     config: ProviderAdapterConfig,
   ): Promise<ChatCompletion> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const baseUrl = getProviderBaseUrl('anthropic', config.baseUrl)
     const { body } = buildAnthropicPayload(request, false)
 
-    const response = await fetch(`${baseUrl}/v1/messages`, {
+    const response = await providerFetch('anthropic', `${baseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -88,10 +88,10 @@ export const anthropicAdapter: ProviderAdapter = {
     request: ProviderRequest,
     config: ProviderAdapterConfig,
   ): AsyncGenerator<string, void, undefined> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const baseUrl = getProviderBaseUrl('anthropic', config.baseUrl)
     const { body } = buildAnthropicPayload(request, true)
 
-    const response = await fetch(`${baseUrl}/v1/messages`, {
+    const response = await providerFetch('anthropic', `${baseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
