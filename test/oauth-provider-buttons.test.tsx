@@ -66,8 +66,11 @@ describe('OAuthProviderButtons', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/social account creation is not configured yet/i),
+        screen.getByText(
+          /operator must add a Google OAuth application before new accounts can be created/i,
+        ),
       ).toBeInTheDocument()
     })
+    expect(screen.queryByText(/GitHub/i)).not.toBeInTheDocument()
   })
 })

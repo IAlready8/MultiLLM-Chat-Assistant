@@ -1,4 +1,32 @@
 import { expect, test } from '@playwright/test'
+import { encode } from 'next-auth/jwt'
+
+const authenticatePage = async (page: import('@playwright/test').Page) => {
+  const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
+  if (!secret) {
+    throw new Error('Focused Settings browser tests require a local auth secret.')
+  }
+
+  const token = await encode({
+    secret,
+    token: {
+      sub: 'pilot-user',
+      id: 'pilot-user',
+      name: 'Pilot User',
+      email: 'pilot@example.com',
+      role: 'MEMBER',
+      tier: 'FREE',
+    },
+  })
+
+  await page.context().addCookies([
+    {
+      name: 'next-auth.session-token',
+      value: token,
+      url: `http://localhost:${process.env.PORT || 3000}`,
+    },
+  ])
+}
 
 test.describe('Settings provider configuration', () => {
   const openProvidersTab = async (
@@ -216,5 +244,85 @@ test.describe('Settings provider configuration', () => {
 
     await expect(page.getByText('Invalid API Key', { exact: true }).first()).toBeVisible()
     await expect.poll(() => state.configPostCalls).toBe(0)
+  })
+
+  test('keeps every Settings tab reachable at 390px by pointer and keyboard', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await authenticatePage(page)
+
+    await page.route('**/api/auth/session', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: {
+            id: 'pilot-user',
+            name: 'Pilot User',
+            email: 'pilot@example.com',
+            role: 'MEMBER',
+            tier: 'FREE',
+          },
+          expires: '2099-01-01T00:00:00.000Z',
+        }),
+      })
+    })
+
+    await page.route('**/api/config', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ configuredProviders: [] }),
+      })
+    })
+
+    await page.goto('/settings', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    })
+
+    const tabs = ['General', 'API Providers', 'Appearance', 'Advanced'].map(
+      name => page.getByRole('tab', { name })
+    )
+
+    for (const tab of tabs) {
+      await expect(tab).toBeVisible()
+      const isHitTarget = await tab.evaluate(element => {
+        const rect = element.getBoundingClientRect()
+        const hitTarget = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2
+        )
+        return hitTarget === element || element.contains(hitTarget)
+      })
+      expect(isHitTarget).toBe(true)
+    }
+
+    const advancedTab = page.getByRole('tab', { name: 'Advanced' })
+    const advancedTabBox = await advancedTab.boundingBox()
+    if (!advancedTabBox) {
+      throw new Error('Advanced tab did not expose a pointer target.')
+    }
+    await page.mouse.click(
+      advancedTabBox.x + advancedTabBox.width / 2,
+      advancedTabBox.y + advancedTabBox.height / 2
+    )
+    await expect(advancedTab).toHaveAttribute('data-state', 'active')
+    await expect(
+      page.getByRole('heading', { name: 'Advanced Settings' })
+    ).toBeVisible({ timeout: 15_000 })
+
+    const generalTab = page.getByRole('tab', { name: 'General' })
+    await generalTab.click()
+    await generalTab.focus()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+
+    await expect(advancedTab).toBeFocused()
+    await expect(advancedTab).toHaveAttribute('data-state', 'active')
+    await expect(
+      page.getByRole('heading', { name: 'Advanced Settings' })
+    ).toBeVisible({ timeout: 15_000 })
   })
 })
