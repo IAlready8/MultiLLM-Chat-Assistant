@@ -4,7 +4,11 @@ import {
   getProviderAdapter,
 } from '@/lib/providers'
 import type { ProviderRequest, ProviderAdapterConfig } from '@/lib/providers'
-import { isProviderApiKeyRequired } from '@/lib/provider-registry'
+import {
+  getProviderDisabledMessage,
+  isProviderApiKeyRequired,
+  isProviderDisabled,
+} from '@/lib/provider-registry'
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -71,6 +75,11 @@ export async function sendChatMessage(
       throw new ValidationError('Provider is required and must be a string', 'provider', context)
     }
 
+    const normalizedProvider = provider.trim().toLowerCase()
+    if (isProviderDisabled(normalizedProvider)) {
+      throw new ValidationError(getProviderDisabledMessage(normalizedProvider), 'provider', context)
+    }
+
     const adapter = getProviderAdapter(provider)
     if (!adapter) {
       throw new ValidationError(`Unsupported provider: ${provider}`, 'provider', context)
@@ -131,6 +140,11 @@ export async function streamChatMessage(
   try {
     if (!provider || typeof provider !== 'string') {
       throw new ValidationError('Provider is required and must be a string', 'provider', context)
+    }
+
+    const normalizedProvider = provider.trim().toLowerCase()
+    if (isProviderDisabled(normalizedProvider)) {
+      throw new ValidationError(getProviderDisabledMessage(normalizedProvider), 'provider', context)
     }
 
     const adapter = getProviderAdapter(provider)

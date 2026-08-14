@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { getUserApiKey } from '@/lib/api-key-service'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
-import { isProviderApiKeyRequired } from '@/lib/provider-registry'
-import { DEEPSEEK_MODEL_ID } from '@/lib/providers/deepseek'
+import {
+  getProviderDisabledMessage,
+  isProviderApiKeyRequired,
+  isProviderDisabled,
+  PROVIDER_DISABLED_ERROR_CODE,
+} from '@/lib/provider-registry'
 
-type HealthStatus = 'ok' | 'invalid' | 'unreachable' | 'rate_limited' | 'provider_error' | 'format'
+type HealthStatus = 'ok' | 'invalid' | 'unreachable' | 'rate_limited' | 'provider_error' | 'format' | 'disabled'
 
 interface TestResult {
   valid: boolean
@@ -45,26 +49,6 @@ async function testKey(
     }
 
     if (response.ok) {
-      if (provider === 'deepseek') {
-        const body = await response.json().catch(() => null)
-        const models = Array.isArray(body?.data) ? body.data : []
-        const modelAvailable = models.some(
-          (model: unknown) =>
-            typeof model === 'object' &&
-            model !== null &&
-            'id' in model &&
-            model.id === DEEPSEEK_MODEL_ID,
-        )
-        if (!modelAvailable) {
-          return buildResult(
-            false,
-            'The approved DeepSeek community model is not currently available.',
-            'provider_error',
-            latencyMs,
-          )
-        }
-      }
-
       return buildResult(
         true,
         isProviderApiKeyRequired(provider)
@@ -140,6 +124,16 @@ export async function POST(request: NextRequest) {
     }
 
     const provider = providerRaw.trim().toLowerCase()
+
+    if (isProviderDisabled(provider)) {
+      return NextResponse.json(
+        {
+          ...buildResult(false, getProviderDisabledMessage(provider), 'disabled'),
+          code: PROVIDER_DISABLED_ERROR_CODE,
+        },
+        { status: 503 },
+      )
+    }
 
     // Mode 1: Test a saved/stored key without re-entry
     if (testSaved) {

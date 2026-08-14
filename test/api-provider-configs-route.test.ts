@@ -80,6 +80,14 @@ describe('/api/provider-configs route', () => {
         createdAt: now,
         updatedAt: now,
       },
+      {
+        id: 'cfg-historical-deepseek',
+        provider: 'deepseek',
+        isActive: true,
+        settings: { models: ['deepseek-ai/DeepSeek-V4-Flash-0731'] },
+        createdAt: now,
+        updatedAt: now,
+      },
     ])
 
     const response = await GET()
@@ -93,6 +101,7 @@ describe('/api/provider-configs route', () => {
       models: ['gpt-4'],
       rateLimits: { requests: 15, window: 60000 },
     })
+    expect(body.configs.deepseek).toBeUndefined()
     expect(mockGetAuthenticatedUser).toHaveBeenCalledWith()
   })
 
@@ -363,7 +372,7 @@ describe('/api/provider-configs route', () => {
     )
   })
 
-  it('POST stores DeepSeek connection settings without a credential', async () => {
+  it('POST rejects disabled DeepSeek without requesting a key or storing config', async () => {
     const response = await POST(
       makeRequest({
         provider: 'deepseek',
@@ -371,16 +380,29 @@ describe('/api/provider-configs route', () => {
       })
     )
 
-    expect(response.status).toBe(200)
-    expect(mockStoreUserApiKey).toHaveBeenCalledWith(
-      'user-1',
-      'deepseek',
-      '',
-      expect.objectContaining({
-        models: ['deepseek-ai/DeepSeek-V4-Flash-0731'],
-        rateLimits: { requests: 12, window: 60000 },
-      })
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      success: false,
+      error: 'DeepSeek is currently unavailable.',
+      code: 'PROVIDER_DISABLED',
+    })
+    expect(mockValidateApiKeyFormat).not.toHaveBeenCalled()
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('PUT rejects disabled DeepSeek before connection testing', async () => {
+    const response = await PUT(
+      makeRequest({ provider: 'deepseek', config: {} }, 'PUT')
     )
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      code: 'PROVIDER_DISABLED',
+    })
+    expect(mockValidateApiKeyFormat).not.toHaveBeenCalled()
+    expect(mockTestProviderKey).not.toHaveBeenCalled()
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
   })
 
   it('POST invalidates cached provider configs after save', async () => {

@@ -600,7 +600,7 @@ class KimiProvider(LLMProvider):
 
 
 class DeepSeekProvider(LLMProvider):
-    """Credentialless DeepSeek V4 Flash community endpoint provider."""
+    """Historical DeepSeek community adapter retained for future restoration."""
 
     def __init__(self):
         self.base_url = (

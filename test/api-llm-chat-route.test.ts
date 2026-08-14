@@ -154,6 +154,28 @@ describe('/api/llm/chat route', () => {
     expect(mockGetUserProviderConfigs).not.toHaveBeenCalled()
   })
 
+  it('rejects disabled DeepSeek before config, key, or network access', async () => {
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'deepseek',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      error: 'DeepSeek is currently unavailable.',
+      code: 'PROVIDER_DISABLED',
+    })
+    expect(mockGetUserProviderConfigs).not.toHaveBeenCalled()
+    expect(mockGetUserApiKey).not.toHaveBeenCalled()
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
   it('returns unsupported provider error', async () => {
     const response = await POST(
       new NextRequest('http://localhost/api/llm/chat', {

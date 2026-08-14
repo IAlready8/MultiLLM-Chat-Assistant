@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { deepseekAdapter } from '@/lib/providers/deepseek'
+import {
+  deepseekAdapter as disabledDeepseekAdapter,
+  historicalDeepseekAdapter as deepseekAdapter,
+} from '@/lib/providers/deepseek'
 import { classifyProviderError } from '@/lib/providers/errors'
 import type { ProviderRequest } from '@/lib/providers/types'
 import { testProviderKey } from '@/lib/provider-key-test'
@@ -30,6 +33,21 @@ afterEach(() => {
 })
 
 describe('deepseekAdapter', () => {
+  it('fails closed without contacting the retired endpoint', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(disabledDeepseekAdapter.testConnection?.(config)).rejects.toThrow(
+      'DeepSeek is currently unavailable.',
+    )
+    await expect(disabledDeepseekAdapter.chat(request, config)).rejects.toThrow(
+      'DeepSeek is currently unavailable.',
+    )
+    const stream = disabledDeepseekAdapter.stream(request, config)
+    await expect(stream.next()).rejects.toThrow('DeepSeek is currently unavailable.')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('checks the public community models endpoint without authorization', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -101,22 +119,16 @@ describe('deepseekAdapter', () => {
     )
   })
 
-  it('uses the same credentialless models probe in Settings', async () => {
+  it('blocks the retired models probe in Settings', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(testProviderKey('deepseek', '')).resolves.toMatchObject({
-      ok: true,
-    })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1/models',
-      expect.objectContaining({
-        method: 'GET',
-      }),
+    await expect(testProviderKey('deepseek', '')).rejects.toThrow(
+      'DeepSeek is currently unavailable.',
     )
-    expect(fetchMock.mock.calls[0][1]?.headers).toBeUndefined()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('sends the community endpoint reasoning and sampling payload', async () => {

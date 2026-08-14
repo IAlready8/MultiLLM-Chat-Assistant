@@ -58,13 +58,16 @@ describe('recent provider model catalog', () => {
     ).toBe(200_000)
   })
 
-  it('exposes only the served DeepSeek community model and deployment limit', () => {
+  it('retains the historical DeepSeek model metadata as unavailable', () => {
     expect(getModelsForProvider('deepseek').map((model) => model.id)).toEqual([
       'deepseek-ai/DeepSeek-V4-Flash-0731',
     ])
     expect(defaultProviderModels.deepseek).toEqual([
       'deepseek-ai/DeepSeek-V4-Flash-0731',
     ])
+    expect(getModelsForProvider('deepseek')[0]?.displayName).toBe(
+      'DeepSeek V4 Flash 0731 (Unavailable)',
+    )
     expect(getDefaultModel('deepseek')).toBe(
       'deepseek-ai/DeepSeek-V4-Flash-0731',
     )

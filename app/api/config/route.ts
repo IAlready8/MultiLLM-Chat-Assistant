@@ -6,8 +6,12 @@ import {
 } from '@/lib/acquisition-attribution'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import {
+  getProviderDisabledMessage,
   getProviderMeta,
   isProviderApiKeyRequired,
+  isProviderDisabled,
+  isProviderOperational,
+  PROVIDER_DISABLED_ERROR_CODE,
 } from '@/lib/provider-registry'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import {
@@ -25,7 +29,9 @@ export async function GET() {
 
   try {
     const configs = await getUserProviderConfigs(user.id)
-    const configuredProviders = configs.map(c => c.provider)
+    const configuredProviders = configs
+      .map((config) => config.provider)
+      .filter(isProviderOperational)
 
     const response = NextResponse.json({ configuredProviders })
     response.headers.set('Cache-Control', 'no-store')
@@ -55,6 +61,16 @@ export async function POST(request: NextRequest) {
 
   const provider = normalizeProvider(providerRaw)
   const providerMeta = getProviderMeta(provider)
+
+  if (isProviderDisabled(provider)) {
+    return NextResponse.json(
+      {
+        error: getProviderDisabledMessage(provider),
+        code: PROVIDER_DISABLED_ERROR_CODE,
+      },
+      { status: 503 },
+    )
+  }
 
   // Validate provider
   if (!providerMeta || !defaultProviderModels[provider]) {

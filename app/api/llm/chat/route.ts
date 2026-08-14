@@ -4,7 +4,12 @@ import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import { validateApiKeyFormat } from '@/lib/provider-key-test'
-import { isProviderApiKeyRequired } from '@/lib/provider-registry'
+import {
+  getProviderDisabledMessage,
+  isProviderApiKeyRequired,
+  isProviderDisabled,
+  PROVIDER_DISABLED_ERROR_CODE,
+} from '@/lib/provider-registry'
 import { checkProviderRateLimit, type ProviderRateLimitConfig } from '@/lib/provider-rate-limit'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import {
@@ -123,6 +128,14 @@ export async function POST(req: NextRequest) {
         400,
         'reasoning_effort must be one of: off, low, high, max',
         'VALIDATION_ERROR',
+      )
+    }
+
+    if (isProviderDisabled(provider)) {
+      return jsonErrorResponse(
+        503,
+        getProviderDisabledMessage(provider),
+        PROVIDER_DISABLED_ERROR_CODE,
       )
     }
 

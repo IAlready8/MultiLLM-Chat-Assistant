@@ -32,11 +32,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
-  MODEL_CATALOG,
   getModelsForProvider,
-  getAllProviderIds,
   type ModelInfo,
 } from '@/lib/model-catalog'
+import {
+  getProviderDisabledMessage,
+  isProviderDisabled,
+  supportedProviderIds,
+  PROVIDER_DISABLED_ERROR_CODE,
+} from '@/lib/provider-registry'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -77,12 +81,22 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   // Full catalog - no provider filter
   if (!providerParam) {
-    return jsonOk({ catalog: MODEL_CATALOG })
+    const catalog = Object.fromEntries(
+      supportedProviderIds.map((provider) => [provider, getModelsForProvider(provider)]),
+    )
+    return jsonOk({ catalog })
   }
 
   // Validate provider
   const provider = providerParam.trim().toLowerCase()
-  const knownProviders = getAllProviderIds()
+  if (isProviderDisabled(provider)) {
+    return jsonError(
+      503,
+      getProviderDisabledMessage(provider),
+      PROVIDER_DISABLED_ERROR_CODE,
+    )
+  }
+  const knownProviders = supportedProviderIds
   if (!knownProviders.includes(provider)) {
     return jsonError(
       400,

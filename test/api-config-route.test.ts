@@ -61,6 +61,7 @@ describe('/api/config route', () => {
   it('GET returns configuredProviders and disables caching', async () => {
     mockGetUserProviderConfigs.mockResolvedValue([
       { provider: 'openai' },
+      { provider: 'deepseek' },
       { provider: 'anthropic' },
     ])
 
@@ -142,22 +143,17 @@ describe('/api/config route', () => {
     expect(mockDeleteUserProviderConfig).not.toHaveBeenCalled()
   })
 
-  it('POST connects DeepSeek without storing a user credential', async () => {
+  it('POST rejects disabled DeepSeek without storing or deleting anything', async () => {
     const response = await POST(
       makePostRequest({ provider: 'DeepSeek' })
     )
 
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ success: true })
-    expect(mockStoreUserApiKey).toHaveBeenCalledWith(
-      'user-1',
-      'deepseek',
-      '',
-      expect.objectContaining({
-        models: ['deepseek-ai/DeepSeek-V4-Flash-0731'],
-        rateLimits: { requests: 12, window: 60000 },
-      })
-    )
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      error: 'DeepSeek is currently unavailable.',
+      code: 'PROVIDER_DISABLED',
+    })
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
     expect(mockDeleteUserProviderConfig).not.toHaveBeenCalled()
   })
 

@@ -92,7 +92,7 @@ async function throwDeepSeekError(
   return await throwUpstreamError('deepseek', response, streaming)
 }
 
-export const deepseekAdapter: ProviderAdapter = {
+export const historicalDeepseekAdapter: ProviderAdapter = {
   id: 'deepseek',
 
   async testConnection(config: ProviderAdapterConfig): Promise<void> {
@@ -185,5 +185,25 @@ export const deepseekAdapter: ProviderAdapter = {
       body,
       (parsed) => parsed.choices?.[0]?.delta?.content,
     )
+  },
+}
+
+const disabledError = () => new Error('DeepSeek is currently unavailable.')
+
+/**
+ * Fail-closed adapter retained under the historical provider ID. Normal
+ * registry lookups exclude it, and direct imports also cannot contact the
+ * retired endpoint.
+ */
+export const deepseekAdapter: ProviderAdapter = {
+  id: 'deepseek',
+  async testConnection(): Promise<void> {
+    throw disabledError()
+  },
+  async chat(): Promise<ChatCompletion> {
+    throw disabledError()
+  },
+  async *stream(): AsyncGenerator<string, void, undefined> {
+    throw disabledError()
   },
 }
