@@ -10,10 +10,10 @@ import { Bot, Play, Plus, RotateCcw, Square, Target, Trash2, X } from 'lucide-re
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
 import { getDefaultModel, getModelsForProvider } from '@/lib/model-catalog'
-import { providerRegistry } from '@/lib/provider-registry'
+import { operationalProviderRegistry } from '@/lib/provider-registry'
 import type { Conversation, Message as PersistedMessage } from '@/types/prisma'
 
-const PROVIDER_OPTIONS = providerRegistry
+const PROVIDER_OPTIONS = operationalProviderRegistry
   .map(provider => ({
     ...provider,
     models: getModelsForProvider(provider.id),

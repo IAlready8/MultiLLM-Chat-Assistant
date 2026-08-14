@@ -7,7 +7,13 @@ import {
 } from '@/lib/api-key-service'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
-import { isProviderApiKeyRequired } from '@/lib/provider-registry'
+import {
+  getProviderDisabledMessage,
+  isProviderApiKeyRequired,
+  isProviderDisabled,
+  isProviderOperational,
+  PROVIDER_DISABLED_ERROR_CODE,
+} from '@/lib/provider-registry'
 import {
   apiReadCacheKey,
   cachedJsonResponse,
@@ -91,6 +97,8 @@ export async function GET() {
         }> = {}
 
         for (const config of configs) {
+          if (!isProviderOperational(config.provider)) continue
+
           const models =
             config.settings?.models ??
             defaultProviderModels[config.provider] ??
@@ -139,6 +147,17 @@ export async function POST(request: NextRequest) {
     }
 
     const provider = normalizeProvider(providerRaw)
+
+    if (isProviderDisabled(provider)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: getProviderDisabledMessage(provider),
+          code: PROVIDER_DISABLED_ERROR_CODE,
+        },
+        { status: 503 },
+      )
+    }
 
     if (!isSupportedProvider(provider)) {
       return NextResponse.json(
@@ -214,6 +233,17 @@ export async function PUT(request: NextRequest) {
     }
 
     const provider = normalizeProvider(providerRaw)
+
+    if (isProviderDisabled(provider)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: getProviderDisabledMessage(provider),
+          code: PROVIDER_DISABLED_ERROR_CODE,
+        },
+        { status: 503 },
+      )
+    }
 
     if (!isSupportedProvider(provider)) {
       return NextResponse.json(

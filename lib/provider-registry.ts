@@ -6,7 +6,13 @@ export interface ProviderMeta {
   requiresApiKey: boolean
   /** False when the provider does not accept a user credential at all. */
   acceptsApiKey?: boolean
+  /** False when the provider is retained for compatibility but unavailable to users. */
+  operational?: boolean
+  /** Sanitized explanation returned when a disabled provider is requested. */
+  disabledReason?: string
 }
+
+export const PROVIDER_DISABLED_ERROR_CODE = 'PROVIDER_DISABLED'
 
 export const providerRegistry: ProviderMeta[] = [
   {
@@ -67,18 +73,37 @@ export const providerRegistry: ProviderMeta[] = [
   },
   {
     id: 'deepseek',
-    name: 'DeepSeek V4 Community',
-    placeholder: 'No API key required',
-    description: 'Shared public community endpoint. Do not submit private or sensitive data.',
+    name: 'DeepSeek',
+    placeholder: 'Currently unavailable',
+    description: 'Temporarily disabled because the previous community endpoint is no longer operational.',
     requiresApiKey: false,
     acceptsApiKey: false,
+    operational: false,
+    disabledReason: 'DeepSeek is currently unavailable.',
   },
 ]
 
-export const supportedProviderIds = providerRegistry.map((provider) => provider.id)
+export const operationalProviderRegistry = providerRegistry.filter(
+  (provider) => provider.operational !== false,
+)
+
+export const supportedProviderIds = operationalProviderRegistry.map(
+  (provider) => provider.id,
+)
 
 export const getProviderMeta = (providerId: string) =>
   providerRegistry.find((provider) => provider.id === providerId)
 
 export const isProviderApiKeyRequired = (providerId: string) =>
   getProviderMeta(providerId)?.requiresApiKey ?? true
+
+export const isProviderOperational = (providerId: string) => {
+  const provider = getProviderMeta(providerId)
+  return Boolean(provider && provider.operational !== false)
+}
+
+export const isProviderDisabled = (providerId: string) =>
+  getProviderMeta(providerId)?.operational === false
+
+export const getProviderDisabledMessage = (providerId: string) =>
+  getProviderMeta(providerId)?.disabledReason ?? 'Provider is currently unavailable.'

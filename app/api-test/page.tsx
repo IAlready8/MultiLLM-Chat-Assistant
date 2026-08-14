@@ -8,19 +8,19 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { getModelsForProvider } from '@/lib/model-catalog'
-import { providerRegistry } from '@/lib/provider-registry'
+import { operationalProviderRegistry } from '@/lib/provider-registry'
 
 type ProviderStatus = 'unknown' | 'connected' | 'disconnected'
 
 const MODEL_OPTIONS = Object.fromEntries(
-  providerRegistry.map(provider => [
+  operationalProviderRegistry.map(provider => [
     provider.id,
     getModelsForProvider(provider.id).map(model => model.id),
   ])
 ) as Record<string, string[]>
 
 const INITIAL_PROVIDER_STATUS = Object.fromEntries(
-  providerRegistry.map(provider => [provider.id, 'unknown'])
+  operationalProviderRegistry.map(provider => [provider.id, 'unknown'])
 ) as Record<string, ProviderStatus>
 
 export default function ApiTestPage() {
@@ -107,7 +107,7 @@ export default function ApiTestPage() {
                 onChange={(e) => handleProviderChange(e.target.value)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                {providerRegistry.map(providerOption => (
+                {operationalProviderRegistry.map(providerOption => (
                   <option key={providerOption.id} value={providerOption.id}>
                     {providerOption.name}
                   </option>
@@ -178,7 +178,7 @@ export default function ApiTestPage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {providerRegistry.map(providerOption => {
+                {operationalProviderRegistry.map(providerOption => {
                   const status = providerStatus[providerOption.id]
                   const label = status === 'connected' ? 'Connected' : status === 'disconnected' ? 'Disconnected' : 'Not tested'
                   const variant = status === 'connected' ? 'default' : status === 'disconnected' ? 'destructive' : 'secondary'

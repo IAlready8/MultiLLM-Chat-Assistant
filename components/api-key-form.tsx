@@ -16,9 +16,9 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { providerRegistry } from "@/lib/provider-registry";
+import { operationalProviderRegistry } from "@/lib/provider-registry";
 
-const providers = providerRegistry;
+const providers = operationalProviderRegistry;
 
 type HealthStatus = "ok" | "invalid" | "unreachable" | "rate_limited" | "provider_error" | "format" | "unknown";
 

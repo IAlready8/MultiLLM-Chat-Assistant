@@ -201,8 +201,8 @@ Supported provider families in code:
 - Google AI
 - OpenRouter
 - Grok
-- DeepSeek V4 Flash 0731 through a credentialless, shared Hugging Face
-  community endpoint (experimental; never send sensitive data)
+- DeepSeek is temporarily disabled because its previous community endpoint is
+  no longer operational; the historical adapter is retained for restoration
 
 Key files:
 - `lib/providers/registry.ts`

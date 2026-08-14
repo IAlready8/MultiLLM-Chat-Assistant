@@ -52,13 +52,10 @@ App users configure Kimi from Settings; its encrypted per-user key is used by
 the primary Next.js chat and stream routes. The optional sidecar uses its own
 server-only `MOONSHOT_API_KEY` environment variable.
 
-DeepSeek is different: it uses the preconfigured, credentialless Hugging Face
-community endpoint for `deepseek-ai/DeepSeek-V4-Flash-0731`. Both runtimes warn
-that this is a shared public service. Do not submit private or sensitive data,
-and expect rate limits or availability changes.
-The sidecar accepts the same `off`, `low`, `high`, and `max`
-`reasoning_effort` values as the Next.js runtime, defaults to `high`, and
-propagates the shared endpoint's `Retry-After` delay on rate-limit errors.
+DeepSeek is temporarily disabled because the previous community endpoint is no
+longer operational. The sidecar does not accept DeepSeek in request schemas or
+register its historical adapter. The adapter code remains in place only to
+make a future, deliberate restoration straightforward.
 
 ## Health and Troubleshooting
 - If `/api/llm/orchestrate` returns `503`, verify sidecar host/port and availability.

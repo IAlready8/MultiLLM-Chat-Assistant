@@ -92,7 +92,7 @@ def validate_provider_type(provider: str) -> bool:
     """
     Validate provider type is one of the allowed values
     """
-    allowed_providers = {'openai', 'anthropic', 'google', 'cohere', 'kimi', 'deepseek'}
+    allowed_providers = {'openai', 'anthropic', 'google', 'cohere', 'kimi'}
     return provider.lower() in allowed_providers
 
 

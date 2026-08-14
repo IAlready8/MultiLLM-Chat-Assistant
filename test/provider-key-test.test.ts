@@ -88,8 +88,10 @@ describe('validateApiKeyFormat', () => {
   })
 
   describe('deepseek', () => {
-    it('does not require a credential', () => {
-      expect(validateApiKeyFormat('deepseek', '')).toBeNull()
+    it('reports the provider as unavailable instead of requesting a credential', () => {
+      expect(validateApiKeyFormat('deepseek', '')).toBe(
+        'DeepSeek is currently unavailable.',
+      )
     })
   })
 
@@ -124,5 +126,14 @@ describe('testProviderKey', () => {
       'http://127.0.0.2:11434/api/tags',
       expect.objectContaining({ redirect: 'error' }),
     )
+  })
+
+  it('does not contact the retired DeepSeek endpoint', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+
+    await expect(testProviderKey('deepseek', '')).rejects.toThrow(
+      'DeepSeek is currently unavailable.',
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

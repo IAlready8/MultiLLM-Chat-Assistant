@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/api-auth';
+import {
+  getProviderDisabledMessage,
+  isProviderDisabled,
+  PROVIDER_DISABLED_ERROR_CODE,
+} from '@/lib/provider-registry'
 import { z } from 'zod';
 
 // Define the URL for the Python service, managed by PM2
@@ -59,7 +64,6 @@ const COST_PER_1K_TOKENS: Record<string, number> = {
   openrouter: 0.01,
   grok: 0.02,
   kimi: 0.009,
-  deepseek: 0,
 }
 
 const estimatePromptTokens = (prompt: string): number =>
@@ -267,6 +271,19 @@ export async function POST(req: Request) {
       { error: 'Invalid input', details: validation.error.flatten() },
       { status: 400 }
     );
+  }
+
+  const disabledProvider = validation.data.requests
+    .map((request) => request.provider.trim().toLowerCase())
+    .find(isProviderDisabled)
+  if (disabledProvider) {
+    return NextResponse.json(
+      {
+        error: getProviderDisabledMessage(disabledProvider),
+        code: PROVIDER_DISABLED_ERROR_CODE,
+      },
+      { status: 503 },
+    )
   }
 
   // 3. Proxy the request to the Python (FastAPI) service

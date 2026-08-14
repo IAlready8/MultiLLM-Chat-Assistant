@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
 import { getModelsForProvider } from '@/lib/model-catalog'
-import { providerRegistry } from '@/lib/provider-registry'
+import { operationalProviderRegistry } from '@/lib/provider-registry'
 import type { ProviderId } from '@/lib/providers'
 
 type ProviderResponse = {
@@ -28,10 +28,10 @@ type ProviderSelection = {
   enabled: boolean
 }
 
-const providerIds = providerRegistry.map(provider => provider.id) as ProviderId[]
+const providerIds = operationalProviderRegistry.map(provider => provider.id) as ProviderId[]
 
 const PROVIDER_CATALOG = Object.fromEntries(
-  providerRegistry.map(provider => [
+  operationalProviderRegistry.map(provider => [
     provider.id,
     {
       label: provider.name,

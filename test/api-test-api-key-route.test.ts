@@ -139,44 +139,23 @@ describe('/api/test-api-key route', () => {
     expect(typeof body.latencyMs).toBe('number')
   })
 
-  it('verifies the exact approved model for the keyless DeepSeek endpoint', async () => {
-    mockTestProviderKey.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          object: 'list',
-          data: [{ id: 'deepseek-ai/DeepSeek-V4-Flash-0731' }],
-        }),
-        { status: 200 },
-      ),
-    )
+  it.each([false, true])(
+    'returns disabled for DeepSeek without accessing any key (testSaved=%s)',
+    async (testSaved) => {
+      const response = await POST(makeRequest({ provider: 'deepseek', testSaved }))
 
-    const response = await POST(makeRequest({ provider: 'deepseek' }))
-
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toMatchObject({
-      valid: true,
-      reason: 'ok',
-      message: 'Provider endpoint verified successfully.',
-    })
-    expect(mockTestProviderKey).toHaveBeenCalledWith('deepseek', '')
-  })
-
-  it('fails the DeepSeek Settings probe when the approved model disappears', async () => {
-    mockTestProviderKey.mockResolvedValue(
-      new Response(JSON.stringify({ object: 'list', data: [] }), {
-        status: 200,
-      }),
-    )
-
-    const response = await POST(makeRequest({ provider: 'deepseek' }))
-
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toMatchObject({
-      valid: false,
-      reason: 'provider_error',
-      message: 'The approved DeepSeek community model is not currently available.',
-    })
-  })
+      expect(response.status).toBe(503)
+      await expect(response.json()).resolves.toEqual({
+        valid: false,
+        message: 'DeepSeek is currently unavailable.',
+        reason: 'disabled',
+        code: 'PROVIDER_DISABLED',
+      })
+      expect(mockGetUserApiKey).not.toHaveBeenCalled()
+      expect(mockValidateApiKeyFormat).not.toHaveBeenCalled()
+      expect(mockTestProviderKey).not.toHaveBeenCalled()
+    },
+  )
 
   it('returns unreachable when provider request throws', async () => {
     mockTestProviderKey.mockRejectedValue(new Error('network down'))

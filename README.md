@@ -15,9 +15,9 @@ Current exact ICP and use case are locked in:
 ## Highlights
 - Multi-provider chat endpoints with streaming support
 - Supported providers: OpenAI, Anthropic, Google AI, OpenRouter, Grok,
-  Mistral, Ollama, Kimi (Moonshot AI), and the DeepSeek V4 community endpoint
-- Configurable provider keys from app settings; DeepSeek's shared community
-  endpoint is credentialless
+  Mistral, Ollama, and Kimi (Moonshot AI)
+- Configurable provider keys from app settings; DeepSeek is temporarily
+  disabled because its previous community endpoint is no longer operational
 - Mandatory account authentication with Google/GitHub OAuth and existing-account password login
 - Optional Python orchestration sidecar (`src/core`)
 - CI workflow for type-check, lint, and build
@@ -166,15 +166,13 @@ Key groups:
 - Optional app metadata/network tuning: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL`, `LLM_FETCH_TIMEOUT_MS`, `LLM_FETCH_RETRIES`
 - Optional client secure-storage override: `NEXT_PUBLIC_SECURE_STORAGE_KEY`
 
-DeepSeek uses the preconfigured, shared Hugging Face community endpoint for
-`deepseek-ai/DeepSeek-V4-Flash-0731`. It requires no API key and currently
-advertises no usage charge, but it is experimental, rate-limited, has no SLA,
-and is operated by a community host. Never submit private, confidential, or
-sensitive data to it, and do not rely on it as the sole production provider.
-DeepSeek chat and stream requests accept `reasoning_effort` values `off`,
-`low`, `high`, or `max`; omitted values retain the existing `high` default,
-while `off` omits the upstream reasoning field. Rate-limit responses preserve
-the endpoint's `Retry-After` delay for clients.
+DeepSeek is temporarily unavailable because the previous community endpoint
+is no longer operational. It is not offered in provider selection or Settings,
+does not request an API key, and is not presented as free. Historical adapter,
+model, and stored-configuration compatibility code is retained so a future
+integration can be restored deliberately. Direct requests fail with a
+sanitized `PROVIDER_DISABLED` response rather than contacting the retired
+endpoint.
 
 ## Deployment
 - Operator runbook: `docs/OPERATOR_RUNBOOK.md`

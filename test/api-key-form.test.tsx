@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 
 import ApiKeyForm from '@/components/api-key-form'
 
-describe('ApiKeyForm credentialless providers', () => {
+describe('ApiKeyForm operational providers', () => {
   beforeEach(() => {
     vi.stubGlobal(
       'fetch',
@@ -21,17 +21,12 @@ describe('ApiKeyForm credentialless providers', () => {
     vi.restoreAllMocks()
   })
 
-  it('shows the DeepSeek public-endpoint warning without a key input', async () => {
+  it('does not offer disabled DeepSeek or request a DeepSeek API key', async () => {
     render(<ApiKeyForm />)
 
-    expect(
-      screen.getByText('DeepSeek V4 Community Connection'),
-    ).toBeVisible()
-    expect(
-      screen.getByRole('note'),
-    ).toHaveTextContent(
-      'No API key required. This shared public endpoint is experimental; never submit private or sensitive data.',
-    )
+    expect(screen.getByText('OpenAI API Key')).toBeVisible()
+    expect(screen.queryByText(/DeepSeek/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Free Community/i)).not.toBeInTheDocument()
     expect(document.getElementById('deepseek-api-key')).toBeNull()
 
     await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/config'))

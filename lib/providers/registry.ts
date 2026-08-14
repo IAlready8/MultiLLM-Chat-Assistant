@@ -15,6 +15,7 @@ import { ollamaAdapter } from './ollama'
 import { mistralAdapter } from './mistral'
 import { kimiAdapter } from './kimi'
 import { deepseekAdapter } from './deepseek'
+import { isProviderOperational } from '@/lib/provider-registry'
 
 const adapters: Record<ProviderId, ProviderAdapter> = {
   openai: openaiAdapter,
@@ -35,8 +36,11 @@ const adapters: Record<ProviderId, ProviderAdapter> = {
 export function getProviderAdapter(
   providerId: string,
 ): ProviderAdapter | undefined {
+  if (!isProviderOperational(providerId)) return undefined
   return adapters[providerId as ProviderId]
 }
 
 /** All supported provider IDs. */
-export const supportedProviderIds = Object.keys(adapters) as ProviderId[]
+export const supportedProviderIds = (Object.keys(adapters) as ProviderId[]).filter(
+  isProviderOperational,
+)
