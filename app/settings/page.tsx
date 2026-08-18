@@ -253,7 +253,7 @@ export default function SettingsPage() {
       </Card>
 
       <Tabs defaultValue="general">
-        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-4">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="providers">API Providers</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
