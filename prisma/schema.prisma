@@ -160,6 +160,8 @@ model Subscription {
   stripeSubscriptionId String?        @unique
   stripePriceId        String?
   stripeCurrentPeriodEnd DateTime?
+  stripeStatus           String?
+  stripeCancelAtPeriodEnd Boolean      @default(false)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

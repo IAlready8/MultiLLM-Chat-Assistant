@@ -6,21 +6,22 @@ export const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID?.trim()
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY?.trim()
 export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim()
 
-const PLACEHOLDER_STRIPE_SECRET_KEY = 'placeholder_stripe_secret_key_for_local_init'
+const PLACEHOLDER_STRIPE_SECRET_KEY =
+  'placeholder_stripe_secret_key_for_local_init'
 
 // Backward-compatible flag used by existing call sites
 export const isStripeConfigured = Boolean(
-  STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET
+  STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET,
 )
 
 export const isStripeApiConfigured = Boolean(
-  STRIPE_SECRET_KEY && STRIPE_SECRET_KEY !== PLACEHOLDER_STRIPE_SECRET_KEY
+  STRIPE_SECRET_KEY && STRIPE_SECRET_KEY !== PLACEHOLDER_STRIPE_SECRET_KEY,
 )
 export const isStripeCheckoutConfigured = Boolean(
-  isStripeApiConfigured && STRIPE_PRO_PRICE_ID
+  isStripeApiConfigured && STRIPE_PRO_PRICE_ID,
 )
 export const isStripeWebhookConfigured = Boolean(
-  isStripeApiConfigured && STRIPE_WEBHOOK_SECRET
+  isStripeApiConfigured && STRIPE_WEBHOOK_SECRET,
 )
 
 export class StripeConfigurationError extends Error {
@@ -31,7 +32,7 @@ export class StripeConfigurationError extends Error {
 }
 
 export function getStripeConfigurationUserMessage(
-  mode: 'api' | 'checkout' | 'webhook'
+  mode: 'api' | 'checkout' | 'webhook',
 ): string {
   switch (mode) {
     case 'api':
@@ -46,27 +47,27 @@ export function getStripeConfigurationUserMessage(
 }
 
 export function ensureStripeConfigured(
-  mode: 'api' | 'checkout' | 'webhook'
+  mode: 'api' | 'checkout' | 'webhook',
 ): void {
   switch (mode) {
     case 'api':
       if (!isStripeApiConfigured) {
         throw new StripeConfigurationError(
-          'Billing is not configured. Missing STRIPE_SECRET_KEY.'
+          'Billing is not configured. Missing STRIPE_SECRET_KEY.',
         )
       }
       break
     case 'checkout':
       if (!isStripeCheckoutConfigured) {
         throw new StripeConfigurationError(
-          'Checkout is not configured. Missing STRIPE_SECRET_KEY or STRIPE_PRO_PRICE_ID.'
+          'Checkout is not configured. Missing STRIPE_SECRET_KEY or STRIPE_PRO_PRICE_ID.',
         )
       }
       break
     case 'webhook':
       if (!isStripeWebhookConfigured) {
         throw new StripeConfigurationError(
-          'Stripe webhook is not configured. Missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET.'
+          'Stripe webhook is not configured. Missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET.',
         )
       }
       break
@@ -82,8 +83,24 @@ export const stripe = new Stripe(
   {
     apiVersion: '2026-02-25.clover',
     typescript: true,
-  }
+  },
 )
+
+const isMissingStripeResource = (error: unknown): boolean =>
+  error instanceof Stripe.errors.StripeInvalidRequestError &&
+  error.code === 'resource_missing'
+
+async function hasUsableStripeCustomer(customerId: string): Promise<boolean> {
+  try {
+    const customer = await stripe.customers.retrieve(customerId)
+    return !customer.deleted
+  } catch (error) {
+    if (isMissingStripeResource(error)) {
+      return false
+    }
+    throw error
+  }
+}
 
 /**
  * Retrieves a user's Stripe Customer ID from the DB,
@@ -91,7 +108,7 @@ export const stripe = new Stripe(
  */
 export async function getOrCreateStripeCustomer(
   userId: string,
-  email: string
+  email: string,
 ): Promise<string> {
   ensureStripeConfigured('api')
 
@@ -101,17 +118,28 @@ export async function getOrCreateStripeCustomer(
     select: { stripeCustomerId: true },
   })
 
-  if (subscription?.stripeCustomerId) {
+  if (
+    subscription?.stripeCustomerId &&
+    (await hasUsableStripeCustomer(subscription.stripeCustomerId))
+  ) {
     return subscription.stripeCustomerId
   }
 
   // 2. Create a new customer in Stripe
-  const customer = await stripe.customers.create({
-    email: email,
-    metadata: {
-      userId: userId,
+  const customer = await stripe.customers.create(
+    {
+      email,
+      metadata: {
+        app: 'multi-llm-chat-assistant',
+        userId,
+      },
     },
-  })
+    {
+      idempotencyKey: `multi-llm-customer:${userId}:${
+        subscription?.stripeCustomerId || 'new'
+      }`,
+    },
+  )
 
   // 3. Save the new customer ID and ensure a subscription row exists
   await prisma.subscription.upsert({

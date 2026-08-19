@@ -47,14 +47,16 @@ export interface Team extends BaseModel {
   name: string
 }
 
-export interface Subscription extends BaseModel {
+export interface Subscription {
+  id: string
   userId: string
   tier: string
   stripeCustomerId?: string | null
   stripeSubscriptionId?: string | null
-  currentPeriodStart: Date
-  currentPeriodEnd: Date
-  status: string
+  stripePriceId?: string | null
+  stripeCurrentPeriodEnd?: Date | null
+  stripeStatus?: string | null
+  stripeCancelAtPeriodEnd: boolean
 }
 
 export interface Analytics extends BaseModel {
