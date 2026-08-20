@@ -129,6 +129,24 @@ describe('/api/llm/stream route', () => {
     expect(mockGetAuthenticatedUser).not.toHaveBeenCalled()
   })
 
+  it('rejects disabled DeepSeek before config, key, or network access', async () => {
+    const response = await POST(
+      makeRequest(JSON.stringify({
+        provider: 'deepseek',
+        messages: [{ role: 'user', content: 'hi' }],
+      }))
+    )
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      error: 'DeepSeek is currently unavailable.',
+      code: 'PROVIDER_DISABLED',
+    })
+    expect(mockGetUserProviderConfigs).not.toHaveBeenCalled()
+    expect(mockGetUserApiKey).not.toHaveBeenCalled()
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
   it('returns unsupported provider error', async () => {
     const response = await POST(
       makeRequest(JSON.stringify({ provider: 'unknown', messages: [{ role: 'user', content: 'hi' }] }))

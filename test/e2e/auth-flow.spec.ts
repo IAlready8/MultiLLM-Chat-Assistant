@@ -40,15 +40,25 @@ test.describe('Authentication flow', () => {
 
   test('opens the OAuth-first account creation surface', async ({ page }) => {
     await page.goto('/auth/signin?callbackUrl=%2Fsettings')
-    await page.getByRole('link', { name: 'Create an account' }).click()
+    const createAccountLink = page.getByRole('link', {
+      name: 'Create an account',
+    })
+    await expect(createAccountLink).toBeVisible()
+    await createAccountLink.click()
 
-    await expect(page).toHaveURL(/\/auth\/register/)
+    await expect(page).toHaveURL(/\/auth\/register/, { timeout: 15_000 })
     await expect(
       page.getByRole('heading', { name: 'Create account' }),
     ).toBeVisible()
     await expect(
-      page.getByText(/use Google or GitHub to create a durable workspace account/i),
+      page.getByText(/use Google to create a durable workspace account/i),
     ).toBeVisible()
+    await expect(
+      page.getByText(
+        /operator must add a Google OAuth application before new accounts can be created/i,
+      ),
+    ).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/Google or GitHub/i)).toHaveCount(0)
     await expect(
       page.getByText(/password registration is unavailable/i),
     ).toBeVisible()

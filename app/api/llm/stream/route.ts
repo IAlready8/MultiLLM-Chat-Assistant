@@ -3,7 +3,12 @@ import { getAuthenticatedUser } from '@/lib/api-auth'
 import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import { validateApiKeyFormat } from '@/lib/provider-key-test'
-import { isProviderApiKeyRequired } from '@/lib/provider-registry'
+import {
+  getProviderDisabledMessage,
+  isProviderApiKeyRequired,
+  isProviderDisabled,
+  PROVIDER_DISABLED_ERROR_CODE,
+} from '@/lib/provider-registry'
 import { checkProviderRateLimit, type ProviderRateLimitConfig } from '@/lib/provider-rate-limit'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import {
@@ -108,6 +113,14 @@ export async function POST(request: NextRequest) {
     const authCheck = await getAuthenticatedUser()
     if (authCheck instanceof NextResponse) return authCheck
     const userId = authCheck.user.id
+
+    if (isProviderDisabled(provider)) {
+      return jsonErrorResponse(
+        503,
+        getProviderDisabledMessage(provider),
+        PROVIDER_DISABLED_ERROR_CODE,
+      )
+    }
 
     // Validate provider via shared registry
     if (!getProviderAdapter(provider)) {

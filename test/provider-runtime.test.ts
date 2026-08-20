@@ -234,10 +234,10 @@ describe('provider registry', () => {
         'ollama',
         'mistral',
         'kimi',
-        'deepseek',
       ]),
     )
-    expect(supportedProviderIds).toHaveLength(9)
+    expect(supportedProviderIds).toHaveLength(8)
+    expect(getProviderAdapter('deepseek')).toBeUndefined()
   })
 
   it('returns an adapter for each supported provider', () => {

@@ -124,7 +124,7 @@ async function throwDeepSeekError(
   )
 }
 
-export const deepseekAdapter: ProviderAdapter = {
+export const historicalDeepseekAdapter: ProviderAdapter = {
   id: 'deepseek',
 
   async testConnection(config: ProviderAdapterConfig): Promise<void> {
@@ -225,3 +225,5 @@ export const deepseekAdapter: ProviderAdapter = {
     )
   },
 }
+
+export const deepseekAdapter = historicalDeepseekAdapter

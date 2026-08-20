@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { MobileMenu } from '@/components/mobile-menu'
+import { SignOutButton } from '@/components/sign-out-button'
 
 export default function Navbar() {
   const pathname = usePathname()
@@ -41,6 +42,7 @@ export default function Navbar() {
               {item.name}
             </Link>
           ))}
+          <SignOutButton className="ml-1 shrink-0" />
         </div>
         <MobileMenu items={navItems} />
       </div>

@@ -56,7 +56,7 @@ export default function RegisterPage() {
             <Badge variant="secondary">Verified provider</Badge>
           </div>
           <CardDescription>
-            Use Google or GitHub to create a durable workspace account.
+            Use Google to create a durable workspace account.
           </CardDescription>
         </CardHeader>
 
