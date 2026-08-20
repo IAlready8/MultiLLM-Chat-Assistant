@@ -11,7 +11,7 @@ const DEFAULT_PROVIDER_BASE_URLS: Readonly<Record<string, string>> = {
   grok: 'https://api.x.ai/v1',
   mistral: 'https://api.mistral.ai/v1',
   kimi: 'https://api.moonshot.ai/v1',
-  deepseek: 'https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1',
+  deepseek: 'https://api.deepseek.com',
 }
 
 const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434'

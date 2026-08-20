@@ -49,7 +49,8 @@ class ProviderResponse(BaseModel):
     content: str
     prompt_tokens: int
     completion_tokens: int
-    cost_usd: float
+    cost_usd: Optional[float]
+    cost_label: Optional[str] = None
     latency_ms: int
     
 class HealthResponse(BaseModel):

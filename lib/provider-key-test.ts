@@ -1,8 +1,5 @@
-import {
-  getProviderDisabledMessage,
-  isProviderApiKeyRequired,
-  isProviderDisabled,
-} from './provider-registry'
+import { isProviderApiKeyRequired } from './provider-registry'
+import { DEEPSEEK_BASE_URL } from './providers/deepseek'
 import { getProviderBaseUrl, providerFetch } from './provider-endpoint'
 
 export type ProviderKeyTestOptions = {
@@ -13,10 +10,6 @@ export const validateApiKeyFormat = (
   provider: string,
   apiKey: string
 ): string | null => {
-  if (isProviderDisabled(provider)) {
-    return getProviderDisabledMessage(provider)
-  }
-
   const requiresApiKey = isProviderApiKeyRequired(provider)
 
   if (!apiKey && !requiresApiKey) {
@@ -85,10 +78,6 @@ export const testProviderKey = async (
   apiKey: string,
   options: ProviderKeyTestOptions = {},
 ) => {
-  if (isProviderDisabled(provider)) {
-    throw new Error(getProviderDisabledMessage(provider))
-  }
-
   switch (provider) {
     case 'openai':
       return fetchWithTimeout('openai', 'https://api.openai.com/v1/models', {
@@ -129,7 +118,10 @@ export const testProviderKey = async (
         headers: { Authorization: `Bearer ${apiKey}` },
       })
     case 'deepseek':
-      return null
+      return fetchWithTimeout('deepseek', `${DEEPSEEK_BASE_URL}/models`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
+      })
     case 'ollama':
       {
         const baseUrl = getProviderBaseUrl('ollama', options.baseUrl)

@@ -1,9 +1,38 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type BrowserContext } from '@playwright/test'
+import { encode } from 'next-auth/jwt'
+
+const addAuthenticatedSession = async (context: BrowserContext) => {
+  const secret = process.env.NEXTAUTH_SECRET
+  if (!secret) {
+    throw new Error('NEXTAUTH_SECRET is required for authenticated E2E tests')
+  }
+
+  const sessionToken = await encode({
+    secret,
+    token: {
+      sub: 'pipeline-e2e-user',
+      email: 'pipeline-e2e@example.test',
+      name: 'Pipeline E2E User',
+    },
+  })
+  const port = process.env.PORT || '3000'
+  await context.addCookies([
+    {
+      name: 'next-auth.session-token',
+      value: sessionToken,
+      url: `http://localhost:${port}`,
+      httpOnly: true,
+      sameSite: 'Lax',
+    },
+  ])
+}
 
 test.describe('Pipeline flow', () => {
   test('runs orchestration with configured providers and renders result metrics', async ({
     page,
+    context,
   }) => {
+    await addAuthenticatedSession(context)
     const state: {
       lastBody: null | {
         prompt: string
@@ -27,7 +56,7 @@ test.describe('Pipeline flow', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          configuredProviders: ['openai', 'anthropic'],
+          configuredProviders: ['openai', 'anthropic', 'deepseek'],
         }),
       })
     })
@@ -63,6 +92,16 @@ test.describe('Pipeline flow', () => {
             cost_usd: 0.0091,
             latency_ms: 260,
           },
+          {
+            provider: 'deepseek',
+            model: 'deepseek-v4-flash',
+            content: 'DeepSeek plan billed directly by the provider.',
+            prompt_tokens: 100,
+            completion_tokens: 100,
+            cost_usd: null,
+            cost_label: 'Provider-billed',
+            latency_ms: 240,
+          },
         ]),
       })
     })
@@ -76,6 +115,8 @@ test.describe('Pipeline flow', () => {
     await expect(
       page.getByRole('heading', { name: 'LLM Orchestration Pipeline' })
     ).toBeVisible()
+    await expect(page.getByText('Loading configured providers...')).toBeHidden()
+    await expect(page.getByLabel('DeepSeek')).toBeChecked()
 
     await page
       .getByPlaceholder('Enter your prompt here...')
@@ -90,11 +131,16 @@ test.describe('Pipeline flow', () => {
       page.getByText('Anthropic plan emphasizing risks and mitigations.')
     ).toBeVisible()
     await expect(
-      page.getByText('Total estimated tokens processed: 750')
+      page.getByText('DeepSeek plan billed directly by the provider.')
+    ).toBeVisible()
+    await expect(page.getByText(/Cost: Provider-billed/)).toBeVisible()
+    await expect(page.getByText(/\+ provider-billed/)).toBeVisible()
+    await expect(
+      page.getByText('Total estimated tokens processed: 950')
     ).toBeVisible()
     await expect
       .poll(() => state.lastBody?.requests.length ?? 0)
-      .toBe(2)
+      .toBe(3)
 
     await page.getByRole('button', { name: 'Clear Results' }).click()
     await expect(
@@ -104,7 +150,9 @@ test.describe('Pipeline flow', () => {
 
   test('handles local validation and orchestration API failure', async ({
     page,
+    context,
   }) => {
+    await addAuthenticatedSession(context)
     await page.route('**/api/auth/session', async route => {
       await route.fulfill({
         status: 200,
@@ -153,7 +201,10 @@ test.describe('Pipeline flow', () => {
     await page.getByLabel('OpenAI').check()
     await page.getByRole('button', { name: 'Run Orchestration' }).click()
     await expect(
-      page.getByText('Provider key missing for selected model.')
+      page
+        .locator('main')
+        .getByText(/Provider key missing for selected model\./)
+        .first()
     ).toBeVisible()
   })
 })

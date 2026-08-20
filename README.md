@@ -15,9 +15,9 @@ Current exact ICP and use case are locked in:
 ## Highlights
 - Multi-provider chat endpoints with streaming support
 - Supported providers: OpenAI, Anthropic, Google AI, OpenRouter, Grok,
-  Mistral, Ollama, and Kimi (Moonshot AI)
-- Configurable provider keys from app settings; DeepSeek is temporarily
-  disabled because its previous community endpoint is no longer operational
+  Mistral, Ollama, Kimi (Moonshot AI), and the official DeepSeek V4 API
+- Configurable encrypted per-user provider keys from app settings, including
+  DeepSeek BYOK
 - Mandatory account authentication with Google/GitHub OAuth and existing-account password login
 - Optional Python orchestration sidecar (`src/core`)
 - CI workflow for type-check, lint, and build
@@ -166,13 +166,21 @@ Key groups:
 - Optional app metadata/network tuning: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL`, `LLM_FETCH_TIMEOUT_MS`, `LLM_FETCH_RETRIES`
 - Optional client secure-storage override: `NEXT_PUBLIC_SECURE_STORAGE_KEY`
 
-DeepSeek is temporarily unavailable because the previous community endpoint
-is no longer operational. It is not offered in provider selection or Settings,
-does not request an API key, and is not presented as free. Historical adapter,
-model, and stored-configuration compatibility code is retained so a future
-integration can be restored deliberately. Direct requests fail with a
-sanitized `PROVIDER_DISABLED` response rather than contacting the retired
-endpoint.
+DeepSeek uses the official `https://api.deepseek.com` API with the
+`deepseek-v4-flash` (default/economical) and `deepseek-v4-pro` models. Each user
+must save their own DeepSeek API key in Settings and maintain sufficient credit
+with DeepSeek. The existing provider-key service encrypts that key server-side;
+provider configuration responses never return it. Usage is billed directly by
+DeepSeek and the app reports its cost as `Provider-billed` rather than `$0` or
+an inaccurate estimate.
+
+DeepSeek chat and stream requests accept `reasoning_effort` values `off`,
+`low`, `high`, or `max`. The app explicitly sends thinking disabled for `off`,
+thinking enabled with the matching effort for the other values, and deliberately
+uses enabled/high when the value is omitted. Rate-limit responses preserve the
+API's `Retry-After` delay for clients. DeepSeek requests in orchestration stay
+in the authenticated Next.js runtime so the encrypted per-user key is never
+forwarded to the optional Python sidecar.
 
 ## Deployment
 - Operator runbook: `docs/OPERATOR_RUNBOOK.md`

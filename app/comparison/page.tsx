@@ -41,7 +41,7 @@ interface ComparisonModel {
   responseTime: number
   tokensPerSecond: number
   accuracy: number
-  cost: number
+  cost: number | null
   usageCount: number
 }
 
@@ -71,6 +71,7 @@ const inferProviderFromName = (name: string) => {
   if (key.includes('grok')) return 'Grok'
   if (key.includes('openrouter')) return 'OpenRouter'
   if (key.includes('kimi')) return 'Kimi'
+  if (key.includes('deepseek')) return 'DeepSeek'
   return name
 }
 
@@ -78,6 +79,9 @@ const round = (value: number, precision = 2) => {
   const factor = 10 ** precision
   return Math.round(value * factor) / factor
 }
+
+const formatCost = (cost: number | null) =>
+  cost === null ? 'Provider-billed' : `$${cost.toFixed(4)}`
 
 const buildModelRows = (
   providerData: DashboardProviderUsage[],
@@ -102,9 +106,14 @@ const buildModelRows = (
     const tokensPerSecond =
       responseTime > 0 ? Math.round(avgTokens / (responseTime / 1000)) : 0
     const providerKey = normalizeKey(providerName)
-    const fallbackCost = COST_PER_1K_TOKENS[providerKey] ?? 0
+    const fallbackCost =
+      providerKey === 'deepseek'
+        ? null
+        : COST_PER_1K_TOKENS[providerKey] ?? 0
     const inferredCost =
-      providerUsage && providerUsage.tokens > 0 && usageCount > 0
+      fallbackCost === null
+        ? null
+        : providerUsage && providerUsage.tokens > 0 && usageCount > 0
         ? (providerUsage.tokens / 1000) * fallbackCost / usageCount
         : fallbackCost
 
@@ -115,7 +124,7 @@ const buildModelRows = (
       responseTime,
       tokensPerSecond,
       accuracy: round(model.factualAccuracy * 20, 1),
-      cost: round(inferredCost, 4),
+      cost: inferredCost === null ? null : round(inferredCost, 4),
       usageCount,
     }
   })
@@ -133,7 +142,11 @@ const buildModelRows = (
         : 0
     const errorRate = provider.errors / requests
     const accuracy = round(Math.max(60, 100 - errorRate * 100), 1)
-    const cost = COST_PER_1K_TOKENS[normalizeKey(provider.provider)] ?? 0
+    const providerKey = normalizeKey(provider.provider)
+    const cost =
+      providerKey === 'deepseek'
+        ? null
+        : COST_PER_1K_TOKENS[providerKey] ?? 0
 
     return {
       id: normalizeKey(provider.provider).replace(/\s+/g, '-'),
@@ -142,7 +155,7 @@ const buildModelRows = (
       responseTime: provider.avgResponseTime,
       tokensPerSecond,
       accuracy,
-      cost: round(cost, 4),
+      cost: cost === null ? null : round(cost, 4),
       usageCount: provider.requests,
     }
   })
@@ -349,7 +362,7 @@ export default function ComparisonPage() {
 
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Est. Cost per 1K tokens</span>
-                    <span className="text-sm font-medium">${model.cost.toFixed(4)}</span>
+                    <span className="text-sm font-medium">{formatCost(model.cost)}</span>
                   </div>
 
                   <div className="flex justify-between pt-2">
@@ -390,7 +403,7 @@ export default function ComparisonPage() {
                       </td>
                       <td className="py-2">{model.tokensPerSecond}</td>
                       <td className="py-2">{model.accuracy}%</td>
-                      <td className="py-2">${model.cost.toFixed(4)}</td>
+                      <td className="py-2">{formatCost(model.cost)}</td>
                     </tr>
                   ))}
                 </tbody>

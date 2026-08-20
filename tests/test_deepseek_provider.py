@@ -1,122 +1,48 @@
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
 import pytest
-from src.core.llm_manager import (
-    DeepSeekProvider,
-    LLMRequest,
-    ProviderType,
-    RateLimitError,
-    parse_retry_after_seconds,
-)
-from src.core.security_utils import validate_model_name
+from pydantic import ValidationError
+
+import src.core.llm_manager as llm_manager_module
+import src.core.providers as providers_module
+from src.core.llm_manager import LLMManager, ProviderType
+from src.core.schemas import ProviderRequest
+from src.core.security_utils import validate_model_name, validate_provider_type
 
 
-def test_hugging_face_model_id_is_allowed_without_allowing_paths():
-    assert validate_model_name("deepseek-ai/DeepSeek-V4-Flash-0731")
-    assert not validate_model_name("../DeepSeek-V4-Flash-0731")
-    assert not validate_model_name("deepseek-ai/models/DeepSeek-V4-Flash-0731")
+def test_official_deepseek_model_ids_are_valid_without_allowing_paths():
+    assert validate_model_name("deepseek-v4-flash")
+    assert validate_model_name("deepseek-v4-pro")
+    assert not validate_model_name("../deepseek-v4-flash")
+    assert not validate_model_name("deepseek/models/deepseek-v4-flash")
+
+
+def test_python_sidecar_has_no_deepseek_network_adapter():
+    assert not hasattr(llm_manager_module, "DeepSeekProvider")
+    assert not validate_provider_type("deepseek")
 
 
 @pytest.mark.asyncio
-@patch("httpx.AsyncClient.post")
-async def test_deepseek_provider_uses_community_endpoint_contract(mock_post):
-    mock_response = MagicMock()
-    mock_response.is_success = True
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "choices": [{"message": {"content": "DeepSeek response"}}],
-        "usage": {"total_tokens": 12},
-        "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
-    }
-    mock_post.return_value = mock_response
+async def test_python_sidecar_does_not_register_deepseek(monkeypatch):
+    isolated_manager = LLMManager()
+    monkeypatch.setattr(providers_module, "llm_manager", isolated_manager)
+    monkeypatch.setattr(providers_module.settings, "OPENAI_API_KEY", None)
+    monkeypatch.setattr(providers_module.settings, "ANTHROPIC_API_KEY", None)
+    monkeypatch.setattr(providers_module.settings, "GOOGLE_AI_API_KEY", None)
+    monkeypatch.setattr(providers_module.settings, "MOONSHOT_API_KEY", None)
 
-    provider = DeepSeekProvider()
-    response = await provider.generate(
-        LLMRequest(
+    await providers_module.initialize_providers()
+
+    assert ProviderType.DEEPSEEK not in isolated_manager.health_check()
+
+
+def test_direct_sidecar_deepseek_request_is_rejected_by_schema():
+    with pytest.raises(ValidationError):
+        ProviderRequest(
+            provider="deepseek",
+            model="deepseek-v4-flash",
             prompt="Test prompt",
-            provider=ProviderType.DEEPSEEK,
-            model="deepseek-ai/DeepSeek-V4-Flash-0731",
-            max_tokens=2048,
-            temperature=0.2,
-        )
-    )
-
-    assert response.content == "DeepSeek response"
-    assert response.provider == ProviderType.DEEPSEEK
-    assert response.tokens_used == 12
-
-    payload = mock_post.call_args.kwargs["json"]
-    assert payload == {
-        "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
-        "messages": [{"role": "user", "content": "Test prompt"}],
-        "max_tokens": 2048,
-        "reasoning_effort": "high",
-        "temperature": 0.2,
-        "top_p": 0.95,
-    }
-    assert provider.headers == {"Content-Type": "application/json"}
-
-
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [
-        ("17", 17),
-        ("Sun, 02 Aug 2026 12:00:19 GMT", 19),
-        ("17 seconds", 5),
-        (None, 5),
-    ],
-)
-def test_parse_retry_after_supports_http_contract(value, expected):
-    assert parse_retry_after_seconds(
-        value,
-        now=datetime(2026, 8, 2, 12, 0, tzinfo=timezone.utc),
-    ) == expected
-
-
-@pytest.mark.asyncio
-@patch("httpx.AsyncClient.post")
-async def test_deepseek_provider_preserves_retry_after(mock_post):
-    mock_response = MagicMock()
-    mock_response.is_success = False
-    mock_response.status_code = 429
-    mock_response.headers = {"retry-after": "17"}
-    mock_post.return_value = mock_response
-
-    provider = DeepSeekProvider()
-    with pytest.raises(RateLimitError) as error:
-        await provider.generate(
-            LLMRequest(
-                prompt="Test prompt",
-                provider=ProviderType.DEEPSEEK,
-                model="deepseek-ai/DeepSeek-V4-Flash-0731",
-            )
+            reasoning_effort="high",
         )
 
-    assert error.value.retry_after_seconds == 17
 
-
-@pytest.mark.asyncio
-@patch("httpx.AsyncClient.post")
-async def test_deepseek_provider_can_disable_reasoning(mock_post):
-    mock_response = MagicMock()
-    mock_response.is_success = True
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "choices": [{"message": {"content": "Fast response"}}],
-        "usage": {"total_tokens": 5},
-    }
-    mock_post.return_value = mock_response
-
-    provider = DeepSeekProvider()
-    await provider.generate(
-        LLMRequest(
-            prompt="Test prompt",
-            provider=ProviderType.DEEPSEEK,
-            model="deepseek-ai/DeepSeek-V4-Flash-0731",
-            reasoning_effort="off",
-        )
-    )
-
-    payload = mock_post.call_args.kwargs["json"]
-    assert "reasoning_effort" not in payload
+def test_deepseek_cost_is_reported_as_provider_billed():
+    assert providers_module.calculate_cost(ProviderType.DEEPSEEK, 1_000) is None

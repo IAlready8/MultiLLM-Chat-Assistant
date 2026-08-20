@@ -80,28 +80,6 @@ describe('/api/llm/orchestrate route', () => {
     })
   })
 
-  it('rejects disabled DeepSeek before sidecar or fallback network access', async () => {
-    const response = await POST(
-      buildRequest({
-        prompt: 'compare answers',
-        requests: [
-          {
-            provider: 'deepseek',
-            model: 'deepseek-ai/DeepSeek-V4-Flash-0731',
-            prompt: 'Summarize this.',
-          },
-        ],
-      })
-    )
-
-    expect(response.status).toBe(503)
-    await expect(response.json()).resolves.toEqual({
-      error: 'DeepSeek is currently unavailable.',
-      code: 'PROVIDER_DISABLED',
-    })
-    expect(global.fetch).not.toHaveBeenCalled()
-  })
-
   it('proxies successful response from Python sidecar', async () => {
     const pythonPayload = [{ provider: 'openai', model: 'gpt-4', content: 'Hello' }]
     const fetchMock = vi.mocked(global.fetch)
@@ -118,6 +96,55 @@ describe('/api/llm/orchestrate route', () => {
     await expect(response.json()).resolves.toEqual(pythonPayload)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/v1/llm/orchestrate')
+  })
+
+  it('keeps DeepSeek BYOK orchestration in the authenticated Next.js runtime', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          content: 'official DeepSeek answer',
+          usage: { prompt_tokens: 4, completion_tokens: 6, total_tokens: 10 },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    const response = await POST(
+      buildRequest({
+        prompt: 'compare answers',
+        requests: [
+          {
+            provider: 'deepseek',
+            model: 'deepseek-v4-flash',
+            prompt: 'Summarize this.',
+          },
+        ],
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('x-orchestration-fallback')).toBe(
+      'local-provider-credentials',
+    )
+    expect(body).toEqual([
+      expect.objectContaining({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        content: 'official DeepSeek answer',
+        cost_usd: null,
+        cost_label: 'Provider-billed',
+      }),
+    ])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/llm/chat')
+    expect(fetchMock.mock.calls[0]?.[0]).not.toContain(
+      '/api/v1/llm/orchestrate',
+    )
   })
 
   it('falls back locally when Python service returns 5xx', async () => {

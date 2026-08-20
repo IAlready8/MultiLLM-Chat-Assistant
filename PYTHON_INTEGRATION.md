@@ -52,10 +52,19 @@ App users configure Kimi from Settings; its encrypted per-user key is used by
 the primary Next.js chat and stream routes. The optional sidecar uses its own
 server-only `MOONSHOT_API_KEY` environment variable.
 
-DeepSeek is temporarily disabled because the previous community endpoint is no
-longer operational. The sidecar does not accept DeepSeek in request schemas or
-register its historical adapter. The adapter code remains in place only to
-make a future, deliberate restoration straightforward.
+DeepSeek BYOK is intentionally implemented only in the primary Next.js runtime.
+Its API key is encrypted per user and is never forwarded to the optional Python
+sidecar, which does not register a DeepSeek network adapter. If an orchestration
+request includes DeepSeek, the bridge route uses its authenticated local
+`/api/llm/chat` path for the request set instead of sending it to Python. This
+keeps the official DeepSeek endpoint, model, reasoning, SSRF, and credential
+contract in one server-side implementation.
+
+The Next.js DeepSeek adapter accepts `off`, `low`, `high`, and `max`
+`reasoning_effort` values. It explicitly disables thinking for `off`, enables
+thinking with the matching effort otherwise, defaults an omitted value to
+enabled/high, and preserves the official API's `Retry-After` delay on rate-limit
+errors. DeepSeek usage is reported as `Provider-billed`.
 
 ## Health and Troubleshooting
 - If `/api/llm/orchestrate` returns `503`, verify sidecar host/port and availability.

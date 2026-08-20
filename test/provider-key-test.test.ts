@@ -88,10 +88,11 @@ describe('validateApiKeyFormat', () => {
   })
 
   describe('deepseek', () => {
-    it('reports the provider as unavailable instead of requesting a credential', () => {
-      expect(validateApiKeyFormat('deepseek', '')).toBe(
-        'DeepSeek is currently unavailable.',
-      )
+    it('requires a non-empty credential without assuming an undocumented prefix', () => {
+      expect(validateApiKeyFormat('deepseek', '')).toBe('API key is too short.')
+      expect(
+        validateApiKeyFormat('deepseek', 'deepseek-test-key-12345'),
+      ).toBeNull()
     })
   })
 
@@ -128,12 +129,22 @@ describe('testProviderKey', () => {
     )
   })
 
-  it('does not contact the retired DeepSeek endpoint', async () => {
+  it('authenticates the official DeepSeek models probe', async () => {
     const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue(new Response(null, { status: 200 }))
 
-    await expect(testProviderKey('deepseek', '')).rejects.toThrow(
-      'DeepSeek is currently unavailable.',
+    const response = await testProviderKey(
+      'deepseek',
+      'deepseek-test-key-12345',
     )
-    expect(fetchMock).not.toHaveBeenCalled()
+
+    expect(response).toMatchObject({ status: 200 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.deepseek.com/models',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer deepseek-test-key-12345' },
+        redirect: 'error',
+      }),
+    )
   })
 })

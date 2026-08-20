@@ -80,14 +80,6 @@ describe('/api/provider-configs route', () => {
         createdAt: now,
         updatedAt: now,
       },
-      {
-        id: 'cfg-historical-deepseek',
-        provider: 'deepseek',
-        isActive: true,
-        settings: { models: ['deepseek-ai/DeepSeek-V4-Flash-0731'] },
-        createdAt: now,
-        updatedAt: now,
-      },
     ])
 
     const response = await GET()
@@ -101,7 +93,6 @@ describe('/api/provider-configs route', () => {
       models: ['gpt-4'],
       rateLimits: { requests: 15, window: 60000 },
     })
-    expect(body.configs.deepseek).toBeUndefined()
     expect(mockGetAuthenticatedUser).toHaveBeenCalledWith()
   })
 
@@ -372,7 +363,7 @@ describe('/api/provider-configs route', () => {
     )
   })
 
-  it('POST rejects disabled DeepSeek without requesting a key or storing config', async () => {
+  it('POST rejects DeepSeek configuration without a credential', async () => {
     const response = await POST(
       makeRequest({
         provider: 'deepseek',
@@ -380,29 +371,34 @@ describe('/api/provider-configs route', () => {
       })
     )
 
-    expect(response.status).toBe(503)
-    await expect(response.json()).resolves.toEqual({
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
       success: false,
-      error: 'DeepSeek is currently unavailable.',
-      code: 'PROVIDER_DISABLED',
+      errors: [
+        { path: 'apiKey', message: 'API key is required and must be valid' },
+      ],
     })
-    expect(mockValidateApiKeyFormat).not.toHaveBeenCalled()
     expect(mockStoreUserApiKey).not.toHaveBeenCalled()
   })
 
-  it('PUT rejects disabled DeepSeek before connection testing', async () => {
-    const response = await PUT(
-      makeRequest({ provider: 'deepseek', config: {} }, 'PUT')
+  it('POST stores the official DeepSeek models with the user credential', async () => {
+    const response = await POST(
+      makeRequest({
+        provider: 'deepseek',
+        config: { apiKey: 'deepseek-test-key-12345' },
+      })
     )
 
-    expect(response.status).toBe(503)
-    await expect(response.json()).resolves.toMatchObject({
-      success: false,
-      code: 'PROVIDER_DISABLED',
-    })
-    expect(mockValidateApiKeyFormat).not.toHaveBeenCalled()
-    expect(mockTestProviderKey).not.toHaveBeenCalled()
-    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+    expect(response.status).toBe(200)
+    expect(mockStoreUserApiKey).toHaveBeenCalledWith(
+      'user-1',
+      'deepseek',
+      'deepseek-test-key-12345',
+      expect.objectContaining({
+        models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+        rateLimits: { requests: 12, window: 60000 },
+      })
+    )
   })
 
   it('POST invalidates cached provider configs after save', async () => {

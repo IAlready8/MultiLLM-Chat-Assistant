@@ -139,23 +139,68 @@ describe('/api/test-api-key route', () => {
     expect(typeof body.latencyMs).toBe('number')
   })
 
-  it.each([false, true])(
-    'returns disabled for DeepSeek without accessing any key (testSaved=%s)',
-    async (testSaved) => {
-      const response = await POST(makeRequest({ provider: 'deepseek', testSaved }))
+  it('verifies both approved models using the provided DeepSeek key', async () => {
+    mockTestProviderKey.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          object: 'list',
+          data: [{ id: 'deepseek-v4-flash' }, { id: 'deepseek-v4-pro' }],
+        }),
+        { status: 200 },
+      ),
+    )
 
-      expect(response.status).toBe(503)
-      await expect(response.json()).resolves.toEqual({
-        valid: false,
-        message: 'DeepSeek is currently unavailable.',
-        reason: 'disabled',
-        code: 'PROVIDER_DISABLED',
-      })
-      expect(mockGetUserApiKey).not.toHaveBeenCalled()
-      expect(mockValidateApiKeyFormat).not.toHaveBeenCalled()
-      expect(mockTestProviderKey).not.toHaveBeenCalled()
-    },
-  )
+    const response = await POST(
+      makeRequest({
+        provider: 'deepseek',
+        apiKey: 'deepseek-test-key-12345',
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      valid: true,
+      reason: 'ok',
+      message: 'API key verified successfully.',
+    })
+    expect(mockTestProviderKey).toHaveBeenCalledWith(
+      'deepseek',
+      'deepseek-test-key-12345',
+    )
+  })
+
+  it('fails the DeepSeek Settings probe when an approved model disappears', async () => {
+    mockTestProviderKey.mockResolvedValue(
+      new Response(JSON.stringify({ object: 'list', data: [] }), {
+        status: 200,
+      }),
+    )
+
+    const response = await POST(
+      makeRequest({
+        provider: 'deepseek',
+        apiKey: 'deepseek-test-key-12345',
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      valid: false,
+      reason: 'provider_error',
+      message: 'The approved DeepSeek models are not currently available.',
+    })
+  })
+
+  it('requires a DeepSeek API key before probing the provider', async () => {
+    const response = await POST(makeRequest({ provider: 'deepseek' }))
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      valid: false,
+      message: 'API key is required.',
+    })
+    expect(mockTestProviderKey).not.toHaveBeenCalled()
+  })
 
   it('returns unreachable when provider request throws', async () => {
     mockTestProviderKey.mockRejectedValue(new Error('network down'))

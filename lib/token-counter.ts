@@ -132,8 +132,9 @@ const CONTEXT_WINDOWS: Record<string, ContextWindowEntry[]> = {
     { pattern: 'kimi', tokens: 262_144 },
   ],
   deepseek: [
-    { pattern: 'deepseek-v4-flash-0731', tokens: 393_216 },
-    { pattern: 'deepseek', tokens: 393_216 },
+    { pattern: 'deepseek-v4-flash', tokens: 1_000_000 },
+    { pattern: 'deepseek-v4-pro', tokens: 1_000_000 },
+    { pattern: 'deepseek', tokens: 1_000_000 },
   ],
 }
 

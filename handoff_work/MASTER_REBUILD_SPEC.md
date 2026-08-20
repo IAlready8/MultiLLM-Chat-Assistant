@@ -201,8 +201,8 @@ Supported provider families in code:
 - Google AI
 - OpenRouter
 - Grok
-- DeepSeek is temporarily disabled because its previous community endpoint is
-  no longer operational; the historical adapter is retained for restoration
+- DeepSeek V4 Flash and Pro through the official API using encrypted per-user
+  BYOK credentials; DeepSeek bills the user's provider account
 
 Key files:
 - `lib/providers/registry.ts`

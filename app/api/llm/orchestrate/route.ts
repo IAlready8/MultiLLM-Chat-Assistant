@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getAuthenticatedUser } from '@/lib/api-auth';
-import {
-  getProviderDisabledMessage,
-  isProviderDisabled,
-  PROVIDER_DISABLED_ERROR_CODE,
-} from '@/lib/provider-registry'
 import { z } from 'zod';
 
 // Define the URL for the Python service, managed by PM2
@@ -53,9 +48,12 @@ type ProviderResult = {
   content: string
   prompt_tokens: number
   completion_tokens: number
-  cost_usd: number
+  cost_usd: number | null
+  cost_label?: string
   latency_ms: number
 }
+
+const PROVIDER_BILLED_LABEL = 'Provider-billed'
 
 const COST_PER_1K_TOKENS: Record<string, number> = {
   openai: 0.03,
@@ -73,6 +71,14 @@ const estimateCost = (provider: string, totalTokens: number): number => {
   const rate = COST_PER_1K_TOKENS[provider] ?? 0.01
   return (totalTokens / 1000) * rate
 }
+
+const getCostFields = (
+  provider: string,
+  totalTokens: number,
+): Pick<ProviderResult, 'cost_usd' | 'cost_label'> =>
+  provider.toLowerCase() === 'deepseek'
+    ? { cost_usd: null, cost_label: PROVIDER_BILLED_LABEL }
+    : { cost_usd: estimateCost(provider, totalTokens) }
 
 const toProviderResult = (
   provider: string,
@@ -95,7 +101,7 @@ const toProviderResult = (
     content: payload.content || '',
     prompt_tokens: promptTokens,
     completion_tokens: completionTokens,
-    cost_usd: estimateCost(provider, totalTokens),
+    ...getCostFields(provider, totalTokens),
     latency_ms: latencyMs,
   }
 }
@@ -195,7 +201,7 @@ const runLocalFallbackOrchestration = async (
         content: `Provider request failed: ${errorMessage}`,
         prompt_tokens: estimatePromptTokens(fallbackPrompt),
         completion_tokens: 0,
-        cost_usd: 0,
+        ...getCostFields(request.provider, 0),
         latency_ms: latencyMs,
       })
       continue
@@ -273,17 +279,11 @@ export async function POST(req: Request) {
     );
   }
 
-  const disabledProvider = validation.data.requests
-    .map((request) => request.provider.trim().toLowerCase())
-    .find(isProviderDisabled)
-  if (disabledProvider) {
-    return NextResponse.json(
-      {
-        error: getProviderDisabledMessage(disabledProvider),
-        code: PROVIDER_DISABLED_ERROR_CODE,
-      },
-      { status: 503 },
-    )
+  // DeepSeek credentials are encrypted per user in the Next.js runtime and
+  // are never forwarded to the optional Python sidecar. Keep any orchestration
+  // containing DeepSeek on the authenticated local provider path.
+  if (validation.data.requests.some(({ provider }) => provider === 'deepseek')) {
+    return localFallbackResponse(validation.data, req, 'local-provider-credentials')
   }
 
   // 3. Proxy the request to the Python (FastAPI) service

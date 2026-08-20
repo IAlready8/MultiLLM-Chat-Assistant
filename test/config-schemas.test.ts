@@ -5,7 +5,6 @@ import {
   defaultProviderModels,
   defaultRateLimits,
 } from '@/lib/config-schemas'
-import { operationalProviderRegistry } from '@/lib/provider-registry'
 
 describe('config-schemas provider registry', () => {
   it('providerRegistry contains all expected providers', () => {
@@ -29,28 +28,22 @@ describe('config-schemas provider registry', () => {
     }
   })
 
-  it('retains DeepSeek metadata and defaults while marking it disabled', () => {
+  it('marks DeepSeek as an official provider-billed BYOK connection', () => {
     const deepseek = providerRegistry.find((provider) => provider.id === 'deepseek')
     expect(deepseek).toMatchObject({
-      requiresApiKey: false,
-      acceptsApiKey: false,
-      operational: false,
-      disabledReason: 'DeepSeek is currently unavailable.',
+      name: 'DeepSeek',
+      requiresApiKey: true,
     })
+    expect(deepseek?.description).toContain('Official BYOK API')
+    expect(deepseek?.description).toContain('billed by DeepSeek')
     expect(defaultRateLimits.deepseek).toEqual({
       requests: 12,
       window: 60000,
     })
   })
 
-  it('excludes disabled DeepSeek from operational provider IDs', () => {
-    expect(supportedProviderIds).toEqual(
-      operationalProviderRegistry.map((provider) => provider.id),
-    )
-    expect(supportedProviderIds).not.toContain('deepseek')
-    expect(supportedProviderIds).toEqual(
-      expect.arrayContaining(['openai', 'anthropic', 'googleai', 'mistral', 'kimi']),
-    )
+  it('supportedProviderIds matches providerRegistry', () => {
+    expect(supportedProviderIds).toEqual(providerRegistry.map((p) => p.id))
   })
 
   it('every provider in registry has default models', () => {

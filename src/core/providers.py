@@ -8,9 +8,9 @@ import logging
 # Global LLM Manager instance
 llm_manager = LLMManager()
 
-# Initialize only providers that are currently operational and configured.
-# The historical DeepSeek adapter remains in llm_manager.py for a reversible
-# future restoration, but it is intentionally not registered here.
+# Initialize sidecar providers with server-side credentials when configured.
+# DeepSeek is intentionally excluded: its BYOK credential remains encrypted
+# per user in the primary Next.js runtime and is never forwarded here.
 async def initialize_providers():
     from .llm_manager import (
         AnthropicProvider,
@@ -62,7 +62,12 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
             content=response.content,
             prompt_tokens=max(1, response.tokens_used // 2),  # Estimate prompt tokens
             completion_tokens=max(1, response.tokens_used // 2),  # Estimate completion tokens
-            cost_usd=calculate_cost(response.provider, response.tokens_used),  # Calculate based on provider/model
+            cost_usd=calculate_cost(response.provider, response.tokens_used),
+            cost_label=(
+                "Provider-billed"
+                if response.provider == ProviderType.DEEPSEEK
+                else None
+            ),
             latency_ms=latency_ms
         )
     except ValueError as e:
@@ -95,14 +100,11 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
         )
 
 
-def calculate_cost(provider: ProviderType, tokens_used: int) -> float:
+def calculate_cost(provider: ProviderType, tokens_used: int) -> float | None:
     """
     Calculate estimated cost based on provider and tokens used.
     This is a simplified calculation - in production, use actual pricing.
     """
-    if provider == ProviderType.DEEPSEEK:
-        raise ValueError("DeepSeek is currently unavailable.")
-
     # Simplified cost calculation - in production, use actual pricing from each provider
     cost_per_thousand_tokens = {
         ProviderType.OPENAI: 0.002,  # Example: $0.002 per 1k tokens for gpt-3.5-turbo
@@ -110,6 +112,9 @@ def calculate_cost(provider: ProviderType, tokens_used: int) -> float:
         ProviderType.GOOGLE: 0.0005,  # Example: $0.0005 per 1k tokens for Gemini
         ProviderType.KIMI: 0.009,  # Blended estimate; actual input/output rates differ
     }
+
+    if provider == ProviderType.DEEPSEEK:
+        return None
 
     cost_per_token = cost_per_thousand_tokens.get(provider, 0.002) / 1000
     return cost_per_token * tokens_used

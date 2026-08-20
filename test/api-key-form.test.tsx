@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 
 import ApiKeyForm from '@/components/api-key-form'
 
-describe('ApiKeyForm operational providers', () => {
+describe('ApiKeyForm DeepSeek BYOK configuration', () => {
   beforeEach(() => {
     vi.stubGlobal(
       'fetch',
@@ -21,13 +21,16 @@ describe('ApiKeyForm operational providers', () => {
     vi.restoreAllMocks()
   })
 
-  it('does not offer disabled DeepSeek or request a DeepSeek API key', async () => {
+  it('shows an official provider-billed DeepSeek password input', async () => {
     render(<ApiKeyForm />)
 
-    expect(screen.getByText('OpenAI API Key')).toBeVisible()
-    expect(screen.queryByText(/DeepSeek/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Free Community/i)).not.toBeInTheDocument()
-    expect(document.getElementById('deepseek-api-key')).toBeNull()
+    expect(screen.getByText('DeepSeek API Key')).toBeVisible()
+    expect(screen.getByText(/Official BYOK API/)).toBeVisible()
+    expect(screen.getByText(/billed by DeepSeek/)).toBeVisible()
+    expect(screen.getByPlaceholderText('DeepSeek API key')).toHaveAttribute(
+      'type',
+      'password',
+    )
 
     await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/config'))
   })

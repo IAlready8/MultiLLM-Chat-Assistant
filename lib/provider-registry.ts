@@ -74,12 +74,11 @@ export const providerRegistry: ProviderMeta[] = [
   {
     id: 'deepseek',
     name: 'DeepSeek',
-    placeholder: 'Currently unavailable',
-    description: 'Temporarily disabled because the previous community endpoint is no longer operational.',
-    requiresApiKey: false,
-    acceptsApiKey: false,
-    operational: false,
-    disabledReason: 'DeepSeek is currently unavailable.',
+    placeholder: 'DeepSeek API key',
+    description: 'Official BYOK API. Usage is billed by DeepSeek to your DeepSeek account.',
+    requiresApiKey: true,
+    acceptsApiKey: true,
+    operational: true,
   },
 ]
 

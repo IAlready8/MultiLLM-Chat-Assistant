@@ -40,8 +40,7 @@ describe('MultiChatPage provider model picker', () => {
     expect(
       screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
     ).toBeVisible()
-    expect(screen.queryByRole('button', { name: /DeepSeek/i })).not.toBeInTheDocument()
-    expect(screen.queryByText(/Free Community/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /DeepSeek/i })).toBeVisible()
     expect(screen.getByRole('option', { name: 'GPT-5.6 Sol' })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /Claude \(Anthropic\)/i }))
@@ -58,5 +57,12 @@ describe('MultiChatPage provider model picker', () => {
     )
     expect(screen.getByRole('option', { name: 'Kimi K3' })).toBeVisible()
 
+    await user.click(screen.getByRole('button', { name: /DeepSeek/i }))
+    expect(
+      screen.getByRole('option', { name: 'DeepSeek V4 Flash' })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('option', { name: 'DeepSeek V4 Pro' })
+    ).toBeVisible()
   })
 })

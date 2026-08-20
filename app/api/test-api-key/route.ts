@@ -2,14 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { getUserApiKey } from '@/lib/api-key-service'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
-import {
-  getProviderDisabledMessage,
-  isProviderApiKeyRequired,
-  isProviderDisabled,
-  PROVIDER_DISABLED_ERROR_CODE,
-} from '@/lib/provider-registry'
+import { isProviderApiKeyRequired } from '@/lib/provider-registry'
+import { DEEPSEEK_MODEL_IDS } from '@/lib/providers/deepseek'
 
-type HealthStatus = 'ok' | 'invalid' | 'unreachable' | 'rate_limited' | 'provider_error' | 'format' | 'disabled'
+type HealthStatus = 'ok' | 'invalid' | 'unreachable' | 'rate_limited' | 'provider_error' | 'format'
 
 interface TestResult {
   valid: boolean
@@ -49,6 +45,33 @@ async function testKey(
     }
 
     if (response.ok) {
+      if (provider === 'deepseek') {
+        const body = await response.json().catch(() => null)
+        const models = Array.isArray(body?.data) ? body.data : []
+        const advertisedModelIds = new Set(
+          models
+            .map((model: unknown) =>
+              typeof model === 'object' && model !== null && 'id' in model
+                ? model.id
+                : null,
+            )
+            .filter((modelId: unknown): modelId is string =>
+              typeof modelId === 'string',
+            ),
+        )
+        const missingModelIds = DEEPSEEK_MODEL_IDS.filter(
+          (modelId) => !advertisedModelIds.has(modelId),
+        )
+        if (missingModelIds.length > 0) {
+          return buildResult(
+            false,
+            'The approved DeepSeek models are not currently available.',
+            'provider_error',
+            latencyMs,
+          )
+        }
+      }
+
       return buildResult(
         true,
         isProviderApiKeyRequired(provider)
@@ -73,8 +96,8 @@ async function testKey(
       return buildResult(
         false,
         retryAfter
-          ? `Shared endpoint rate limited. Retry after ${retryAfter} seconds.`
-          : 'Shared endpoint rate limited. Try again shortly.',
+          ? `Provider rate limited. Retry after ${retryAfter} seconds.`
+          : 'Provider rate limited. Try again shortly.',
         'rate_limited',
         latencyMs
       )
@@ -124,16 +147,6 @@ export async function POST(request: NextRequest) {
     }
 
     const provider = providerRaw.trim().toLowerCase()
-
-    if (isProviderDisabled(provider)) {
-      return NextResponse.json(
-        {
-          ...buildResult(false, getProviderDisabledMessage(provider), 'disabled'),
-          code: PROVIDER_DISABLED_ERROR_CODE,
-        },
-        { status: 503 },
-      )
-    }
 
     // Mode 1: Test a saved/stored key without re-entry
     if (testSaved) {
