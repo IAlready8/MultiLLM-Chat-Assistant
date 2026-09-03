@@ -36,6 +36,7 @@ describe('/api/llm/orchestrate route', () => {
     vi.clearAllMocks()
     vi.stubGlobal('fetch', vi.fn())
     vi.unstubAllEnvs()
+    vi.stubEnv('PYTHON_CORE_URL', 'http://127.0.0.1:8008')
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
   })
 
@@ -342,5 +343,180 @@ describe('/api/llm/orchestrate route', () => {
 
     await POST(buildRequest())
     expect(mockGetAuthenticatedUser).toHaveBeenCalledWith()
+  })
+
+  it('uses native orchestration directly when no Python sidecar is configured', async () => {
+    vi.stubEnv('PYTHON_CORE_URL', '')
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ content: 'native fallback' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const response = await POST(buildRequest())
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('x-orchestration-fallback')).toBe('local-no-sidecar')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'http://127.0.0.1:3000/api/llm/chat',
+    )
+  })
+
+  it('bounds native fallback concurrency and preserves request order', async () => {
+    vi.stubEnv('PYTHON_CORE_URL', '')
+    const fetchMock = vi.mocked(global.fetch)
+    const pending: Array<() => void> = []
+    let inFlight = 0
+    let maxInFlight = 0
+
+    fetchMock.mockImplementation((_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { provider: string }
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+
+      return new Promise<Response>((resolve) => {
+        pending.push(() => {
+          inFlight -= 1
+          resolve(
+            new Response(JSON.stringify({ content: body.provider }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          )
+        })
+      })
+    })
+
+    const responsePromise = POST(
+      buildRequest({
+        prompt: 'compare answers',
+        requests: [
+          { provider: 'openai', model: 'gpt-4', prompt: 'A' },
+          { provider: 'anthropic', model: 'claude', prompt: 'B' },
+          { provider: 'googleai', model: 'gemini', prompt: 'C' },
+          { provider: 'grok', model: 'grok', prompt: 'D' },
+          { provider: 'mistral', model: 'mistral', prompt: 'E' },
+        ],
+      }),
+    )
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+    })
+    expect(maxInFlight).toBe(3)
+
+    for (let index = 0; index < 5; index += 1) {
+      const resolveNext = pending.shift()
+      expect(resolveNext).toBeDefined()
+      resolveNext?.()
+
+      if (index < 4) {
+        await vi.waitFor(() => {
+          expect(fetchMock).toHaveBeenCalledTimes(Math.min(4 + index, 5))
+        })
+      }
+    }
+
+    const response = await responsePromise
+    const results = (await response.json()) as Array<{
+      provider: string
+      content: string
+    }>
+
+    expect(response.status).toBe(200)
+    expect(results.map((result) => result.provider)).toEqual([
+      'openai',
+      'anthropic',
+      'googleai',
+      'grok',
+      'mistral',
+    ])
+    expect(results.map((result) => result.content)).toEqual([
+      'openai',
+      'anthropic',
+      'googleai',
+      'grok',
+      'mistral',
+    ])
+  })
+
+  it('returns ordered partial results when one native provider request rejects', async () => {
+    vi.stubEnv('PYTHON_CORE_URL', '')
+    const fetchMock = vi.mocked(global.fetch)
+    fetchMock.mockImplementation((_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { provider: string }
+      if (body.provider === 'anthropic') {
+        return Promise.reject(new TypeError('fetch failed'))
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ content: `${body.provider} answer` }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+    })
+
+    const response = await POST(
+      buildRequest({
+        prompt: 'compare answers',
+        requests: [
+          { provider: 'openai', model: 'gpt-4', prompt: 'A' },
+          { provider: 'anthropic', model: 'claude', prompt: 'B' },
+        ],
+      }),
+    )
+    const results = (await response.json()) as Array<{ content: string }>
+
+    expect(response.status).toBe(200)
+    expect(results[0]?.content).toBe('openai answer')
+    expect(results[1]?.content).toBe('Provider request failed: network request failed')
+  })
+
+  it('turns a native provider timeout into an ordered failure result', async () => {
+    vi.stubEnv('PYTHON_CORE_URL', '')
+    vi.useFakeTimers()
+
+    try {
+      const fetchMock = vi.mocked(global.fetch)
+      fetchMock.mockImplementation((_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'))
+          })
+        }),
+      )
+
+      const responsePromise = POST(buildRequest())
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      const response = await responsePromise
+      const results = (await response.json()) as Array<{ content: string }>
+
+      expect(response.status).toBe(200)
+      expect(results[0]?.content).toBe(
+        'Provider request failed: request timed out',
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects oversized orchestration batches before any network request', async () => {
+    const fetchMock = vi.mocked(global.fetch)
+    const requests = Array.from({ length: 9 }, (_, index) => ({
+      provider: 'openai',
+      model: 'gpt-4',
+      prompt: `Prompt ${index}`,
+    }))
+
+    const response = await POST(buildRequest({ prompt: 'compare', requests }))
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({ error: 'Invalid input' })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
