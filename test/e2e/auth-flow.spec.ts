@@ -51,7 +51,9 @@ test.describe('Authentication flow', () => {
       page.getByRole('heading', { name: 'Create account' }),
     ).toBeVisible()
     await expect(
-      page.getByText(/use Google to create a durable workspace account/i),
+      page.getByText(
+        /use your organization's configured OAuth provider to create a durable workspace account/i,
+      ),
     ).toBeVisible()
     await expect(
       page.getByText(
