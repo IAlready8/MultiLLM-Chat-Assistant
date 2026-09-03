@@ -67,10 +67,12 @@ describe('OAuthProviderButtons', () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          /operator must add a Google OAuth application before new accounts can be created/i,
+          /operator must add a Google or GitHub OAuth application before new accounts can be created/i,
         ),
       ).toBeInTheDocument()
     })
-    expect(screen.queryByText(/GitHub/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /continue with github/i }),
+    ).not.toBeInTheDocument()
   })
 })

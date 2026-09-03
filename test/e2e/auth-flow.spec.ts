@@ -55,10 +55,9 @@ test.describe('Authentication flow', () => {
     ).toBeVisible()
     await expect(
       page.getByText(
-        /operator must add a Google OAuth application before new accounts can be created/i,
+        /operator must add a Google or GitHub OAuth application before new accounts can be created/i,
       ),
     ).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByText(/Google or GitHub/i)).toHaveCount(0)
     await expect(
       page.getByText(/password registration is unavailable/i),
     ).toBeVisible()
