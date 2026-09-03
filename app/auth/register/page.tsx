@@ -56,7 +56,8 @@ export default function RegisterPage() {
             <Badge variant="secondary">Verified provider</Badge>
           </div>
           <CardDescription>
-            Use Google to create a durable workspace account.
+            Use a configured OAuth provider to create a durable workspace
+            account.
           </CardDescription>
         </CardHeader>
 
