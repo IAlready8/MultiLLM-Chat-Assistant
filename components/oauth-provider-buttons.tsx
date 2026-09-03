@@ -98,8 +98,8 @@ export function OAuthProviderButtons({
   if (providers.length === 0) {
     return (
       <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-muted-foreground">
-        Social account creation is not configured yet. An operator must add a
-        Google OAuth application before new accounts can be created.
+        Social account creation is not configured yet. An operator must add at
+        least one OAuth provider before new accounts can be created.
       </p>
     )
   }
