@@ -55,7 +55,8 @@ describe('/api/health route', () => {
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'memory',
       status: 'memory',
-      message: 'Redis not configured; using in-memory rate limiting',
+      scope: 'per-instance',
+      message: 'Redis not configured; using per-instance in-memory rate limiting',
       redisConfigured: false,
       redisConnected: false,
       inMemoryKeys: 0,
@@ -129,8 +130,9 @@ describe('/api/health route', () => {
       payload.checks.rateLimit.responseTimeMs
     )
     expect(payload.checks.rateLimit.message).toBe(
-      'Redis not configured; using in-memory rate limiting'
+      'Redis not configured; using per-instance in-memory rate limiting'
     )
+    expect(payload.checks.rateLimit.scope).toBe('per-instance')
     expect(payload.checks.sidecar.status).toBe('disabled')
     expect(payload.checks.sidecar.responseTimeMs).toBeTypeOf('number')
     expect(payload.checks.sidecar.responseTime).toBe(
@@ -230,7 +232,8 @@ describe('/api/health route', () => {
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'memory',
       status: 'degraded',
-      message: 'Redis configured but unavailable; using in-memory rate limiting',
+      scope: 'per-instance',
+      message: 'Redis configured but unavailable; using per-instance in-memory rate limiting',
       redisConfigured: true,
       redisConnected: false,
       inMemoryKeys: 3,
@@ -244,7 +247,7 @@ describe('/api/health route', () => {
     expect(payload.status).toBe('degraded')
     expect(payload.checks.rateLimit.status).toBe('degraded')
     expect(payload.checks.rateLimit.message).toBe(
-      'Redis configured but unavailable; using in-memory rate limiting'
+      'Redis configured but unavailable; using per-instance in-memory rate limiting'
     )
     expect(payload.summary).toEqual({
       coreAvailability: 'available',

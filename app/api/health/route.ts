@@ -101,6 +101,7 @@ export async function GET(request: NextRequest) {
         status: rateLimitDiagnostics.status,
         responseTime: rateLimitResponseTimeMs,
         responseTimeMs: rateLimitResponseTimeMs,
+        scope: rateLimitDiagnostics.scope,
         message: rateLimitDiagnostics.message,
         mode: rateLimitDiagnostics.mode,
       },

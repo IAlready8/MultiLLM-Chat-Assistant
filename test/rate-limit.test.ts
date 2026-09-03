@@ -30,7 +30,8 @@ describe('rate-limit diagnostics', () => {
     expect(getRateLimitDiagnostics()).toEqual({
       mode: 'memory',
       status: 'memory',
-      message: 'Redis not configured; using in-memory rate limiting',
+      scope: 'per-instance',
+      message: 'Redis not configured; using per-instance in-memory rate limiting',
       redisConfigured: false,
       redisConnected: false,
       inMemoryKeys: 0,
@@ -65,7 +66,8 @@ describe('rate-limit diagnostics', () => {
     expect(getRateLimitDiagnostics()).toEqual({
       mode: 'memory',
       status: 'degraded',
-      message: 'Redis configured but unavailable; using in-memory rate limiting',
+      scope: 'per-instance',
+      message: 'Redis configured but unavailable; using per-instance in-memory rate limiting',
       redisConfigured: true,
       redisConnected: false,
       inMemoryKeys: 0,
@@ -128,6 +130,7 @@ describe('rate-limit diagnostics', () => {
     expect(getRateLimitDiagnostics()).toMatchObject({
       mode: 'redis',
       status: 'connected',
+      scope: 'distributed',
     })
 
     resetAll()

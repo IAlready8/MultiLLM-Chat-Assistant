@@ -7,13 +7,18 @@ import {
 } from '@/lib/provider-registry'
 import { z } from 'zod';
 
-// Define the URL for the Python service, managed by PM2
-// This MUST be 127.0.0.1 (localhost) because the Next.js server
-// and the Python server are running on the *same machine*.
-const PYTHON_CORE_URL = process.env.PYTHON_CORE_URL || 'http://127.0.0.1:8008';
 const LOCAL_FALLBACK_ORIGIN = 'http://127.0.0.1:3000'
 const ORCHESTRATION_FALLBACK_ERROR_CODE = 'ORCHESTRATION_FALLBACK_UNAVAILABLE'
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
+const MAX_ORCHESTRATION_REQUESTS = 8
+const LOCAL_FALLBACK_CONCURRENCY = 3
+const LOCAL_FALLBACK_REQUEST_TIMEOUT_MS = 30_000
+const LOCAL_FALLBACK_BATCH_TIMEOUT_MS = 45_000
+
+const getConfiguredPythonCoreUrl = (): string | null => {
+  const configuredUrl = process.env.PYTHON_CORE_URL?.trim()
+  return configuredUrl ? configuredUrl.replace(/\/+$/, '') : null
+}
 
 class OrchestrationFallbackError extends Error {
   readonly code = ORCHESTRATION_FALLBACK_ERROR_CODE
@@ -28,12 +33,12 @@ class OrchestrationFallbackError extends Error {
 const orchestrateRequestSchema = z.object({
   requests: z.array(
     z.object({
-      provider: z.string(),
-      model: z.string(),
-      prompt: z.string(),
-    })
-  ),
-  prompt: z.string(),
+      provider: z.string().trim().min(1).max(64),
+      model: z.string().trim().min(1).max(256),
+      prompt: z.string().max(10000),
+    }),
+  ).min(1).max(MAX_ORCHESTRATION_REQUESTS),
+  prompt: z.string().max(10000),
 });
 
 type OrchestrateRequest = z.infer<typeof orchestrateRequestSchema>
@@ -100,6 +105,35 @@ const toProviderResult = (
   }
 }
 
+const toProviderFailureResult = (
+  request: OrchestrateRequest['requests'][number],
+  prompt: string,
+  message: string,
+  latencyMs: number,
+): ProviderResult => ({
+  provider: request.provider,
+  model: request.model,
+  content: `Provider request failed: ${message}`,
+  prompt_tokens: estimatePromptTokens(prompt),
+  completion_tokens: 0,
+  cost_usd: 0,
+  latency_ms: latencyMs,
+})
+
+const getProviderFailureMessage = (error: unknown): string => {
+  const errorName =
+    error && typeof error === 'object' && 'name' in error
+      ? (error as { name?: unknown }).name
+      : undefined
+  if (errorName === 'AbortError') {
+    return 'request timed out'
+  }
+  if (error instanceof SyntaxError) {
+    return 'malformed response'
+  }
+  return 'network request failed'
+}
+
 const resolveTrustedAppOrigin = (): string => {
   // A Vercel preview must not reuse a production NEXTAUTH_URL with a preview
   // session cookie. Disable this fallback rather than guessing a safe target.
@@ -138,16 +172,63 @@ const resolveTrustedAppOrigin = (): string => {
   return parsedOrigin.origin
 }
 
-const runLocalFallbackOrchestration = async (
-  requestData: OrchestrateRequest,
-  req: Request
-): Promise<ProviderResult[]> => {
-  const trustedOrigin = resolveTrustedAppOrigin()
-  const cookieHeader = req.headers.get('cookie') || ''
-  const results: ProviderResult[] = []
+const runWithConcurrencyLimit = async <T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> => {
+  const settled = new Array<PromiseSettledResult<R>>(items.length)
+  let nextIndex = 0
 
-  for (const request of requestData.requests) {
-    const startedAt = Date.now()
+  const runWorker = async () => {
+    while (true) {
+      const index = nextIndex
+      nextIndex += 1
+      if (index >= items.length) return
+
+      try {
+        settled[index] = {
+          status: 'fulfilled',
+          value: await worker(items[index], index),
+        }
+      } catch (reason) {
+        settled[index] = { status: 'rejected', reason }
+      }
+    }
+  }
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length)
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()))
+  return settled
+}
+
+const fetchOneProviderViaLocalChat = async (
+  trustedOrigin: string,
+  cookieHeader: string,
+  requestData: OrchestrateRequest,
+  request: OrchestrateRequest['requests'][number],
+  batchDeadlineMs: number,
+): Promise<ProviderResult> => {
+  const startedAt = Date.now()
+  const fallbackPrompt = request.prompt || requestData.prompt
+  const remainingBatchMs = batchDeadlineMs - startedAt
+
+  if (remainingBatchMs <= 0) {
+    return toProviderFailureResult(
+      request,
+      fallbackPrompt,
+      'orchestration deadline exceeded',
+      0,
+    )
+  }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    Math.min(LOCAL_FALLBACK_REQUEST_TIMEOUT_MS, remainingBatchMs),
+  )
+
+  try {
     const chatResponse = await fetch(`${trustedOrigin}/api/llm/chat`, {
       method: 'POST',
       headers: {
@@ -165,10 +246,11 @@ const runLocalFallbackOrchestration = async (
         messages: [
           {
             role: 'user',
-            content: request.prompt || requestData.prompt,
+            content: fallbackPrompt,
           },
         ],
       }),
+      signal: controller.signal,
     })
 
     if (REDIRECT_STATUSES.has(chatResponse.status)) {
@@ -178,42 +260,94 @@ const runLocalFallbackOrchestration = async (
     }
 
     const latencyMs = Date.now() - startedAt
-    const fallbackPrompt = request.prompt || requestData.prompt
 
     if (!chatResponse.ok) {
-      let errorMessage = `HTTP ${chatResponse.status}`
-      try {
-        const errorPayload = await chatResponse.json()
-        errorMessage = errorPayload?.error || errorPayload?.details || errorMessage
-      } catch {
-        // Ignore parsing errors and use status-based message
-      }
-
-      results.push({
-        provider: request.provider,
-        model: request.model,
-        content: `Provider request failed: ${errorMessage}`,
-        prompt_tokens: estimatePromptTokens(fallbackPrompt),
-        completion_tokens: 0,
-        cost_usd: 0,
-        latency_ms: latencyMs,
-      })
-      continue
+      // Do not reflect upstream response bodies into the multi-provider
+      // response. They may contain provider-specific details or secrets.
+      return toProviderFailureResult(
+        request,
+        fallbackPrompt,
+        `HTTP ${chatResponse.status}`,
+        latencyMs,
+      )
     }
 
-    const payload = (await chatResponse.json()) as ChatResponsePayload
-    results.push(
-      toProviderResult(
-        request.provider,
-        request.model,
-        payload,
+    let payload: unknown
+    try {
+      payload = await chatResponse.json()
+    } catch (error) {
+      if (error instanceof OrchestrationFallbackError) throw error
+      return toProviderFailureResult(
+        request,
+        fallbackPrompt,
+        'malformed response',
         latencyMs,
-        fallbackPrompt
       )
-    )
-  }
+    }
 
-  return results
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return toProviderFailureResult(
+        request,
+        fallbackPrompt,
+        'malformed response',
+        latencyMs,
+      )
+    }
+
+    return toProviderResult(
+      request.provider,
+      request.model,
+      payload as ChatResponsePayload,
+      latencyMs,
+      fallbackPrompt,
+    )
+  } catch (error) {
+    if (error instanceof OrchestrationFallbackError) throw error
+    return toProviderFailureResult(
+      request,
+      fallbackPrompt,
+      getProviderFailureMessage(error),
+      Date.now() - startedAt,
+    )
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+const runLocalFallbackOrchestration = async (
+  requestData: OrchestrateRequest,
+  req: Request,
+): Promise<ProviderResult[]> => {
+  const trustedOrigin = resolveTrustedAppOrigin()
+  const cookieHeader = req.headers.get('cookie') || ''
+  const batchDeadlineMs = Date.now() + LOCAL_FALLBACK_BATCH_TIMEOUT_MS
+  const settled = await runWithConcurrencyLimit(
+    requestData.requests,
+    LOCAL_FALLBACK_CONCURRENCY,
+    (request) =>
+      fetchOneProviderViaLocalChat(
+        trustedOrigin,
+        cookieHeader,
+        requestData,
+        request,
+        batchDeadlineMs,
+      ),
+  )
+
+  return settled.map((result, index) => {
+    if (result.status === 'fulfilled') return result.value
+    if (result.reason instanceof OrchestrationFallbackError) {
+      throw result.reason
+    }
+
+    const request = requestData.requests[index]
+    return toProviderFailureResult(
+      request,
+      request.prompt || requestData.prompt,
+      getProviderFailureMessage(result.reason),
+      0,
+    )
+  })
 }
 
 const localFallbackResponse = async (
@@ -286,25 +420,36 @@ export async function POST(req: Request) {
     )
   }
 
-  // 3. Proxy the request to the Python (FastAPI) service
+  const pythonCoreUrl = getConfiguredPythonCoreUrl()
+  if (!pythonCoreUrl) {
+    return localFallbackResponse(validation.data, req, 'local-no-sidecar')
+  }
+
+  // 3. Proxy to the explicitly configured Python (FastAPI) service.
+  // Vercel production does not provide a localhost sidecar, so an unset
+  // PYTHON_CORE_URL takes the native Next.js path above instead of creating a
+  // guaranteed connection-refused request on every orchestration call.
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
-    const pythonResponse = await fetch(
-      `${PYTHON_CORE_URL}/api/v1/llm/orchestrate`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(validation.data),
-        signal: controller.signal,
-      }
-    );
-
-    clearTimeout(timeoutId);
+    let pythonResponse: Response
+    try {
+      pythonResponse = await fetch(
+        `${pythonCoreUrl}/api/v1/llm/orchestrate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify(validation.data),
+          signal: controller.signal,
+        }
+      )
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (!pythonResponse.ok) {
       // Log the error response from Python service
