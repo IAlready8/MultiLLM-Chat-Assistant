@@ -130,9 +130,13 @@ jobs:
           bash scripts/smoke-test.sh --base-url http://localhost:3000
 
 
+      - name: Install Chromium for authenticated browser QA
+        run: npx playwright install --with-deps chromium
+
       - name: Authenticated generation integration tests
         env:
           GENERATION_INTEGRATION_TEST: 'true'
+          RUN_ACCOUNT_BROWSER_QA: 'true'
           LLM_MONTHLY_REQUEST_LIMITS: '{"FREE":8,"PRO":100,"ENTERPRISE":null}'
           GENERATION_TEST_BASE_URL: http://localhost:3001
           NEXTAUTH_URL: http://localhost:3001
@@ -154,6 +158,14 @@ jobs:
             sleep 1
           done
           node scripts/test-generation-flow.mjs || { cat generation-server.log; exit 1; }
+
+      - name: Upload browser QA screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-browser-qa
+          path: ${{ runner.temp }}/multillm-browser/*.png
+          if-no-files-found: ignore
 
   coverage:
     name: Coverage
