@@ -25,3 +25,9 @@ The fresh full-tree audit initially found 22 dependency findings (14 high, seven
 Patch selection used the [brace-expansion advisory](https://github.com/advisories/GHSA-rgw5-rvv9-x895), [js-yaml advisory](https://github.com/advisories/GHSA-5p4m-2wfm-xmqj) and [Undici releases](https://github.com/nodejs/undici/releases). Existing major versions of application frameworks and Vercel CLI are preserved.
 
 The final source-marker sweep still finds the legacy error-system reporting placeholder, unavailable provider metadata and normal form placeholders. It did not establish that account recovery, advanced model capabilities or staging deployment are complete.
+
+## Browser regression gate
+
+CI now installs Chromium and runs real credential sign-in, profile update/reload, encrypted server-history download and local decryption, and desktop/mobile settings checks against the isolated PostgreSQL/Redis server. It fails on page/console errors and mobile horizontal overflow and retains screenshots as Actions artifacts. This is native CI browser verification, separate from deployed Vercel staging.
+
+The first browser run reached a non-hydrated sign-in form: the development CSP omitted Next.js's required eval allowance. The correction permits eval only when NODE_ENV is development, with regression assertions that production/test policies exclude it. Sign-in submission also stays disabled while session hydration is pending. See [Next.js CSP development guidance](https://nextjs.org/docs/app/guides/content-security-policy#development-vs-production-considerations). Browser pass/fail remains an executed CI gate, not an inference from compilation.

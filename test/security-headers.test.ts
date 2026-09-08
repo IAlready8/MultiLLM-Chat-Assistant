@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import nextConfig from '../next.config.mjs'
 
 type SecurityHeader = { key: string; value: string }
@@ -60,5 +60,19 @@ describe('application security headers', () => {
 
     expect(getHeader(headers, 'X-Frame-Options').value).toBe('DENY')
     expect(getHeader(headers, 'X-Content-Type-Options').value).toBe('nosniff')
+  })
+})
+
+describe('development-only CSP exceptions', () => {
+  afterEach(() => { vi.unstubAllEnvs(); vi.resetModules() })
+  it.each(['production', 'test', 'development'])('only permits eval in development (%s)', async environment => {
+    vi.stubEnv('NODE_ENV', environment)
+    vi.resetModules()
+    const config = (await import('../next.config.mjs')).default
+    if (!config.headers) throw new Error('Missing security headers')
+    const rules = await config.headers()
+    const csp = rules.find(rule => rule.source === '/(.*)')?.headers.find(header => header.key === 'Content-Security-Policy')?.value
+    expect(csp).toBeDefined()
+    expect(csp?.includes("'unsafe-eval'")).toBe(environment === 'development')
   })
 })

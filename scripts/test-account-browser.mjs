@@ -17,6 +17,7 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   try {
     await page.goto(new URL('/auth/signin?callbackUrl=%2Fsettings', baseUrl).href)
+    await expect(page.getByRole('button', { name: 'Sign in with password', exact: true })).toBeEnabled()
     await page.getByLabel('Email', { exact: true }).fill(email)
     await page.getByLabel('Password', { exact: true }).fill(password)
     await page.getByRole('button', { name: 'Sign in with password', exact: true }).click()
@@ -53,6 +54,7 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
     assert.deepEqual(errors, [], 'Browser must not report console errors or uncaught exceptions')
     console.log('Browser QA passed: credential sign-in, persisted profile reload, encrypted archive download/decryption, desktop and mobile settings; no console errors')
   } catch (error) {
+    console.error('Browser QA diagnostics', { url: page.url(), errors })
     await page.screenshot({ path: path.join(artifacts, 'failure.png'), fullPage: true }).catch(() => {})
     throw error
   } finally { await browser.close() }
