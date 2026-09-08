@@ -40,3 +40,11 @@ it.each(['orphan', 'duplicate', 'ownership', 'billing', 'status'])('rejects inva
   await expect(restoreAccountHistory('owner', value)).rejects.toMatchObject({ status: 400 })
   expect(mocks.transaction).not.toHaveBeenCalled()
 })
+
+it('preserves archive order when message timestamps are identical', async () => {
+  const value = archive()
+  value.messages.push({ ...value.messages[0], id: 'second-message', content: 'Second answer' })
+  await restoreAccountHistory('owner', value)
+  const messages = mocks.create.mock.calls[0][0].data.messages.create
+  expect([...messages].sort((a, b) => a.id.localeCompare(b.id)).map(message => message.content)).toEqual(['Partial answer', 'Second answer'])
+})

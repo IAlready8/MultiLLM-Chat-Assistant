@@ -56,8 +56,8 @@ export async function restoreAccountHistory(userId: string, value: unknown) {
       const conversationMessages = messages.filter(message => message.conversationId === conversation.id)
       await tx.conversation.create({ data: {
         id, userId, title: conversation.title, createdAt: new Date(conversation.createdAt), updatedAt: new Date(conversation.updatedAt),
-        messages: { create: conversationMessages.map(message => ({
-          id: `archive_${digest(JSON.stringify([id, message.id]))}`, role: message.role, content: message.content,
+        messages: { create: conversationMessages.map((message, index) => ({
+          id: `archive_${digest(id).slice(0, 32)}_${String(index).padStart(4, '0')}`, role: message.role, content: message.content,
           provider: message.provider, model: message.model, createdAt: new Date(message.createdAt),
           clientId: message.clientId ? uuid(`${id}:${message.clientId}`) : null,
           turnId: message.turnId ? uuid(`${id}:${message.turnId}`) : null,

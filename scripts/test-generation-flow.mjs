@@ -202,6 +202,11 @@ try {
   assert.deepEqual(restoreResults.map(result => result.skippedConversations).sort(), [0, 3])
   const restoredRows = await db.query('SELECT id FROM "Conversation" WHERE "userId" = $1', [outsider])
   assert.equal(restoredRows.rows.length, 3)
+  for (const source of archive.conversations) {
+    const copy = await db.query('SELECT id FROM \"Conversation\" WHERE \"userId\" = $1 AND title = $2', [outsider, source.title])
+    const restoredMessages = await db.query('SELECT role, content FROM \"Message\" WHERE \"conversationId\" = $1 ORDER BY \"createdAt\", id', [copy.rows[0].id])
+    assert.deepEqual(restoredMessages.rows, archive.messages.filter(message => message.conversationId === source.id).map(({ role, content }) => ({ role, content })))
+  }
   assert.ok(restoredRows.rows.every(row => !historyIds.includes(row.id)))
   assert.equal((await db.query('SELECT COUNT(*)::int AS count FROM "Generation" WHERE "userId" = $1', [outsider])).rows[0].count, 0)
   assert.equal((await db.query('SELECT COUNT(*)::int AS count FROM "LlmQuotaUsage" WHERE "userId" = $1', [outsider])).rows[0].count, 0)
