@@ -162,6 +162,22 @@ try {
   const page = await (await request('/api/conversations?limit=1')).json()
   assert.equal(page.items.length, 1)
   assert.equal(page.items[0].userId, owner)
+  for (const title of ['Pipeline: Page test', 'Roundtable: Page test']) {
+    assert.equal((await request('/api/conversations', json({ title }))).status, 201)
+  }
+  let cursor
+  const historyIds = []
+  do {
+    const history = await (await request(`/api/conversations?limit=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)).json()
+    assert.ok(history.items.every(item => item.userId === owner))
+    historyIds.push(...history.items.map(item => item.id))
+    cursor = history.nextCursor
+    assert.ok(historyIds.length <= 3, 'History cursor must make progress')
+  } while (cursor)
+  assert.equal(new Set(historyIds).size, 3, 'Pagination must not duplicate or skip records')
+  const pipelineHistory = await (await request('/api/conversations?workspace=pipeline')).json()
+  assert.equal(pipelineHistory.items.length, 1)
+  assert.equal(pipelineHistory.items[0].title, 'Pipeline: Page test')
   await db.query('DELETE FROM "User" WHERE id = $1', [outsider])
   assert.equal((await other('/api/conversations')).status, 401, 'A deleted account must not retain access through its session token')
   console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'deleted account session revocation'], providerCalls }))

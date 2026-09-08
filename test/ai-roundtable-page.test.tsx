@@ -4,7 +4,7 @@ import { render, screen, waitFor } from '@/test/test-utils'
 import AIRoundtablePage from '@/app/ai-roundtable/page'
 
 const mockApiClient = vi.hoisted(() => ({
-  getConversations: vi.fn(),
+  getConversationPage: vi.fn(),
   getConversation: vi.fn(),
   createConversation: vi.fn(),
   addMessages: vi.fn(),
@@ -45,16 +45,7 @@ describe('AIRoundtablePage history behavior', () => {
       json: async () => ({ configuredProviders: ['openai', 'anthropic'] }),
     })
     vi.stubGlobal('fetch', mockFetch)
-    mockApiClient.getConversations.mockResolvedValue([
-      roundtableConversation,
-      {
-        id: 'chat-1',
-        title: 'Regular chat',
-        userId: 'user-1',
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
-      },
-    ])
+    mockApiClient.getConversationPage.mockResolvedValue({ items: [roundtableConversation], nextCursor: null })
     mockApiClient.getConversation.mockResolvedValue({
       ...roundtableConversation,
       messages: [
@@ -89,12 +80,29 @@ describe('AIRoundtablePage history behavior', () => {
 
     await screen.findByText('Roundtable: Old test chat')
 
-    expect(mockApiClient.getConversations).toHaveBeenCalledTimes(1)
+    expect(mockApiClient.getConversationPage).toHaveBeenCalledWith('roundtable', undefined)
     expect(mockApiClient.getConversation).not.toHaveBeenCalled()
     expect(
       screen.getByText('Add a goal and start the roundtable to watch agents converse.')
     ).toBeInTheDocument()
     expect(screen.queryByText('Old persisted response')).not.toBeInTheDocument()
+  })
+
+  it('preserves loaded history when an older page fails and retries the same cursor', async () => {
+    const user = userEvent.setup()
+    mockApiClient.getConversationPage
+      .mockResolvedValueOnce({ items: [roundtableConversation], nextCursor: 'older-page' })
+      .mockRejectedValueOnce(new Error('Temporary read failure'))
+      .mockResolvedValueOnce({ items: [{ ...roundtableConversation, id: 'older', title: 'Roundtable: Older thread' }], nextCursor: null })
+    render(<AIRoundtablePage />)
+    await user.click(await screen.findByRole('button', { name: 'Load more' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load roundtable history')
+    expect(screen.getByText('Roundtable: Old test chat')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(await screen.findByText('Roundtable: Older thread')).toBeVisible()
+    expect(screen.getByText('Roundtable: Old test chat')).toBeVisible()
+    expect(mockApiClient.getConversationPage).toHaveBeenLastCalledWith('roundtable', 'older-page')
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
   })
 
   it('offers every catalog-backed provider and recent OpenAI/Anthropic models', async () => {
@@ -191,9 +199,9 @@ describe('AIRoundtablePage history behavior', () => {
     })
     mockApiClient.createConversation.mockResolvedValue(newConversation)
     mockApiClient.addMessages.mockResolvedValue({})
-    mockApiClient.getConversations
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([newConversation])
+    mockApiClient.getConversationPage
+      .mockResolvedValueOnce({ items: [], nextCursor: null })
+      .mockResolvedValueOnce({ items: [newConversation], nextCursor: null })
 
     render(<AIRoundtablePage />)
 

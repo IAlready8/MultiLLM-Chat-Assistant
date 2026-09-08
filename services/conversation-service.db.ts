@@ -204,12 +204,13 @@ export const ConversationService = {
   },
 
   /**
-   * Get all conversations (metadata only) for a user.
+   * Legacy metadata list, bounded to 100 records. Active workspaces use cursors.
    */
   async getConversationsByUserId(userId: string): Promise<Conversation[]> {
     const listFallbackConversations = () =>
       Array.from(getFallbackUserStore(userId).values())
         .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+        .slice(0, 100)
         .map(toConversation)
 
     if (db.isKnownUnavailable()) {
@@ -224,6 +225,7 @@ export const ConversationService = {
         orderBy: {
           updatedAt: 'desc',
         },
+        take: 100,
       })
       if (!db.isFallbackAllowed()) {
         return conversations
@@ -244,7 +246,7 @@ export const ConversationService = {
 
       return Array.from(merged.values()).sort(
         (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
-      )
+      ).slice(0, 100)
     } catch (error) {
       if (!db.isFallbackAllowed()) {
         throw error

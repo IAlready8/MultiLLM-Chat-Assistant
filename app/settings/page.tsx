@@ -173,7 +173,7 @@ export default function SettingsPage() {
       const result = await exportAllData(password)
       toast({
         title: 'Export complete',
-        description: 'Your data was exported and downloaded successfully.',
+        description: 'Your legacy local data is ready to download.',
       })
       return result
     },
@@ -384,8 +384,8 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <Label>Export Data</Label>
-                  <p className="text-sm text-muted-foreground">Export/import local workspace data with encryption (API keys excluded)</p>
+                  <Label>Legacy Local Data</Label>
+                  <p className="text-sm text-muted-foreground">Export or import older conversations stored in this browser. Server conversation history and provider keys are not included.</p>
                 </div>
                 <ExportImportDialog
                   onExport={handleExportData}

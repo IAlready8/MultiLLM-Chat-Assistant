@@ -88,6 +88,8 @@ export default function MultiChatPage() {
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [conversationList, setConversationList] = useState<Conversation[]>([])
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null)
+  const [historyError, setHistoryError] = useState<string | null>(null)
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null)
   const [editingConversationTitle, setEditingConversationTitle] = useState('')
   const [isLoadingConversationList, setIsLoadingConversationList] = useState(false)
@@ -148,14 +150,17 @@ export default function MultiChatPage() {
   }, [toast])
 
   const refreshConversationList = useCallback(
-    async (options?: { silent?: boolean }) => {
+    async (options?: { silent?: boolean; cursor?: string }) => {
       try {
         setIsLoadingConversationList(true)
-        const conversations = await apiClient.getConversations()
-        setConversationList(conversations)
-        return conversations
+        const page = await apiClient.getConversationPage('all', options?.cursor)
+        setConversationList(previous => options?.cursor ? Array.from(new Map([...previous, ...page.items].map(item => [item.id, item])).values()) : page.items)
+        setHistoryCursor(page.nextCursor)
+        setHistoryError(null)
+        return page.items
       } catch (error) {
         console.error('Failed to refresh conversation list:', error)
+        setHistoryError('Unable to load conversation history. Try again.')
         if (!options?.silent) {
           toast({
             title: 'Error',
@@ -711,7 +716,7 @@ export default function MultiChatPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-[280px] overflow-y-auto">
-                {isLoadingConversationList ? (
+                {isLoadingConversationList && conversationList.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Loading conversations...</p>
                 ) : conversationList.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
@@ -818,6 +823,11 @@ export default function MultiChatPage() {
                     </div>
                   ))
                 )}
+              </div>
+              {historyError && <p role="alert" className="mt-2 text-xs text-destructive">{historyError}</p>}
+              <div className="mt-2 flex gap-2">
+                <Button variant="outline" size="sm" disabled={isBusy || isLoadingConversationList} onClick={() => void refreshConversationList()}>Refresh History</Button>
+                {historyCursor && <Button variant="outline" size="sm" disabled={isBusy || isLoadingConversationList} onClick={() => void refreshConversationList({ cursor: historyCursor })}>{isLoadingConversationList ? 'Loading…' : 'Load more'}</Button>}
               </div>
             </CardContent>
           </Card>

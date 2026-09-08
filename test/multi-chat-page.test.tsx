@@ -4,7 +4,7 @@ import { render, screen, waitFor, fireEvent, act } from '@/test/test-utils'
 import MultiChatPage from '@/app/multi-chat/page'
 
 const mockApiClient = vi.hoisted(() => ({
-  getConversations: vi.fn(),
+  getConversationPage: vi.fn(),
   createConversation: vi.fn(),
   addMessages: vi.fn(),
 }))
@@ -19,7 +19,7 @@ describe('MultiChatPage provider model picker', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     Element.prototype.scrollIntoView = vi.fn()
-    mockApiClient.getConversations.mockResolvedValue([])
+    mockApiClient.getConversationPage.mockResolvedValue({ items: [], nextCursor: null })
     mockApiClient.createConversation.mockResolvedValue({ id: 'saved-conversation', title: 'Test conversation', updatedAt: new Date() })
     mockApiClient.addMessages.mockResolvedValue(undefined)
     vi.stubGlobal(

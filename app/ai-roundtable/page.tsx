@@ -163,8 +163,6 @@ const deriveConversationTitle = (goal: string) => {
   return `Roundtable: ${trimmed.length > maxLength ? `${base}...` : base}`
 }
 
-const ROUNDTABLE_TITLE_PREFIX = 'Roundtable:'
-
 const formatConversationTimestamp = (value: Date | string) => {
   const timestamp = new Date(value)
   if (Number.isNaN(timestamp.getTime())) return 'Unknown'
@@ -195,6 +193,8 @@ export default function AIRoundtablePage() {
   const [maxTurns, setMaxTurns] = useState('6')
   const [messages, setMessages] = useState<RoundtableMessage[]>([])
   const [conversationList, setConversationList] = useState<Conversation[]>([])
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null)
+  const [historyError, setHistoryError] = useState<string | null>(null)
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [isLoadingConversationList, setIsLoadingConversationList] = useState(false)
   const [isLoadingConversation, setIsLoadingConversation] = useState(false)
@@ -247,17 +247,17 @@ export default function AIRoundtablePage() {
   }, [toast])
 
   const refreshConversationList = useCallback(
-    async (options?: { silent?: boolean }) => {
+    async (options?: { silent?: boolean; cursor?: string }) => {
       try {
         setIsLoadingConversationList(true)
-        const conversations = await apiClient.getConversations()
-        const roundtableConversations = conversations.filter(conversation =>
-          conversation.title.startsWith(ROUNDTABLE_TITLE_PREFIX)
-        )
-        setConversationList(roundtableConversations)
-        return roundtableConversations
+        const page = await apiClient.getConversationPage('roundtable', options?.cursor)
+        setConversationList(previous => options?.cursor ? Array.from(new Map([...previous, ...page.items].map(item => [item.id, item])).values()) : page.items)
+        setHistoryCursor(page.nextCursor)
+        setHistoryError(null)
+        return page.items
       } catch (error) {
         console.error('Failed to load roundtable conversations:', error)
+        setHistoryError('Unable to load roundtable history. Try again.')
         if (!options?.silent) {
           toast({
             title: 'Error',
@@ -265,7 +265,6 @@ export default function AIRoundtablePage() {
             variant: 'destructive',
           })
         }
-        setConversationList([])
         return [] as Conversation[]
       } finally {
         setIsLoadingConversationList(false)
@@ -803,7 +802,7 @@ export default function AIRoundtablePage() {
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="max-h-[220px] space-y-2 overflow-y-auto">
-                {isLoadingConversationList || isLoadingConversation ? (
+                {(isLoadingConversationList && conversationList.length === 0) || isLoadingConversation ? (
                   <p className="text-xs text-muted-foreground">
                     Loading roundtable history...
                   </p>
@@ -841,6 +840,7 @@ export default function AIRoundtablePage() {
                         className="h-6 w-6 p-0"
                         onClick={() => void deleteConversationById(conversation.id)}
                         disabled={isBusy}
+                        aria-label={`Delete roundtable ${conversation.title}`}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -848,12 +848,14 @@ export default function AIRoundtablePage() {
                   ))
                 )}
               </div>
+              {historyError && <p role="alert" className="text-xs text-destructive">{historyError}</p>}
+              {historyCursor && <Button variant="outline" size="sm" className="w-full" disabled={isBusy || isLoadingConversationList} onClick={() => void refreshConversationList({ cursor: historyCursor })}>{isLoadingConversationList ? 'Loading…' : 'Load more'}</Button>}
               <Button
                 variant="outline"
                 size="sm"
                 className="w-full"
                 onClick={() => void refreshConversationList()}
-                disabled={isBusy}
+                disabled={isBusy || isLoadingConversationList}
               >
                 Refresh History
               </Button>

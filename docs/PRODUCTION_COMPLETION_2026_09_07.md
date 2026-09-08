@@ -1,5 +1,7 @@
 # Production completion engineering handoff
 
+Historical checkpoint. The [September 8 completion map](PRODUCTION_COMPLETION_2026_09_08.md) supersedes its publishing, integration, quota, recovery and release-status limitations.
+
 Baseline: `main` at `9818849639be29b5f8b25c5de9e1709f37ae91d5`.
 Work branch: `codex/production-completion-20260907`.
 
