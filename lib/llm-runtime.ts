@@ -1,3 +1,4 @@
+import { reserveLlmQuota } from '@/lib/llm-quota'
 import { validateModelRequest } from '@/lib/model-contract'
 import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
@@ -68,6 +69,7 @@ export async function executeChat(userId: string, input: LlmInput, signal?: Abor
   const startedAt = Date.now()
   const call = await prepareProviderCall(userId, input, signal)
   try {
+    await reserveLlmQuota(userId)
     const result = await call.adapter.chat(call.request, call.config)
     if (typeof result.content !== 'string' || !result.content.trim()) throw new LlmRequestError('Provider returned an empty response', 502, 'PROVIDER_EMPTY_RESPONSE')
     const usage = resolveUsage(input.messages, result.content, result.usage)

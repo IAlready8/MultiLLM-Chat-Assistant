@@ -1,3 +1,4 @@
+import { reserveLlmQuota } from '@/lib/llm-quota'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { parseLlmInput, readBoundedJson } from '@/lib/llm-request'
@@ -16,6 +17,7 @@ export async function POST(request: NextRequest) {
     const controller = new AbortController()
     const signal = AbortSignal.any([request.signal, controller.signal, AbortSignal.timeout(45_000)])
     const call = await prepareProviderCall(auth.user.id, input, signal)
+    await reserveLlmQuota(auth.user.id)
     return new Response(createCompletionStream(call, input.provider, auth.user.id, controller, false), {
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
     })

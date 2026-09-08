@@ -44,6 +44,7 @@ model User {
   sessions      Session[]
   conversations Conversation[]
   generations   Generation[]
+  llmQuotaUsage LlmQuotaUsage[]
   providerConfigs ProviderConfig[]
   goals         Goal[]
   personas      Persona[]
@@ -201,4 +202,13 @@ model Generation {
 model StripeWebhookEvent {
   id String @id
   createdAt DateTime @default(now())
+}
+
+model LlmQuotaUsage {
+  id String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  units Int
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
 }

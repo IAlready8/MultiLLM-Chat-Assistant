@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -8,8 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api-client'
-import { getModelsForProvider } from '@/lib/model-catalog'
+import { getDefaultModel, getModelsForProvider } from '@/lib/model-catalog'
 import { operationalProviderRegistry } from '@/lib/provider-registry'
+import type { Conversation } from '@/types/prisma'
 import type { ProviderId } from '@/lib/providers'
 
 type ProviderResponse = {
@@ -51,7 +52,7 @@ const isProviderId = (value: string): value is ProviderId =>
 
 const createSelection = (provider: ProviderId): ProviderSelection => ({
   provider,
-  model: PROVIDER_CATALOG[provider].models[0],
+  model: getDefaultModel(provider),
   enabled: true,
 })
 
@@ -70,6 +71,23 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 export default function PipelinePage() {
   const { toast } = useToast()
   const [prompt, setPrompt] = useState('')
+  const [history, setHistory] = useState<Conversation[]>([])
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [historical, setHistorical] = useState(false)
+  const runRef = useRef(false)
+  const loadHistory = useCallback(async (cursor?: string) => {
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      const page = await apiClient.getConversationPage('pipeline', cursor)
+      setHistory(previous => cursor ? [...new Map([...previous, ...page.items].map(item => [item.id, item])).values()] : page.items)
+      setHistoryCursor(page.nextCursor)
+    } catch { setHistoryError('Could not load saved pipeline runs. Retry history loading.') }
+    finally { setHistoryLoading(false) }
+  }, [])
+  useEffect(() => { void loadHistory() }, [loadHistory])
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingProviders, setIsLoadingProviders] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -174,8 +192,22 @@ export default function PipelinePage() {
     setError(null)
   }
 
+  const loadRun = async (id: string) => {
+    if (runRef.current) return
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      const saved = await apiClient.getConversation(id)
+      setPrompt(saved.messages.find(message => message.role === 'user')?.content ?? '')
+      setResults(saved.messages.filter(message => message.role === 'assistant').map(message => ({ provider: message.provider ?? '', model: message.model ?? '', content: message.content, status: message.generationStatus, prompt_tokens: 0, completion_tokens: 0, latency_ms: 0, cost_usd: null })))
+      setHistorical(true)
+    } catch { setHistoryError('Could not open this saved run. Try again.') }
+    finally { setHistoryLoading(false) }
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (runRef.current) return
 
     const promptValue = prompt.trim()
     if (!promptValue) {
@@ -188,15 +220,23 @@ export default function PipelinePage() {
       return
     }
 
+    runRef.current = true
     setIsLoading(true)
+    setHistorical(false)
     setError(null)
     setFallbackMode(null)
     setResults([])
 
     try {
+      const turnId = crypto.randomUUID()
+      const conversation = await apiClient.createConversation({ title: `Pipeline: ${promptValue.slice(0, 80)}`, messages: [{ role: 'user', content: promptValue, clientId: turnId }] })
+      setHistory(previous => [conversation, ...previous])
       const orchestrationRequest = {
+        conversationId: conversation.id,
+        turnId,
         prompt: promptValue,
         requests: activeSelections.map(selection => ({
+          requestId: crypto.randomUUID(),
           provider: selection.provider,
           model: selection.model,
           prompt: promptValue,
@@ -207,12 +247,6 @@ export default function PipelinePage() {
       setResults(data.results)
       setFallbackMode(data.fallbackMode)
 
-      if (data.fallbackMode) {
-        toast({
-          title: 'Fallback mode active',
-          description: `Using local orchestration (${data.fallbackMode}).`,
-        })
-      }
     } catch (submitError) {
       const message =
         submitError instanceof Error
@@ -220,6 +254,7 @@ export default function PipelinePage() {
           : 'An unknown error occurred.'
       setError(message)
     } finally {
+      runRef.current = false
       setIsLoading(false)
     }
   }
@@ -231,7 +266,7 @@ export default function PipelinePage() {
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle>LLM Orchestration Pipeline</CardTitle>
             <Badge variant="secondary">Interactive</Badge>
-            {fallbackMode ? (
+            {fallbackMode && fallbackMode !== 'native' ? (
               <Badge variant="outline">Fallback: {fallbackMode}</Badge>
             ) : null}
           </div>
@@ -251,8 +286,20 @@ export default function PipelinePage() {
             </div>
           ) : null}
 
+          <details className="rounded-md border p-3">
+            <summary className="cursor-pointer font-medium">Saved pipeline runs ({history.length})</summary>
+            {historyError ? <p role="alert" className="text-sm text-destructive">{historyError}</p> : null}
+            {!historyLoading && history.length === 0 ? <p className="py-2 text-sm">No saved runs yet.</p> : null}
+            <div className="max-h-56 overflow-y-auto py-2 space-y-1">
+              {history.map(item => <Button key={item.id} variant="ghost" className="h-auto w-full justify-start whitespace-normal text-left" disabled={isLoading || historyLoading} onClick={() => void loadRun(item.id)}>{item.title}</Button>)}
+            </div>
+            <Button variant="outline" disabled={historyLoading || isLoading} onClick={() => void loadHistory()}>{historyLoading ? 'Loading history...' : 'Refresh history'}</Button>
+            {historyCursor ? <Button variant="ghost" disabled={historyLoading || isLoading} onClick={() => void loadHistory(historyCursor)}>Load more runs</Button> : null}
+          </details>
           <form onSubmit={handleSubmit} className="space-y-5">
             <Textarea
+              aria-label="Pipeline prompt"
+              maxLength={10000}
               value={prompt}
               onChange={event => setPrompt(event.target.value)}
               placeholder="Enter your prompt here..."
@@ -355,7 +402,7 @@ export default function PipelinePage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading || historyLoading || isLoadingProviders}>
                 {isLoading ? 'Processing...' : 'Run Orchestration'}
               </Button>
               <Button
@@ -395,7 +442,7 @@ export default function PipelinePage() {
                 <Card className="bg-muted/30">
                   <CardContent className="p-4">
                     <p className="text-xs text-muted-foreground">Avg Latency</p>
-                    <p className="text-xl font-semibold">{averageLatency}ms</p>
+                    <p className="text-xl font-semibold">{historical ? 'Unavailable' : `${averageLatency}ms`}</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-muted/30">
@@ -409,7 +456,7 @@ export default function PipelinePage() {
               </div>
 
               <p className="text-xs text-muted-foreground">
-                Total estimated tokens processed: {totalTokens.toLocaleString()}
+                {historical ? 'Saved results loaded. Timing and token totals are not shown for historical runs.' : `Total tokens processed: ${totalTokens.toLocaleString()}`}
               </p>
 
               {results.map(result => (
@@ -420,16 +467,17 @@ export default function PipelinePage() {
                         result.provider}{' '}
                       ({result.model})
                     </CardTitle>
-                    <p className="text-xs text-muted-foreground">
+                    {!historical ? <p className="text-xs text-muted-foreground">
                       Latency: {result.latency_ms}ms | Prompt tokens:{' '}
                       {result.prompt_tokens.toLocaleString()} | Completion tokens:{' '}
                       {result.completion_tokens.toLocaleString()} | Cost:{' '}
                       {result.cost_usd === null ? 'Unavailable' : currencyFormatter.format(result.cost_usd)}
-                    </p>
+                    </p> : null}
                   </CardHeader>
                   <CardContent>
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {result.content || 'No content returned.'}
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                      {result.content || (result.status === 'running' ? 'Generation is running. Reload this run shortly.' : result.error || 'Response interrupted or unavailable. Run again to retry.')}
+                      {result.content && result.status && result.status !== 'complete' ? `\n\nStatus: ${result.status}` : ''}
                     </p>
                   </CardContent>
                 </Card>

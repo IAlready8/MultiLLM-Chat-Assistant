@@ -36,6 +36,8 @@ const {
   }
 })
 
+vi.mock('@/lib/billing-price', () => ({ getProPrice: vi.fn().mockResolvedValue({ id: 'price_test', label: '$10 / month' }) }))
+
 vi.mock('@/lib/billing-lock', () => ({ withBillingLock: async (_key: string, work: () => Promise<unknown>) => work() }))
 
 vi.mock('@/lib/api-auth', () => ({

@@ -26,6 +26,7 @@ const modelApi = createServer(async (req, res) => {
   const input = JSON.parse(body)
   providerCalls++
   if (input.model === 'qa-fail') { res.writeHead(429); res.end('{"error":"private provider error detail"}'); return }
+  if (input.stream === false) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ message: { content: `answer:${input.model}` }, done: true, prompt_eval_count: 12, eval_count: 4 })); return }
   res.setHeader('Content-Type', 'application/x-ndjson')
   const emit = value => res.write(JSON.stringify(value) + '\n')
   emit({ message: { content: `answer:${input.model}` }, done: false })
@@ -76,7 +77,13 @@ try {
   await once(modelApi, 'listening')
   const request = await login(owner)
   const other = await login(outsider)
+  if (process.env.REQUIRE_DISTRIBUTED_RATE_LIMIT === 'true') {
+    const health = await (await request('/api/health')).json()
+    assert.equal(health.checks.rateLimit.status, 'connected')
+    assert.equal(health.checks.rateLimit.scope, 'distributed')
+  }
   assert.equal((await client()('/api/conversations')).status, 401)
+  assert.equal((await request('/api/conversations', { ...json({ title: 'Denied origin' }), headers: { 'Content-Type': 'application/json', Origin: 'https://untrusted.example' } })).status, 403)
   const turnId = randomUUID()
   const create = await request('/api/conversations', json({ title: 'Generation integration test', messages: [{ role: 'user', content: 'Compare this prompt. '.repeat(30), clientId: turnId }] }))
   assert.equal(create.status, 201)
@@ -130,7 +137,34 @@ try {
   const ledger = await db.query('SELECT status, "usageSource", "promptTokens", "completionTokens" FROM "Generation" WHERE "conversationId" = $1', [conversation.id])
   assert.equal(ledger.rows.length, 6, 'Replay and conflicting request IDs must not create additional usage rows')
   assert.ok(ledger.rows.filter(row => row.status === 'complete').every(row => row.usageSource === 'provider' && row.promptTokens === 12 && row.completionTokens === 4))
-  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger'], providerCalls }))
+  // Simulate a process dying after its last durable checkpoint.
+  await db.query(`UPDATE "Generation" SET status = $1, "leaseExpiresAt" = NOW() - INTERVAL '1 minute' WHERE "conversationId" = $2 AND "messageId" IN (SELECT id FROM "Message" WHERE model = $3)`, ['running', conversation.id, 'qa-cancel'])
+  await db.query('UPDATE "Message" SET "generationStatus" = $1 WHERE "conversationId" = $2 AND model = $3', ['running', conversation.id, 'qa-cancel'])
+  const recovered = await (await request(`/api/conversations/${conversation.id}`)).json()
+  assert.equal(recovered.messages.find(message => message.model === 'qa-cancel').generationStatus, 'interrupted')
+  assert.equal(recovered.messages.find(message => message.model === 'qa-cancel').content, 'answer:qa-cancel')
+  if (process.env.LLM_MONTHLY_REQUEST_LIMITS) {
+    const ownerUsage = await db.query('SELECT SUM(units)::int AS used FROM "LlmQuotaUsage" WHERE "userId" = $1', [owner])
+    assert.equal(ownerUsage.rows[0].used, 6, 'Replay, rejected ownership and duplicate requests must not consume quota')
+    const attempts = await Promise.all(Array.from({ length: 9 }, () => other('/api/llm/stream', json({ provider: 'ollama', model: 'qa-fast', messages: [{ role: 'user', content: 'quota test' }] }))))
+    assert.equal(attempts.filter(response => response.status === 200).length, 8, 'Atomic quota admission must never exceed the configured allowance')
+    assert.equal(attempts.filter(response => response.status === 429).length, 1)
+    await Promise.all(attempts.map(response => response.text()))
+  }
+  const savedBatch = { conversationId: conversation.id, turnId: duplicateTurn.messages[0].clientId, prompt: 'Next turn', requests: ['qa-fast', 'qa-slow'].map(model => ({ provider: 'ollama', model, prompt: 'Next turn', requestId: randomUUID() })) }
+  const pipelineResults = await (await request('/api/llm/orchestrate', json(savedBatch))).json()
+  assert.equal(pipelineResults.length, 2)
+  assert.ok(pipelineResults.every(item => item.status === 'complete'))
+  const callsBeforeBatchReplay = providerCalls
+  const batchReplay = await (await request('/api/llm/orchestrate', json(savedBatch))).json()
+  assert.ok(batchReplay.every(item => item.replay === true))
+  assert.equal(providerCalls, callsBeforeBatchReplay)
+  const page = await (await request('/api/conversations?limit=1')).json()
+  assert.equal(page.items.length, 1)
+  assert.equal(page.items[0].userId, owner)
+  await db.query('DELETE FROM "User" WHERE id = $1', [outsider])
+  assert.equal((await other('/api/conversations')).status, 401, 'A deleted account must not retain access through its session token')
+  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'deleted account session revocation'], providerCalls }))
 } finally {
   modelApi.closeAllConnections()
   if (modelApi.listening) await new Promise(resolve => modelApi.close(resolve))

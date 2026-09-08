@@ -53,6 +53,7 @@ const createStubDelegate = <T>(label: string): PrismaModelDelegate<T> => {
 
 const createStubClient = (): PrismaClient => {
   const stub = {
+    llmQuotaUsage: createStubDelegate<{ id: string; userId: string; units: number; createdAt: Date }>('llmQuotaUsage'),
     generation: createStubDelegate<import('@/types/prisma').Generation>('generation'),
     stripeWebhookEvent: createStubDelegate<{ id: string; createdAt: Date }>('stripeWebhookEvent'),
     user: createStubDelegate<User>('user'),

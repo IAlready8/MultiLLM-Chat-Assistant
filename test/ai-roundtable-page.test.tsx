@@ -29,7 +29,7 @@ const createStreamResponse = (text: string) =>
   new Response(
     new ReadableStream({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode(text))
+        controller.enqueue(new TextEncoder().encode(JSON.stringify({ type: 'chunk', content: text }) + '\n' + JSON.stringify({ type: 'done' }) + '\n'))
         controller.close()
       },
     }),
@@ -169,7 +169,7 @@ describe('AIRoundtablePage history behavior', () => {
     expect(screen.getByText('Roundtable: Old test chat')).toBeInTheDocument()
   })
 
-  it('archives a completed roundtable and clears the active transcript', async () => {
+  it('persists completed turns on the server and retains the active transcript', async () => {
     const user = userEvent.setup()
     const newConversation = {
       id: 'roundtable-new',
@@ -180,7 +180,7 @@ describe('AIRoundtablePage history behavior', () => {
     }
 
     mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
-      if (String(input).includes('/api/llm/chat')) {
+      if (String(input).includes('/api/llm/stream')) {
         return createStreamResponse('Archived response')
       }
 
@@ -207,14 +207,14 @@ describe('AIRoundtablePage history behavior', () => {
     await user.click(screen.getByRole('button', { name: /^start$/i }))
 
     expect(await screen.findByText('Roundtable saved to history.')).toBeInTheDocument()
-    expect(goalInput).toHaveValue('')
-    expect(
-      screen.getByText('Add a goal and start the roundtable to watch agents converse.')
-    ).toBeInTheDocument()
-    expect(screen.queryByText('Archived response')).not.toBeInTheDocument()
+    expect(goalInput).toHaveValue('New archived goal')
+    expect(screen.getAllByText('Archived response')).toHaveLength(2)
+    expect(mockApiClient.addMessages).not.toHaveBeenCalled()
+    const generationRequest = mockFetch.mock.calls.find(call => String(call[0]).includes('/api/llm/stream'))
+    expect(JSON.parse(generationRequest![1].body)).toMatchObject({ conversationId: expect.any(String), turnId: expect.any(String), requestId: expect.any(String) })
     expect(await screen.findByText('Roundtable: New archived goal')).toBeInTheDocument()
     expect(
       screen.getByText('Roundtable: New archived goal').closest('button')?.parentElement?.className
-    ).not.toContain('border-primary')
+    ).toContain('border-primary')
   }, 10_000)
 })

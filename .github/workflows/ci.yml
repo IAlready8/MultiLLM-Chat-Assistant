@@ -69,12 +69,23 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
 
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/multillm_smoke
       NEXTAUTH_SECRET: ci-smoke-test-secret-32chars-min
       NEXTAUTH_URL: http://localhost:3000
       API_KEY_ENCRYPTION_SEED: ci-smoke-encryption-seed-32chars
+      REDIS_URL: redis://localhost:6379
+      REQUIRE_DISTRIBUTED_RATE_LIMIT: 'true'
 
     steps:
       - name: Checkout code
@@ -122,6 +133,7 @@ jobs:
       - name: Authenticated generation integration tests
         env:
           GENERATION_INTEGRATION_TEST: 'true'
+          LLM_MONTHLY_REQUEST_LIMITS: '{"FREE":8,"PRO":100,"ENTERPRISE":null}'
           GENERATION_TEST_BASE_URL: http://localhost:3001
           NEXTAUTH_URL: http://localhost:3001
         run: |

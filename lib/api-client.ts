@@ -14,11 +14,14 @@ type NewGoal = Omit<Goal, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
 
 // Types for Orchestration
 type ProviderRequest = {
+  requestId?: string
   provider: string
   model: string
   prompt: string
 }
 type OrchestrateRequest = {
+  conversationId?: string
+  turnId?: string
   requests: ProviderRequest[]
   prompt: string
 }
@@ -115,6 +118,11 @@ export const apiClient = {
   },
 
   // --- Conversation API Calls ---
+  async getConversationPage(workspace = 'all', cursor?: string): Promise<{ items: Conversation[]; nextCursor: string | null }> {
+    const query = new URLSearchParams({ limit: '30', workspace })
+    if (cursor) query.set('cursor', cursor)
+    return handleResponse(await fetch(`/api/conversations?${query}`, { cache: 'no-store' }))
+  },
   async getConversations(): Promise<Conversation[]> {
     return handleResponse(await fetch('/api/conversations'))
   },

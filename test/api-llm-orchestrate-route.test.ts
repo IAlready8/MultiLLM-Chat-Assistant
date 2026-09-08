@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), chat: vi.fn() }))
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), chat: vi.fn(), begin: vi.fn(), finish: vi.fn() }))
+vi.mock('@/services/generation-service', () => ({ beginGeneration: mocks.begin, finishGeneration: mocks.finish }))
 vi.mock('@/lib/api-auth', () => ({ getAuthenticatedUser: mocks.auth }))
 vi.mock('@/lib/llm-runtime', async importOriginal => ({ ...await importOriginal<typeof import('@/lib/llm-runtime')>(), executeChat: mocks.chat }))
 import { POST } from '@/app/api/llm/orchestrate/route'
@@ -13,6 +14,19 @@ const answer = (content = 'answer') => ({ content, usage: { prompt_tokens: 1, co
 describe('native orchestration and explicit sidecar', () => {
   beforeEach(() => { vi.clearAllMocks(); vi.stubEnv('PYTHON_CORE_URL', ''); vi.stubGlobal('fetch', vi.fn()); mocks.auth.mockResolvedValue({ user: { id: 'user-1' } }); mocks.chat.mockResolvedValue(answer()) })
   afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+  it('persists saved runs before completing and replays without dispatch', async () => {
+    const saved = { ...input, conversationId: 'conversation', turnId: '00000000-0000-4000-8000-000000000001', requests: [{ ...input.requests[0], requestId: '00000000-0000-4000-8000-000000000002' }] }
+    mocks.begin.mockResolvedValue({ id: 'generation', replay: null })
+    mocks.finish.mockResolvedValue(undefined)
+    const response = await POST(request(saved))
+    expect(await response.json()).toMatchObject([{ status: 'complete' }])
+    expect(mocks.finish).toHaveBeenCalledWith('user-1', 'generation', 'answer', 'complete', expect.any(Object))
+    mocks.chat.mockClear()
+    mocks.begin.mockResolvedValue({ id: 'generation', replay: 'saved answer' })
+    expect(await (await POST(request(saved))).json()).toMatchObject([{ content: 'saved answer', replay: true }])
+    expect(mocks.chat).not.toHaveBeenCalled()
+  })
+
   it('forwards authentication failures without any provider dispatch', async () => {
     mocks.auth.mockResolvedValue(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
     expect((await POST(request())).status).toBe(401)

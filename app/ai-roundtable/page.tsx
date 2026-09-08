@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Bot, Play, Plus, RotateCcw, Square, Target, Trash2, X } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
+import { readChatStream } from '@/services/stream-client'
 import { apiClient } from '@/lib/api-client'
 import { getDefaultModel, getModelsForProvider } from '@/lib/model-catalog'
 import { operationalProviderRegistry } from '@/lib/provider-registry'
@@ -144,52 +145,14 @@ const streamProviderResponse = async (
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   model: string,
   onChunk: (chunk: string) => void,
+  saved: { conversationId: string; turnId: string; requestId: string; instanceId: string },
   signal?: AbortSignal
 ) => {
-  const response = await fetch('/api/llm/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, messages, model, stream: true }),
-    signal
+  const response = await fetch('/api/llm/stream', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, messages, model, ...saved, position: 0 }), signal,
   })
-
-  if (!response.ok) {
-    let errorMessage = `HTTP ${response.status}`
-    try {
-      const errorBody = await response.json()
-      errorMessage = errorBody?.error || errorMessage
-    } catch {}
-    throw new Error(errorMessage)
-  }
-
-  if (!response.body) {
-    throw new Error('No response body received')
-  }
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let fullContent = ''
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      const chunk = decoder.decode(value, { stream: true })
-      if (chunk) {
-        fullContent += chunk
-        onChunk(chunk)
-      }
-    }
-    const finalChunk = decoder.decode()
-    if (finalChunk) {
-      fullContent += finalChunk
-      onChunk(finalChunk)
-    }
-  } finally {
-    reader.releaseLock()
-  }
-
-  return fullContent
+  return readChatStream(response, onChunk, signal)
 }
 
 const deriveConversationTitle = (goal: string) => {
@@ -229,7 +192,7 @@ export default function AIRoundtablePage() {
   const { toast } = useToast()
   const stableIdBase = useId()
   const [goal, setGoal] = useState('')
-  const [maxTurns, setMaxTurns] = useState(6)
+  const [maxTurns, setMaxTurns] = useState('6')
   const [messages, setMessages] = useState<RoundtableMessage[]>([])
   const [conversationList, setConversationList] = useState<Conversation[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
@@ -351,7 +314,7 @@ export default function AIRoundtablePage() {
 
       for (const message of sortedMessages) {
         if (message.role !== 'assistant') continue
-        const parsed = parseAgentMessage(message)
+        const parsed = message.instanceId ? { agentName: message.instanceId, content: message.content } : parseAgentMessage(message)
         transcript.push({
           id: message.id,
           kind: 'agent',
@@ -419,10 +382,7 @@ export default function AIRoundtablePage() {
   }
 
   const handleMaxTurnsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = Number(e.target.value)
-    if (Number.isNaN(value)) return
-    const clamped = Math.max(2, Math.min(30, value))
-    setMaxTurns(clamped)
+    setMaxTurns(e.target.value)
   }
 
   const addAgent = (provider: string) => {
@@ -484,7 +444,7 @@ export default function AIRoundtablePage() {
     setStatusMessage({ type: 'info', text: 'Roundtable stopped.' })
   }
 
-  const createConversation = async (goalText: string) => {
+  const createConversation = async (goalText: string, turnId: string) => {
     try {
       const title = deriveConversationTitle(goalText)
       const newConversation = await apiClient.createConversation({
@@ -493,6 +453,7 @@ export default function AIRoundtablePage() {
           {
             role: 'user',
             content: `Goal: ${goalText}`,
+            clientId: turnId,
             provider: null,
             model: null
           }
@@ -515,34 +476,12 @@ export default function AIRoundtablePage() {
     }
   }
 
-  const persistAssistantMessage = async (
-    conversationId: string,
-    agent: AgentConfig,
-    content: string
-  ) => {
-    try {
-      const agentLabel = resolveAgentName(agent.name)
-      const storedContent = agentLabel ? `${agentLabel}: ${content}` : content
-      await apiClient.addMessages(conversationId, [
-        {
-          role: 'assistant',
-          content: storedContent,
-          provider: agent.provider,
-          model: agent.model || null
-        }
-      ])
-      touchConversation(conversationId)
-    } catch (error) {
-      console.error('Failed to save assistant message:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to save a roundtable response.',
-        variant: 'destructive'
-      })
-    }
-  }
-
   const startRoundtable = async () => {
+    const turnLimit = Number(maxTurns)
+    if (!Number.isInteger(turnLimit) || turnLimit < 2 || turnLimit > 30) {
+      setStatusMessage({ type: 'error', text: 'Choose between 2 and 30 turns.' })
+      return
+    }
     if (isRunningRef.current) return
 
     setStatusMessage(null)
@@ -608,7 +547,8 @@ export default function AIRoundtablePage() {
     isRunningRef.current = true
     setStatusMessage({ type: 'info', text: 'Roundtable running...' })
 
-    const conversation = await createConversation(trimmedGoal)
+    const turnId = crypto.randomUUID()
+    const conversation = await createConversation(trimmedGoal, turnId)
     if (!conversation) {
       setIsRunning(false)
       isRunningRef.current = false
@@ -632,7 +572,7 @@ export default function AIRoundtablePage() {
     let endState: 'completed' | 'stopped' | 'error' | null = null
 
     try {
-      for (let turn = 0; turn < maxTurns; turn += 1) {
+      for (let turn = 0; turn < turnLimit; turn += 1) {
         if (!isRunningRef.current) {
           endState = 'stopped'
           break
@@ -673,6 +613,7 @@ export default function AIRoundtablePage() {
               )
               setMessages(workingMessages)
             },
+            { conversationId, turnId, requestId: crypto.randomUUID(), instanceId: agentLabel.slice(0, 128) },
             abortControllerRef.current?.signal
           )
 
@@ -687,7 +628,7 @@ export default function AIRoundtablePage() {
           setMessages(workingMessages)
 
           if (trimmedContent) {
-            await persistAssistantMessage(conversationId, agent, trimmedContent)
+            touchConversation(conversationId)
           }
         } catch (error) {
           if ((error as Error)?.name === 'AbortError') {
@@ -699,7 +640,7 @@ export default function AIRoundtablePage() {
           const errorMessage = (error as Error).message || 'Failed to get a response.'
           endState = 'error'
           workingMessages = workingMessages.map(message =>
-            message.id === typingId ? { ...message, content: `Error: ${errorMessage}` } : message
+            message.id === typingId ? { ...message, content: `${streamedContent}${streamedContent ? '\n\n' : ''}Error: ${errorMessage}` } : message
           )
           setMessages(workingMessages)
           setStatusMessage({ type: 'error', text: errorMessage })
@@ -719,7 +660,6 @@ export default function AIRoundtablePage() {
       isRunningRef.current = false
       abortControllerRef.current = null
       await refreshConversationList({ silent: true })
-      resetRoundtable({ clearGoal: true })
       if (endState === 'completed') {
         setStatusMessage({ type: 'success', text: 'Roundtable saved to history.' })
       } else if (endState === 'stopped') {

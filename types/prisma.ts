@@ -100,6 +100,7 @@ export type PrismaModelDelegate<T> = {
 }
 
 export interface PrismaClient {
+  llmQuotaUsage: PrismaModelDelegate<{ id: string; userId: string; units: number; createdAt: Date }>
   generation: PrismaModelDelegate<Generation>
   stripeWebhookEvent: PrismaModelDelegate<{ id: string; createdAt: Date }>
   user: PrismaModelDelegate<User>

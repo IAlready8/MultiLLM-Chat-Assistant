@@ -1,5 +1,6 @@
 import { orderConversationMessages, reconcileExpiredGenerations } from './generation-service'
 import { prisma } from '@/lib/prisma'
+import { conversationCursor, type parseConversationPage } from '@/lib/conversation-pagination'
 import { Conversation, Message, PrismaClient } from '@/types/prisma'
 import {
   createDbAvailabilityTracker,
@@ -76,6 +77,21 @@ const countWeeklySavedBriefComparisonFallbackConversations = (
  * replacing the old client-side IndexedDB logic.
  */
 export const ConversationService = {
+  async getConversationPage(userId: string, page: ReturnType<typeof parseConversationPage>) {
+    const date = page.cursor ? new Date(page.cursor.updatedAt) : undefined
+    const items = await prisma.conversation.findMany({
+      where: {
+        userId,
+        ...(page.prefix ? { title: { startsWith: page.prefix } } : {}),
+        ...(page.cursor ? { OR: [{ updatedAt: { lt: date } }, { updatedAt: date, id: { lt: page.cursor.id } }] } : {}),
+      },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take: page.limit + 1,
+    })
+    const more = items.length > page.limit
+    const visible = items.slice(0, page.limit)
+    return { items: visible, nextCursor: more ? conversationCursor(visible[visible.length - 1]) : null }
+  },
   async getComparisonReadyConversationCountByUserId(
     userId: string
   ): Promise<number> {

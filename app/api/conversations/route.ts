@@ -13,6 +13,7 @@ import {
 } from '@/lib/api-read-cache'
 import { z } from 'zod'
 import { readBoundedJson, LlmRequestError } from '@/lib/llm-request'
+import { parseConversationPage } from '@/lib/conversation-pagination'
 
 // Zod schema for creating a conversation
 const createConvoSchema = z.object({
@@ -41,12 +42,17 @@ export const GET = withApiMetrics(async (_req: Request) => {
   const { user } = authCheck
 
   try {
+    const params = new URL(_req.url).searchParams
+    if (['limit', 'cursor', 'workspace'].some(key => params.has(key))) {
+      return NextResponse.json(await ConversationService.getConversationPage(user.id, parseConversationPage(params)), { headers: { 'Cache-Control': 'no-store' } })
+    }
     return await cachedJsonResponse(
       '/api/conversations',
       apiReadCacheKey('/api/conversations', user.id),
       () => ConversationService.getConversationsByUserId(user.id)
     )
   } catch (error) {
+    if (error instanceof LlmRequestError) return NextResponse.json({ error: error.message }, { status: error.status })
     console.error('Error loading conversations:', error)
     return NextResponse.json(
       { error: 'Failed to load conversations' },

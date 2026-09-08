@@ -1,3 +1,4 @@
+import { reserveLlmQuota } from '@/lib/llm-quota'
 import { after, NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { parseLlmInput, readBoundedJson } from '@/lib/llm-request'
@@ -32,6 +33,10 @@ export async function POST(request: NextRequest) {
         finish: (content, status, usage) => finishGeneration(auth.user.id, generation.id, content, status, usage),
         settled,
       }
+    }
+    try { await reserveLlmQuota(auth.user.id) } catch (error) {
+      try { await persistence?.finish('', 'failed', { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, usage_source: 'estimated' }) } finally { persistence?.settled() }
+      throw error
     }
     return new Response(createCompletionStream(call, input.provider, auth.user.id, controller, true, persistence), {
       headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' },

@@ -1,3 +1,4 @@
+import { getProPrice } from '@/lib/billing-price'
 import { withBillingLock } from '@/lib/billing-lock'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
 
   try {
     ensureStripeConfigured('checkout')
+    await getProPrice()
 
     const stripeCustomerId = await getOrCreateStripeCustomer(
       user.id,
@@ -111,7 +113,7 @@ export async function POST(req: Request) {
           tier: 'PRO',
           userId: user.id,
         },
-      }, { idempotencyKey: `checkout:${user.id}:${STRIPE_PRO_PRICE_ID}:${Math.floor(Date.now() / 1800000)}` })
+      }, { idempotencyKey: `checkout:${user.id}:${STRIPE_PRO_PRICE_ID}:${existingSubscriptions.data[0]?.id ?? 'new'}:${Math.floor(Date.now() / 1800000)}` })
       return { url: session.url, destination: 'checkout' }
     })
 

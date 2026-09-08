@@ -1,3 +1,5 @@
+import { getLlmQuota } from '@/lib/llm-quota'
+import { getProPrice } from '@/lib/billing-price'
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -21,7 +23,7 @@ export default async function BillingPage() {
   }
 
   const userId = session.user.id
-  const [weeklySavedBriefComparisons, subscription] = await Promise.all([
+  const [weeklySavedBriefComparisons, subscription, quota, proPrice] = await Promise.all([
     userId
       ? ConversationService.getWeeklySavedBriefComparisonCountForRollingDays(
           userId,
@@ -33,10 +35,15 @@ export default async function BillingPage() {
           where: { userId },
           select: {
             tier: true,
+            stripeStatus: true,
+            stripeCancelAtPeriodEnd: true,
+            stripeCustomerId: true,
             stripeCurrentPeriodEnd: true,
           },
         })
       : null,
+    userId ? getLlmQuota(userId) : null,
+    isStripeCheckoutConfigured ? getProPrice().catch(() => null) : null,
   ])
 
   const tier: SubscriptionTier =
@@ -60,6 +67,11 @@ export default async function BillingPage() {
         <CardContent>
           <BillingClient
             tier={tier}
+            status={subscription?.stripeStatus}
+            cancelAtPeriodEnd={subscription?.stripeCancelAtPeriodEnd}
+            hasBillingAccount={Boolean(subscription?.stripeCustomerId)}
+            quota={quota}
+            proPriceLabel={proPrice?.label}
             periodEnd={
               subscription?.stripeCurrentPeriodEnd?.toISOString() || null
             }
@@ -68,7 +80,7 @@ export default async function BillingPage() {
               FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE
             }
             weeklySavedBriefComparisons={weeklySavedBriefComparisons}
-            checkoutEnabled={isStripeCheckoutConfigured}
+            checkoutEnabled={isStripeCheckoutConfigured && Boolean(proPrice)}
             portalEnabled={isStripeApiConfigured}
           />
         </CardContent>

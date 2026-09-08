@@ -11,6 +11,7 @@ const PUBLIC_PATHS = new Set([
   '/api/auth',
   '/api/health',
   '/api/webhooks',
+  '/api/cron/generations', // Bearer-authenticated by the route, not a browser session.
 ])
 
 const isPublicPath = (pathname: string): boolean => {
@@ -32,6 +33,13 @@ const isStaticAsset = (pathname: string): boolean =>
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  if (pathname.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method) && !isPublicPath(pathname)) {
+    const origin = request.headers.get('origin')
+    if ((origin && origin !== request.nextUrl.origin) || request.headers.get('sec-fetch-site') === 'cross-site') {
+      return NextResponse.json({ error: 'Cross-origin request denied' }, { status: 403 })
+    }
+  }
 
   // Always allow static assets and public auth routes
   if (isStaticAsset(pathname) || isPublicPath(pathname)) {

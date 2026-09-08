@@ -1,3 +1,4 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
@@ -136,7 +137,8 @@ export async function POST(request: NextRequest) {
   const { user } = authCheck
 
   try {
-    const body = await request.json()
+    const body = await readApiObject(request)
+  if (body instanceof NextResponse) return body
     const { provider: providerRaw, config } = body
 
     if (!providerRaw || typeof providerRaw !== 'string') {
@@ -173,7 +175,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
+    const apiKey = 'apiKey' in config && typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
     if (!apiKey && isProviderApiKeyRequired(provider)) {
       return NextResponse.json(
         {
@@ -222,7 +224,8 @@ export async function PUT(request: NextRequest) {
   const { user } = authCheck
 
   try {
-    const body = await request.json()
+    const body = await readApiObject(request)
+  if (body instanceof NextResponse) return body
     const { provider: providerRaw, config } = body
 
     if (!providerRaw || typeof providerRaw !== 'string') {
@@ -267,7 +270,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Validate API key format if provided
-    const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
+    const apiKey = 'apiKey' in config && typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
     if (
       (!apiKey || apiKey.length < 10) &&
       isProviderApiKeyRequired(provider)
