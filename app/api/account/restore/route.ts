@@ -16,5 +16,11 @@ export async function POST(request: Request) {
     const result = await restoreAccountHistory(auth.user.id, await readBoundedJson(request, ACCOUNT_RESTORE_MAX_BYTES))
     invalidateApiReadCache(apiReadCacheKey('/api/conversations', auth.user.id))
     return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } })
-  } catch (error) { return llmErrorResponse(error) }
+  } catch (error) {
+    if (!(error instanceof LlmRequestError)) {
+      const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' ? error.code : 'UNKNOWN'
+      console.error('account_restore_failed', { code })
+    }
+    return llmErrorResponse(error)
+  }
 }

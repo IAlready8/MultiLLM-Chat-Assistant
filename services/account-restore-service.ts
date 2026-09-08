@@ -46,7 +46,7 @@ export async function restoreAccountHistory(userId: string, value: unknown) {
   const archiveId = digest(JSON.stringify({ conversations, messages }))
   const targetId = (id: string) => `archive_${digest(JSON.stringify([userId, archiveId, id]))}`
   return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`account-restore:${userId}`}, 0))`
+    await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${`account-restore:${userId}`}, 0))`
     const existing = await tx.conversation.findMany({ where: { userId, id: { in: conversations.map(item => targetId(item.id)) } }, select: { id: true } })
     const restored = new Set(existing.map(item => item.id))
     let createdMessages = 0
