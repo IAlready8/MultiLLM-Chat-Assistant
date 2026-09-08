@@ -1,3 +1,4 @@
+import { providerSignal } from './util'
 /**
  * OpenAI provider adapter.
  *
@@ -77,7 +78,7 @@ export const openaiAdapter: ProviderAdapter = {
         ...config.extraHeaders,
       },
       body: JSON.stringify(buildChatPayload(request, false)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('openai', response, false)
@@ -103,13 +104,13 @@ export const openaiAdapter: ProviderAdapter = {
         Authorization: `Bearer ${config.apiKey}`,
         ...config.extraHeaders,
       },
-      body: JSON.stringify(buildChatPayload(request, true)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      body: JSON.stringify({ ...buildChatPayload(request, true), stream_options: { include_usage: true } }),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('openai', response, true)
     const body = requireBody('openai', response)
 
-    yield* parseSSEStream(body, (parsed) => parsed.choices?.[0]?.delta?.content)
+    yield* parseSSEStream(body, (parsed) => parsed.choices?.[0]?.delta?.content, request.onUsage)
   },
 }

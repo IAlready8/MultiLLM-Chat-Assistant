@@ -43,6 +43,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   conversations Conversation[]
+  generations   Generation[]
   providerConfigs ProviderConfig[]
   goals         Goal[]
   personas      Persona[]
@@ -66,6 +67,9 @@ model Conversation {
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
+  generations Generation[]
+
+  @@index([userId, updatedAt])
 }
 
 model Message {
@@ -76,10 +80,18 @@ model Message {
   model          String? // e.g., "gpt-4", "claude-2"
   createdAt      DateTime     @default(now())
 
+  clientId       String?
+  instanceId     String?
+  turnId         String?
+  position       Int?
+  generationStatus String @default("complete")
+  generation     Generation?
+
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
+  @@unique([conversationId, clientId])
 }
 
 model ProviderConfig {
@@ -160,6 +172,31 @@ model Subscription {
   stripeSubscriptionId String?        @unique
   stripePriceId        String?
   stripeCurrentPeriodEnd DateTime?
+  stripeStatus           String?
+  stripeCancelAtPeriodEnd Boolean      @default(false)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Generation {
+  id String @id
+  requestHash String
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messageId String @unique
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  status String @default("running")
+  promptTokens Int @default(0)
+  completionTokens Int @default(0)
+  usageSource String @default("unknown")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, createdAt])
+}
+
+model StripeWebhookEvent {
+  id String @id
+  createdAt DateTime @default(now())
 }

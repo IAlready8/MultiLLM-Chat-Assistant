@@ -1,3 +1,4 @@
+import { orderConversationMessages } from './generation-service'
 import { prisma } from '@/lib/prisma'
 import { Conversation, Message, PrismaClient } from '@/types/prisma'
 import {
@@ -39,7 +40,7 @@ const createId = (prefix: string) => {
 
 const cloneConversation = (conversation: ConversationWithMessages): ConversationWithMessages => ({
   ...conversation,
-  messages: conversation.messages.map(message => ({ ...message })),
+  messages: orderConversationMessages(conversation.messages.map(message => ({ ...message }))),
 })
 
 const toConversation = (conversation: ConversationWithMessages): Conversation => {
@@ -50,7 +51,7 @@ const toConversation = (conversation: ConversationWithMessages): Conversation =>
 const countComparisonReadyFallbackConversations = (userId: string) =>
   Array.from(peekFallbackUserStore(userId)?.values() ?? []).filter(conversation =>
     conversation.messages.some(
-      message => message.role === 'assistant' && Boolean(message.provider)
+      message => message.role === 'assistant' && Boolean(message.provider) && Boolean(message.content.trim()) && (!message.generationStatus || message.generationStatus === 'complete')
     )
   ).length
 
@@ -63,6 +64,8 @@ const countWeeklySavedBriefComparisonFallbackConversations = (
       conversation.messages.some(
         message =>
           message.role === 'assistant' &&
+          Boolean(message.content.trim()) &&
+          (!message.generationStatus || message.generationStatus === 'complete') &&
           Boolean(message.provider) &&
           message.createdAt >= updatedSince
       )
@@ -86,6 +89,8 @@ export const ConversationService = {
       const dbConversationIds = await prisma.message.findMany({
         where: {
           role: 'assistant',
+          generationStatus: 'complete',
+          content: { not: '' },
           provider: {
             not: null,
           },
@@ -139,6 +144,8 @@ export const ConversationService = {
             gte: updatedSince,
           },
           role: 'assistant',
+          generationStatus: 'complete',
+          content: { not: '' },
           provider: {
             not: null,
           },
@@ -260,7 +267,7 @@ export const ConversationService = {
         },
       })
       if (conversation) {
-        return conversation as unknown as ConversationWithMessages
+        return { ...conversation, messages: orderConversationMessages((conversation as ConversationWithMessages).messages) } as ConversationWithMessages
       }
 
       if (!db.isFallbackAllowed()) {
@@ -300,6 +307,8 @@ export const ConversationService = {
         content: message.content,
         provider: message.provider ?? null,
         model: message.model ?? null,
+        clientId: message.clientId ?? null,
+        instanceId: message.instanceId ?? null,
       }))
 
       const conversation: ConversationWithMessages = {
@@ -368,6 +377,8 @@ export const ConversationService = {
         content: message.content,
         provider: message.provider ?? null,
         model: message.model ?? null,
+        clientId: message.clientId ?? null,
+        instanceId: message.instanceId ?? null,
       }))
 
       const updatedConversation: ConversationWithMessages = {
@@ -394,14 +405,14 @@ export const ConversationService = {
         return null // Not found or not authorized
       }
 
-      // Add messages and update the conversation's updatedAt timestamp
+      // Nested createMany preserves the unique per-conversation client ID on retries.
       await prisma.conversation.update({
-        where: { id: id },
+        where: { id: id, userId },
         data: {
           updatedAt: new Date(),
-          messages: {
-            create: messagesData,
-          },
+          messages: messagesData.some(message => message.clientId)
+            ? { createMany: { data: messagesData, skipDuplicates: true } }
+            : { create: messagesData },
         },
       })
 
@@ -491,13 +502,13 @@ export const ConversationService = {
 
     try {
       // Use a transaction to delete messages and conversation
-      await prisma.$transaction(async (tx: PrismaClient) => {
+      return await prisma.$transaction(async (tx: PrismaClient) => {
         // Verify ownership
         const conversation = await tx.conversation.findFirst({
           where: { id: id, userId: userId },
         })
         if (!conversation) {
-          throw new Error('Conversation not found or unauthorized')
+          return false
         }
         
         // 1. Delete messages
@@ -507,11 +518,12 @@ export const ConversationService = {
         
         // 2. Delete conversation
         await tx.conversation.delete({
-          where: { id: id },
+          where: { id: id, userId: userId },
         })
+        return true
       })
-      return true
     } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') return false
       const dbUnavailable = db.markUnavailableIfNeeded(error)
       const userForeignKeyError = isUserForeignKeyConstraintError(error)
       if (!db.isFallbackAllowed()) {

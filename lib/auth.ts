@@ -42,7 +42,8 @@ declare module 'next-auth/jwt' {
 validateStartupEnvironment()
 
 const resolveAuthSecret = (): string => {
-  const configuredSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
+  const configuredSecret =
+    process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
 
   if (configuredSecret?.trim()) {
     return configuredSecret.trim()
@@ -71,6 +72,21 @@ const authLogger: NonNullable<NextAuthOptions['logger']> = {
       console.debug(`[next-auth][debug][${code}]`, metadata ?? '')
     }
   },
+}
+
+const loadSubscriptionTier = async (
+  userId: string,
+): Promise<SubscriptionTier> => {
+  try {
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+      select: { tier: true },
+    })
+    return (subscription?.tier as SubscriptionTier) || 'FREE'
+  } catch (error) {
+    console.warn('Failed to load subscription tier, defaulting to FREE:', error)
+    return 'FREE'
+  }
 }
 
 const buildProviders = (): NextAuthOptions['providers'] => {
@@ -127,19 +143,11 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        try {
-          const subscription = await prisma.subscription.findUnique({
-            where: { userId: user.id },
-            select: { tier: true },
-          })
-          token.tier = (subscription?.tier as SubscriptionTier) || 'FREE'
-        } catch (error) {
-          console.warn(
-            'Failed to load subscription tier, defaulting to FREE:',
-            error,
-          )
-          token.tier = 'FREE'
-        }
+      }
+
+      const userId = (user?.id || token.id || token.sub) as string | undefined
+      if (userId) {
+        token.tier = await loadSubscriptionTier(userId)
       }
 
       token.role = resolveAuthTeamRole(user?.email ?? token.email)
@@ -191,6 +199,8 @@ export async function auth() {
     return null
   }
 
+  const tier = await loadSubscriptionTier(userId)
+
   return {
     expires: new Date(Number(token.exp) * 1000).toISOString(),
     user: {
@@ -198,7 +208,7 @@ export async function auth() {
       name: token.name,
       email: token.email,
       role: (token.role || 'MEMBER') as TeamRole,
-      tier: (token.tier || 'FREE') as SubscriptionTier,
+      tier,
     },
   }
 }

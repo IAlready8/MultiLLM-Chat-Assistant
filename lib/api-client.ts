@@ -29,7 +29,9 @@ type ProviderResponse = {
   content: string
   prompt_tokens: number
   completion_tokens: number
-  cost_usd: number
+  status?: string
+  error?: string
+  cost_usd: number | null
   latency_ms: number
 }
 

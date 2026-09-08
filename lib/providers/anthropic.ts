@@ -1,3 +1,4 @@
+import { providerSignal } from './util'
 /**
  * Anthropic (Claude) provider adapter.
  */
@@ -66,7 +67,7 @@ export const anthropicAdapter: ProviderAdapter = {
         ...config.extraHeaders,
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('anthropic', response, false)
@@ -100,13 +101,21 @@ export const anthropicAdapter: ProviderAdapter = {
         ...config.extraHeaders,
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('anthropic', response, true)
     const streamBody = requireBody('anthropic', response)
 
+    let inputTokens: number | undefined
     yield* parseSSEStream(streamBody, (parsed) => {
+      if (parsed.type === 'message_start' && parsed.message?.usage) {
+        const usage = parsed.message.usage
+        inputTokens = usage.input_tokens + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0)
+      }
+      if (parsed.type === 'message_delta' && inputTokens !== undefined && typeof parsed.usage?.output_tokens === 'number') {
+        request.onUsage?.({ prompt_tokens: inputTokens, completion_tokens: parsed.usage.output_tokens, total_tokens: inputTokens + parsed.usage.output_tokens })
+      }
       if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
         return parsed.delta.text
       }

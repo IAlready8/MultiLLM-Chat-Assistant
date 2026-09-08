@@ -118,6 +118,31 @@ jobs:
 
           bash scripts/smoke-test.sh --base-url http://localhost:3000
 
+
+      - name: Authenticated generation integration tests
+        env:
+          GENERATION_INTEGRATION_TEST: 'true'
+          GENERATION_TEST_BASE_URL: http://localhost:3001
+          NEXTAUTH_URL: http://localhost:3001
+        run: |
+          set -euo pipefail
+          # Ollama is intentionally local-development only. All auth, database,
+          # routes and streaming code are real; the runner controls the model API.
+          ./node_modules/.bin/next dev --webpack --hostname 127.0.0.1 --port 3001 > generation-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 45); do
+            if curl -sf http://localhost:3001/api/health >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$i" = "45" ]; then
+              cat generation-server.log
+              exit 1
+            fi
+            sleep 1
+          done
+          node scripts/test-generation-flow.mjs || { cat generation-server.log; exit 1; }
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest

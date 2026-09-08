@@ -12,20 +12,23 @@ import {
   invalidateApiReadCache,
 } from '@/lib/api-read-cache'
 import { z } from 'zod'
+import { readBoundedJson, LlmRequestError } from '@/lib/llm-request'
 
 // Zod schema for creating a conversation
 const createConvoSchema = z.object({
-  title: z.string().min(1).max(255),
+  title: z.string().min(1).max(200).max(255),
   messages: z.array(
     z.object({
       role: z.enum(['user', 'assistant']),
-      content: z.string().min(1),
+      content: z.string().min(1).max(200).max(128_000),
+      clientId: z.string().uuid().nullable().optional(),
+      instanceId: z.string().max(128).nullable().optional(),
       provider: z.string().nullable().optional(),
       model: z.string().nullable().optional(),
       cost: z.number().optional(),
       latency: z.number().optional(),
     })
-  ).min(1),
+  ).min(1).max(200),
 })
 
 /**
@@ -61,7 +64,11 @@ export const POST = withApiMetrics(async (req: Request) => {
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const body = await req.json()
+  let body: unknown
+    try { body = await readBoundedJson(req) } catch (error) {
+      if (error instanceof LlmRequestError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+      throw error
+    }
   const validation = createConvoSchema.safeParse(body)
 
   if (!validation.success) {
@@ -74,11 +81,13 @@ export const POST = withApiMetrics(async (req: Request) => {
   const { title, messages } = validation.data
 
   // Map messages to match Prisma schema (strip out extra fields like cost/latency)
-  const prismaMessages = messages.map(({ role, content, provider, model }) => ({
+  const prismaMessages = messages.map(({ role, content, provider, model, clientId, instanceId }) => ({
     role,
     content,
     provider: provider ?? null,
     model: model ?? null,
+    ...(clientId ? { clientId } : {}),
+    ...(instanceId ? { instanceId } : {}),
   }))
 
   try {

@@ -5,6 +5,8 @@ const {
   mockGetAuthenticatedUser,
   mockEnsureStripeConfigured,
   mockGetOrCreateStripeCustomer,
+  mockListSubscriptions,
+  mockListCheckoutSessions,
   mockCreateCheckoutSession,
   mockCreatePortalSession,
   mockRecordAnalyticsEvent,
@@ -23,6 +25,8 @@ const {
     mockGetAuthenticatedUser: vi.fn(),
     mockEnsureStripeConfigured: vi.fn(),
     mockGetOrCreateStripeCustomer: vi.fn(),
+    mockListSubscriptions: vi.fn(),
+    mockListCheckoutSessions: vi.fn(),
     mockCreateCheckoutSession: vi.fn(),
     mockCreatePortalSession: vi.fn(),
     mockRecordAnalyticsEvent: vi.fn(),
@@ -32,6 +36,8 @@ const {
   }
 })
 
+vi.mock('@/lib/billing-lock', () => ({ withBillingLock: async (_key: string, work: () => Promise<unknown>) => work() }))
+
 vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
@@ -40,8 +46,12 @@ vi.mock('@/lib/stripe', () => ({
   stripe: {
     checkout: {
       sessions: {
-        create: (payload: unknown) => mockCreateCheckoutSession(payload),
+        create: (payload: unknown, options: unknown) => mockCreateCheckoutSession(payload, options),
+        list: (payload: unknown) => mockListCheckoutSessions(payload),
       },
+    },
+    subscriptions: {
+      list: (payload: unknown) => mockListSubscriptions(payload),
     },
     billingPortal: {
       sessions: {
@@ -96,8 +106,14 @@ describe('subscription routes', () => {
       user: { id: 'user-1', email: 'user@example.com' },
     })
     mockGetOrCreateStripeCustomer.mockResolvedValue('cus_123')
-    mockCreateCheckoutSession.mockResolvedValue({ url: 'https://stripe.test/checkout' })
-    mockCreatePortalSession.mockResolvedValue({ url: 'https://stripe.test/portal' })
+    mockListSubscriptions.mockResolvedValue({ data: [] })
+    mockListCheckoutSessions.mockResolvedValue({ data: [] })
+    mockCreateCheckoutSession.mockResolvedValue({
+      url: 'https://stripe.test/checkout',
+    })
+    mockCreatePortalSession.mockResolvedValue({
+      url: 'https://stripe.test/portal',
+    })
     mockRecordAnalyticsEvent.mockResolvedValue(undefined)
     mockLoggerWarn.mockReset()
     mockLoggerError.mockReset()
@@ -105,10 +121,12 @@ describe('subscription routes', () => {
 
   it('forwards auth response for /api/subscriptions', async () => {
     mockGetAuthenticatedUser.mockResolvedValue(
-      NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
     )
 
-    const response = await createSubscriptionSession(new Request('http://localhost'))
+    const response = await createSubscriptionSession(
+      new Request('http://localhost'),
+    )
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
@@ -117,10 +135,14 @@ describe('subscription routes', () => {
   it('returns 400 when authenticated user has no email', async () => {
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
 
-    const response = await createSubscriptionSession(new Request('http://localhost'))
+    const response = await createSubscriptionSession(
+      new Request('http://localhost'),
+    )
 
     expect(response.status).toBe(400)
-    await expect(response.json()).resolves.toEqual({ error: 'User email not found' })
+    await expect(response.json()).resolves.toEqual({
+      error: 'User email not found',
+    })
   })
 
   it('returns 503 when checkout is not configured', async () => {
@@ -128,7 +150,9 @@ describe('subscription routes', () => {
       throw new MockStripeConfigurationError('Checkout is not configured.')
     })
 
-    const response = await createSubscriptionSession(new Request('http://localhost'))
+    const response = await createSubscriptionSession(
+      new Request('http://localhost'),
+    )
 
     expect(response.status).toBe(503)
     await expect(response.json()).resolves.toEqual({
@@ -140,22 +164,28 @@ describe('subscription routes', () => {
         route: '/api/subscriptions',
         userId: 'user-1',
         reason: 'Checkout is not configured.',
-      })
+      }),
     )
   })
 
   it('falls back to localhost base URL when NEXTAUTH_URL is invalid', async () => {
     process.env.NEXTAUTH_URL = 'not-a-valid-url'
 
-    const response = await createSubscriptionSession(new Request('http://localhost'))
+    const response = await createSubscriptionSession(
+      new Request('http://localhost'),
+    )
     const payload = mockCreateCheckoutSession.mock.calls[0]?.[0] as {
       success_url: string
       cancel_url: string
     }
 
     expect(response.status).toBe(200)
-    expect(payload.success_url).toBe('http://localhost:3000/billing?success=true')
-    expect(payload.cancel_url).toBe('http://localhost:3000/billing?canceled=true')
+    expect(payload.success_url).toBe(
+      'http://localhost:3000/billing?success=true',
+    )
+    expect(payload.cancel_url).toBe(
+      'http://localhost:3000/billing?canceled=true',
+    )
   })
 
   it('records checkout analytics with request source', async () => {
@@ -164,7 +194,7 @@ describe('subscription routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'billing_page' }),
-      })
+      }),
     )
 
     expect(response.status).toBe(200)
@@ -178,6 +208,55 @@ describe('subscription routes', () => {
     })
   })
 
+  it('creates hosted Checkout with durable user metadata', async () => {
+    const response = await createSubscriptionSession(
+      new Request('http://localhost', { method: 'POST' }),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      url: 'https://stripe.test/checkout',
+      destination: 'checkout',
+    })
+    expect(mockCreateCheckoutSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'subscription',
+        customer: 'cus_123',
+        client_reference_id: 'user-1',
+        subscription_data: {
+          billing_mode: { type: 'flexible' },
+          metadata: {
+            app: 'multi-llm-chat-assistant',
+            tier: 'PRO',
+            userId: 'user-1',
+          },
+        },
+      }),
+      expect.objectContaining({ idempotencyKey: expect.stringMatching(/^checkout:user-1:price_test:/) }),
+    )
+  })
+
+  it('routes customers with an ongoing subscription to the portal', async () => {
+    mockListSubscriptions.mockResolvedValue({
+      data: [{ id: 'sub_existing', status: 'past_due' }],
+    })
+
+    const response = await createSubscriptionSession(
+      new Request('http://localhost', { method: 'POST' }),
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      url: 'https://stripe.test/portal',
+      destination: 'portal',
+    })
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled()
+    expect(mockCreatePortalSession).toHaveBeenCalledWith({
+      customer: 'cus_123',
+      return_url: 'http://localhost:3000/billing',
+    })
+  })
+
   it('creates a manage session and enforces API stripe config', async () => {
     const response = await createManageSession(new Request('http://localhost'))
 
@@ -188,14 +267,14 @@ describe('subscription routes', () => {
     expect(mockEnsureStripeConfigured).toHaveBeenCalledWith('api')
     expect(mockGetOrCreateStripeCustomer).toHaveBeenCalledWith(
       'user-1',
-      'user@example.com'
+      'user@example.com',
     )
   })
 
   it('returns 503 for manage session when stripe API is not configured', async () => {
     mockEnsureStripeConfigured.mockImplementation(() => {
       throw new MockStripeConfigurationError(
-        'Billing is not configured. Missing STRIPE_SECRET_KEY.'
+        'Billing is not configured. Missing STRIPE_SECRET_KEY.',
       )
     })
 
@@ -211,7 +290,7 @@ describe('subscription routes', () => {
         route: '/api/subscriptions/manage',
         userId: 'user-1',
         reason: 'Billing is not configured. Missing STRIPE_SECRET_KEY.',
-      })
+      }),
     )
   })
 
@@ -230,7 +309,7 @@ describe('subscription routes', () => {
         route: '/api/subscriptions/manage',
         userId: 'user-1',
         error: expect.any(Error),
-      })
+      }),
     )
   })
 
@@ -240,7 +319,7 @@ describe('subscription routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'billing_page' }),
-      })
+      }),
     )
 
     expect(response.status).toBe(200)
@@ -253,6 +332,13 @@ describe('subscription routes', () => {
       },
     })
   })
+  it('reuses an unexpired checkout for the same user and price', async () => {
+    mockListCheckoutSessions.mockResolvedValue({ data: [{ url: 'https://checkout.stripe.com/existing', expires_at: Math.floor(Date.now() / 1000) + 3600, metadata: { app: 'multi-llm-chat-assistant', userId: 'user-1', priceId: 'price_test' } }] })
+    const response = await createSubscriptionSession(new Request('http://localhost'))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ url: 'https://checkout.stripe.com/existing', destination: 'checkout' })
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled()
+  })
 })
 
 afterEach(() => {
@@ -261,4 +347,6 @@ afterEach(() => {
   } else {
     process.env.NEXTAUTH_URL = originalNextAuthUrl
   }
+
+
 })

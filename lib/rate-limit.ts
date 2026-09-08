@@ -11,6 +11,7 @@ interface LimitConfig {
 export interface RateLimitDiagnostics {
   mode: 'redis' | 'memory'
   status: 'connected' | 'degraded' | 'memory'
+  scope: 'distributed' | 'per-instance'
   message: string
   redisConfigured: boolean
   redisConnected: boolean
@@ -149,16 +150,18 @@ export function getRateLimitDiagnostics(): RateLimitDiagnostics {
   const redisConnected = Boolean(redisClient && isRedisConnected)
   const status =
     redisConnected ? 'connected' : redisConfigured ? 'degraded' : 'memory'
+  const scope = redisConnected ? 'distributed' : 'per-instance'
   const message =
     status === 'connected'
       ? 'Redis-backed rate limiting is connected'
       : status === 'degraded'
-        ? 'Redis configured but unavailable; using in-memory rate limiting'
-        : 'Redis not configured; using in-memory rate limiting'
+        ? 'Redis configured but unavailable; using per-instance in-memory rate limiting'
+        : 'Redis not configured; using per-instance in-memory rate limiting'
 
   return {
     mode: redisConnected ? 'redis' : 'memory',
     status,
+    scope,
     message,
     redisConfigured,
     redisConnected,

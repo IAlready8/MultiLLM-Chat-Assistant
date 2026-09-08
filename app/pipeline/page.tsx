@@ -18,7 +18,9 @@ type ProviderResponse = {
   content: string
   prompt_tokens: number
   completion_tokens: number
-  cost_usd: number
+  status?: string
+  error?: string
+  cost_usd: number | null
   latency_ms: number
 }
 
@@ -127,7 +129,7 @@ export default function PipelinePage() {
   )
 
   const totalCost = useMemo(
-    () => results.reduce((sum, result) => sum + result.cost_usd, 0),
+    () => results.reduce((sum, result) => sum + (result.cost_usd ?? 0), 0),
     [results]
   )
 
@@ -400,7 +402,7 @@ export default function PipelinePage() {
                   <CardContent className="p-4">
                     <p className="text-xs text-muted-foreground">Est. Cost</p>
                     <p className="text-xl font-semibold">
-                      {currencyFormatter.format(totalCost)}
+                      {results.some(result => result.cost_usd === null) ? 'Unavailable' : currencyFormatter.format(totalCost)}
                     </p>
                   </CardContent>
                 </Card>
@@ -422,7 +424,7 @@ export default function PipelinePage() {
                       Latency: {result.latency_ms}ms | Prompt tokens:{' '}
                       {result.prompt_tokens.toLocaleString()} | Completion tokens:{' '}
                       {result.completion_tokens.toLocaleString()} | Cost:{' '}
-                      {currencyFormatter.format(result.cost_usd)}
+                      {result.cost_usd === null ? 'Unavailable' : currencyFormatter.format(result.cost_usd)}
                     </p>
                   </CardHeader>
                   <CardContent>

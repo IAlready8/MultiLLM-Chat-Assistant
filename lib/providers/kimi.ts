@@ -1,3 +1,4 @@
+import { providerSignal } from './util'
 /**
  * Kimi (Moonshot AI) provider adapter.
  *
@@ -68,7 +69,7 @@ export const kimiAdapter: ProviderAdapter = {
       method: 'POST',
       headers: buildHeaders(config),
       body: JSON.stringify(buildPayload(request, false)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('kimi', response, false)
@@ -96,7 +97,7 @@ export const kimiAdapter: ProviderAdapter = {
       method: 'POST',
       headers: buildHeaders(config),
       body: JSON.stringify(buildPayload(request, true)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('kimi', response, true)
@@ -107,6 +108,7 @@ export const kimiAdapter: ProviderAdapter = {
     yield* parseSSEStream(
       body,
       (parsed) => parsed.choices?.[0]?.delta?.content,
+      request.onUsage,
     )
   },
 }

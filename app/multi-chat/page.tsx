@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Send,
+  Square,
   Bot,
   User,
   RotateCcw,
@@ -19,6 +20,8 @@ import {
   Check,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
+import { readChatStream } from '@/services/stream-client'
+import { buildModelHistory } from '@/lib/model-history'
 import { apiClient } from '@/lib/api-client'
 import { getDefaultModel, getModelsForProvider } from '@/lib/model-catalog'
 import { operationalProviderRegistry } from '@/lib/provider-registry'
@@ -52,6 +55,11 @@ interface Message {
   provider?: string
   model?: string
   instanceId?: string
+  turnId?: string
+  generationStatus?: string
+  requestId?: string
+  position?: number
+  error?: string
 }
 
 // Each active model instance has a unique ID, provider, and model
@@ -86,6 +94,8 @@ export default function MultiChatPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const { toast } = useToast()
   const { status } = useSession()
+  const runRef = useRef<AbortController | null>(null)
+  useEffect(() => () => { runRef.current?.abort() }, [])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const isBusy = chatState.isLoading || isLoadingHistory
   const hasMessages = chatState.messages.length > 0
@@ -167,12 +177,17 @@ export default function MultiChatPage() {
   }) => {
     const restoredMessages: Message[] = conversation.messages.map(
       (msg: ConversationMessage) => ({
-        id: msg.id,
+        id: msg.clientId || msg.id,
         role: msg.role as Message['role'],
         content: msg.content,
         timestamp: new Date(msg.createdAt),
         provider: msg.provider ?? undefined,
         model: msg.model ?? undefined,
+        instanceId: msg.instanceId ?? undefined,
+        turnId: msg.turnId ?? undefined,
+        position: msg.position ?? undefined,
+        generationStatus: msg.generationStatus === 'running' && Date.now() - new Date(msg.createdAt).getTime() > 120_000 ? 'interrupted' : msg.generationStatus,
+
       })
     )
 
@@ -346,7 +361,7 @@ export default function MultiChatPage() {
     return trimmed.length > maxLength ? `${base}...` : base
   }
 
-  const ensureConversation = async (userContent: string) => {
+  const ensureConversation = async (userContent: string, clientId: string) => {
     if (status !== 'authenticated') {
       return null
     }
@@ -354,6 +369,7 @@ export default function MultiChatPage() {
     const userMessage = {
       role: 'user' as const,
       content: userContent,
+      clientId,
       provider: null,
       model: null
     }
@@ -387,46 +403,9 @@ export default function MultiChatPage() {
     }
   }
 
-  const persistAssistantMessage = async (
-    conversationId: string,
-    provider: string,
-    model: string | undefined,
-    content: string
-  ) => {
-    const message = {
-      role: 'assistant' as const,
-      content,
-      provider,
-      model: model ?? null
-    }
-
-    try {
-      await apiClient.addMessages(conversationId, [message])
-      touchConversation(conversationId)
-    } catch (error) {
-      console.error('Failed to save assistant message:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to save assistant response.',
-        variant: 'destructive'
-      })
-    }
-  }
-
   type ProviderRequestError = Error & {
     code?: string
     status?: number
-  }
-
-  const createProviderRequestError = (
-    message: string,
-    status?: number,
-    code?: string
-  ): ProviderRequestError => {
-    const error = new Error(message) as ProviderRequestError
-    error.status = status
-    error.code = code
-    return error
   }
 
   const toProviderDisplayError = (error: ProviderRequestError): string => {
@@ -452,247 +431,63 @@ export default function MultiChatPage() {
     return error.message || 'Failed to get response from provider'
   }
 
-  const streamProviderResponse = async (
-    provider: string,
-    messages: Array<{ role: Message['role']; content: string }>,
-    model: string,
-    onChunk: (chunk: string) => void
-  ) => {
-    const response = await fetch('/api/llm/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, messages, model })
-    })
-
-    if (!response.ok) {
-      let errorMessage = `HTTP ${response.status}`
-      let errorCode: string | undefined
-      try {
-        const errorBody = await response.json()
-        errorMessage = errorBody?.error || errorMessage
-        errorCode =
-          typeof errorBody?.code === 'string' ? errorBody.code : undefined
-      } catch {}
-      throw createProviderRequestError(errorMessage, response.status, errorCode)
-    }
-
-    if (!response.body) {
-      throw createProviderRequestError(
-        'No response body received',
-        502,
-        'EMPTY_RESPONSE_BODY'
-      )
-    }
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let fullContent = ''
-    let buffer = ''
-    let streamCompleted = false
-
-    const processLine = (line: string) => {
-      const trimmed = line.trim()
-      if (!trimmed) {
-        return
-      }
-
-      let event: {
-        type?: string
-        content?: unknown
-        error?: unknown
-        code?: unknown
-      }
-      try {
-        event = JSON.parse(trimmed)
-      } catch {
-        return
-      }
-
-      if (event.type === 'chunk' && typeof event.content === 'string') {
-        fullContent += event.content
-        onChunk(event.content)
-        return
-      }
-
-      if (event.type === 'error') {
-        const message =
-          typeof event.error === 'string' ? event.error : 'Stream error'
-        const code = typeof event.code === 'string' ? event.code : undefined
-        throw createProviderRequestError(message, 500, code)
-      }
-
-      if (event.type === 'done') {
-        streamCompleted = true
-      }
-    }
-
+  const callInstance = async (instance: ModelInstance, messages: Message[], conversationId: string, response: Message, signal: AbortSignal) => {
+    const update = (change: Partial<Message>) => setChatState(prev => ({ ...prev, messages: prev.messages.map(message => message.id === response.id ? { ...message, ...change } : message) }))
+    let content = ''
     try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        let lineBreakIndex = buffer.indexOf('\n')
-
-        while (lineBreakIndex !== -1) {
-          const line = buffer.slice(0, lineBreakIndex)
-          buffer = buffer.slice(lineBreakIndex + 1)
-          processLine(line)
-          lineBreakIndex = buffer.indexOf('\n')
-        }
-      }
-
-      const finalChunk = decoder.decode()
-      if (finalChunk) {
-        buffer += finalChunk
-      }
-      if (buffer.trim()) {
-        processLine(buffer)
-      }
-
-      if (!streamCompleted && fullContent.length === 0) {
-        throw createProviderRequestError(
-          'No streamed content received',
-          502,
-          'STREAM_EMPTY'
-        )
-      }
-    } finally {
-      reader.releaseLock()
+      const result = await fetch('/api/llm/stream', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
+        body: JSON.stringify({ provider: instance.provider, model: instance.model, messages: buildModelHistory(messages, instance), conversationId, requestId: response.requestId, turnId: response.turnId, instanceId: instance.id, position: response.position }),
+      })
+      await readChatStream(result, chunk => { content += chunk; update({ content }) }, signal)
+      update({ generationStatus: 'complete' })
+      touchConversation(conversationId)
+    } catch (error) {
+      const canceled = signal.aborted
+      update({ content, generationStatus: canceled ? 'canceled' : 'failed', error: canceled ? undefined : toProviderDisplayError(error as ProviderRequestError) })
     }
-
-    return fullContent
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!chatState.input.trim() || chatState.isLoading || isLoadingHistory) return
-    if (chatState.activeInstances.length === 0) {
-      toast({
-        title: 'No Models Enabled',
-        description: 'Add at least one model before sending a message.',
-        variant: 'destructive'
-      })
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!chatState.input.trim() || isBusy || runRef.current) return
+    if (!chatState.activeInstances.length) {
+      toast({ title: 'No Models Enabled', description: 'Add at least one model before sending a message.', variant: 'destructive' })
       return
     }
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: chatState.input,
-      timestamp: new Date()
-    }
-
-    const typingIds: Record<string, string> = {}
-    const initialAssistantMessages = chatState.activeInstances.map(instance => {
-      const id = `typing-${instance.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
-      typingIds[instance.id] = id
-      return {
-        id,
-        role: 'assistant' as const,
-        content: 'Thinking...',
-        timestamp: new Date(),
-        provider: instance.provider,
-        model: instance.model,
-        instanceId: instance.id
-      }
-    })
-
-    const messageHistory = chatState.messages.concat(userMessage)
-
-    setChatState(prev => ({
-      ...prev,
-      messages: [...prev.messages, userMessage, ...initialAssistantMessages],
-      input: '',
-      isLoading: true
-    }))
-
-    const conversationId = await ensureConversation(userMessage.content)
-
-    const instancePromises = chatState.activeInstances.map(instance => {
-      const typingId = typingIds[instance.id]
-      if (!typingId) return Promise.resolve()
-      return callInstance(instance, messageHistory, conversationId, typingId)
-    })
-
+    const controller = new AbortController()
+    runRef.current = controller
+    setChatState(prev => ({ ...prev, isLoading: true }))
+    const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content: chatState.input, timestamp: new Date() }
     try {
-      await Promise.all(instancePromises)
-    } catch (error) {
-      console.error('Error calling providers:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to get responses from providers',
-        variant: 'destructive'
-      })
+      const conversationId = await ensureConversation(userMessage.content, userMessage.id)
+      if (!conversationId || controller.signal.aborted) return
+      const responses: Message[] = chatState.activeInstances.map((instance, position) => ({ id: crypto.randomUUID(), requestId: crypto.randomUUID(), turnId: userMessage.id, position, role: 'assistant', content: '', timestamp: new Date(), provider: instance.provider, model: instance.model, instanceId: instance.id, generationStatus: 'running' }))
+      const history = [...chatState.messages, userMessage]
+      setChatState(prev => ({ ...prev, input: '', messages: [...prev.messages, userMessage, ...responses] }))
+      await Promise.all(chatState.activeInstances.map((instance, index) => callInstance(instance, history, conversationId, responses[index], controller.signal)))
     } finally {
+      runRef.current = null
       setChatState(prev => ({ ...prev, isLoading: false }))
     }
   }
 
-  const callInstance = async (
-    instance: ModelInstance,
-    messages: Message[],
-    conversationId: string | null,
-    typingId: string
-  ) => {
+  const regenerate = async (message: Message) => {
+    if (isBusy || runRef.current || !activeConversationId || !message.provider || !message.model || !message.turnId) return
+    const turnIndex = chatState.messages.findIndex(item => item.id === message.turnId)
+    if (turnIndex < 0) return
+    const controller = new AbortController()
+    runRef.current = controller
+    const response: Message = { ...message, id: crypto.randomUUID(), requestId: crypto.randomUUID(), content: '', error: undefined, generationStatus: 'running', timestamp: new Date() }
+    setChatState(prev => {
+      const lastAlternative = prev.messages.reduce((index, item, current) => item.turnId === message.turnId && item.position === message.position ? current : index, turnIndex)
+      return { ...prev, isLoading: true, messages: [...prev.messages.slice(0, lastAlternative + 1), response, ...prev.messages.slice(lastAlternative + 1)] }
+    })
     try {
-      const { provider, model } = instance
-      if (!model) {
-        throw new Error(`No model selected for instance`)
-      }
-
-      const fullMessages = messages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }))
-
-      const fullContent = await streamProviderResponse(
-        provider,
-        fullMessages,
-        model,
-        (chunk) => {
-          setChatState(prev => {
-            const updatedMessages = prev.messages.map(msg => {
-              if (msg.id === typingId) {
-                return {
-                  ...msg,
-                  content: msg.content === 'Thinking...' ? chunk : msg.content + chunk
-                }
-              }
-              return msg
-            })
-            return { ...prev, messages: updatedMessages }
-          })
-        }
-      )
-
-      if (conversationId && fullContent.trim()) {
-        await persistAssistantMessage(conversationId, provider, model, fullContent.trim())
-      }
-    } catch (error) {
-      console.error(`Error calling instance ${instance.provider}/${instance.model}:`, error)
-      const providerError = error as ProviderRequestError
-      const displayError = toProviderDisplayError(providerError)
-
-      setChatState(prev => {
-        const updatedMessages = prev.messages.map(msg => {
-          if (msg.id === typingId) {
-            return {
-              ...msg,
-              content: `Error: ${displayError}`,
-              timestamp: new Date()
-            }
-          }
-          return msg
-        })
-        return { ...prev, messages: updatedMessages }
-      })
-
-      toast({
-        title: 'Provider Error',
-        description: `Failed to get response from ${instance.provider}/${instance.model}: ${displayError}`,
-        variant: 'destructive'
-      })
+      await callInstance({ id: message.instanceId || generateInstanceId(), provider: message.provider, model: message.model }, chatState.messages.slice(0, turnIndex + 1), activeConversationId, response, controller.signal)
+    } finally {
+      runRef.current = null
+      setChatState(prev => ({ ...prev, isLoading: false }))
     }
   }
 
@@ -708,6 +503,7 @@ export default function MultiChatPage() {
   }
 
   const addModelInstance = (provider: string) => {
+    if (chatState.activeInstances.length >= 8) return
     const newInstance: ModelInstance = {
       id: generateInstanceId(),
       provider,
@@ -795,7 +591,17 @@ export default function MultiChatPage() {
                         <span className="text-xs text-muted-foreground">({message.model.split('/').pop()})</span>
                       )}
                     </div>
-                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    <div className="whitespace-pre-wrap break-words">{message.content || (message.generationStatus === 'running' ? 'Thinking...' : '')}</div>
+                    {message.generationStatus && message.generationStatus !== 'complete' && (
+                      <p role={message.error ? 'alert' : 'status'} className="mt-2 text-sm text-muted-foreground">
+                        {message.error ? `Error: ${message.error}` : message.generationStatus === 'running' ? 'Generating...' : message.generationStatus === 'canceled' ? 'Stopped. Reload to check saved progress.' : 'Response interrupted. Regenerate to try again.'}
+                      </p>
+                    )}
+                    {message.role === 'assistant' && message.turnId && message.generationStatus !== 'running' && (
+                      <Button variant="ghost" size="sm" className="mt-2" disabled={isBusy} onClick={() => regenerate(message)} aria-label={`Regenerate ${message.provider}/${message.model}`}>
+                        <RotateCcw className="mr-2 h-3 w-3" />Regenerate
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -813,6 +619,7 @@ export default function MultiChatPage() {
               value={chatState.input}
               onChange={handleInputChange}
               placeholder="Type your message here..."
+              aria-label="Message"
               disabled={isBusy}
               className="flex-1"
             />
@@ -823,6 +630,7 @@ export default function MultiChatPage() {
             >
               <Send className="h-4 w-4" />
             </Button>
+            {chatState.isLoading && <Button type="button" variant="outline" onClick={() => runRef.current?.abort()} aria-label="Stop generation"><Square className="mr-2 h-4 w-4" />Stop</Button>}
           </form>
         </div>
 
@@ -839,7 +647,7 @@ export default function MultiChatPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => addModelInstance(provider.id)}
-                    disabled={isBusy}
+                    disabled={isBusy || chatState.activeInstances.length >= 8}
                     className="text-xs"
                     title={provider.description}
                   >
