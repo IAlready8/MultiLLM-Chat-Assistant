@@ -34,10 +34,14 @@ The earlier completion phase also added durable ownership/idempotency checks, cr
 | P0 release gate | Vercel fails resource provisioning before application build | A ready preview of the exact reviewed commit, staging migration and authenticated browser/mobile QA |
 | P1 commercial gate | Commercial limits and Stripe test environment unavailable | Approved allowance policy, configured price, real signed lifecycle/redelivery tests and reconciliation of provider usage/cost |
 | P1 operational gate | Live provider and deployment secrets unavailable | Credentialed provider matrix, configured Redis and cron, process-kill/outage exercise in staging |
-| P2 product | Account recovery, verified profile/account lifecycle and server-history export/restore incomplete | Authorized end-to-end account lifecycle and cross-device recovery tests |
+| P2 product | Account recovery, verified email changes and server-history restore incomplete | Authorized end-to-end account lifecycle and cross-device recovery tests |
 | P2 scale | Individual conversation reads still load full message history | Message pagination or a measured bound that preserves model context and ordering |
 | P2 assurance | No deployed DAST, mobile browser run, historical secret scan or production restore rehearsal | Dedicated staging access, operator-run secret/history scan and backup/restore drill |
 
 No existing user files, secrets, production records or unrelated branches were removed. Migrations are additive and were executed only against CI's disposable PostgreSQL database. Automatic generation retry remains deliberately absent: marking interrupted work and allowing explicit regeneration avoids hidden duplicate provider charges.
 
 Password derivation parameters follow the PBKDF2-SHA-256 guidance in the [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html); the encryption envelope uses authenticated AES-GCM, as covered by [OWASP cryptographic storage guidance](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html). This does not claim FIPS certification.
+
+## Account continuation update
+
+See [account continuation](ACCOUNT_CONTINUATION_2026_09_08.md) for persisted profile ownership validation, consistent owned server-history export, local archive encryption/reading and the refreshed dependency scan. The export half of the earlier archive gap is now implemented; server restore remains open. Full-tree residual findings are explicitly documented there and are not covered by the zero-production-findings statement above.

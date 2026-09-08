@@ -59,7 +59,7 @@ export async function importAllData(encryptedData: string, password: string): Pr
     const importData: ExportData = JSON.parse(jsonData);
     
     // Validate data
-    if (!importData.version || !importData.timestamp || !Array.isArray(importData.conversations)) {
+    if (importData.version !== '1.0' || !importData.timestamp || !Array.isArray(importData.conversations)) {
       throw new Error("Invalid import data format");
     }
     

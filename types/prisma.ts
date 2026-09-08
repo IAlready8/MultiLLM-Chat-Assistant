@@ -112,6 +112,6 @@ export interface PrismaClient {
   analytics: PrismaModelDelegate<Analytics>
   providerConfig: PrismaModelDelegate<any>
   team: PrismaModelDelegate<Team>
-  $transaction: <T>(fn: (tx: PrismaClient) => Promise<T>, options?: { timeout?: number; maxWait?: number }) => Promise<T>
+  $transaction: <T>(fn: (tx: PrismaClient) => Promise<T>, options?: { timeout?: number; maxWait?: number; isolationLevel?: 'RepeatableRead' }) => Promise<T>
   $queryRaw: (...args: any[]) => Promise<unknown>
 }

@@ -5,7 +5,8 @@ import { useTheme } from 'next-themes'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { AccountProfileForm } from '@/components/account-profile-form'
+import { AccountHistoryExport } from '@/components/account-history-export'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
@@ -27,16 +28,6 @@ const LOCAL_PREFERENCE_KEYS = [
 
 type FontSizeOption = 'small' | 'normal' | 'large'
 
-type ProfileSettings = {
-  name: string
-  email: string
-}
-
-const DEFAULT_PROFILE: ProfileSettings = {
-  name: '',
-  email: '',
-}
-
 const FONT_OPTIONS: Record<FontSizeOption, { label: string; scale: number }> = {
   small: { label: 'Small', scale: 0.92 },
   normal: { label: 'Normal', scale: 1 },
@@ -56,27 +47,6 @@ const applyFontScale = (option: FontSizeOption) => {
   document.documentElement.style.fontSize = `${16 * scale}px`
 }
 
-const readProfileFromStorage = (): ProfileSettings => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_PROFILE
-  }
-
-  const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY)
-  if (!raw) {
-    return DEFAULT_PROFILE
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<ProfileSettings>
-    return {
-      name: typeof parsed.name === 'string' ? parsed.name : '',
-      email: typeof parsed.email === 'string' ? parsed.email : '',
-    }
-  } catch {
-    return DEFAULT_PROFILE
-  }
-}
-
 const readFontSizeFromStorage = (): FontSizeOption => {
   if (typeof window === 'undefined') {
     return 'normal'
@@ -94,21 +64,17 @@ const readAnalyticsToggle = (): boolean => {
 }
 
 export default function SettingsPage() {
-  const [profile, setProfile] = useState<ProfileSettings>(DEFAULT_PROFILE)
   const [fontSize, setFontSize] = useState<FontSizeOption>('normal')
   const [analyticsEnabled, setAnalyticsEnabled] = useState(true)
-  const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
   const { toast } = useToast()
 
   const { theme, setTheme } = useTheme()
 
   const hydrateFromStorage = useCallback(() => {
-    const savedProfile = readProfileFromStorage()
     const savedFontSize = readFontSizeFromStorage()
     const savedAnalyticsEnabled = readAnalyticsToggle()
 
-    setProfile(savedProfile)
     setFontSize(savedFontSize)
     setAnalyticsEnabled(savedAnalyticsEnabled)
     applyFontScale(savedFontSize)
@@ -117,35 +83,6 @@ export default function SettingsPage() {
   useEffect(() => {
     hydrateFromStorage()
   }, [hydrateFromStorage])
-
-  const saveProfile = async () => {
-    if (!profile.email.trim().includes('@')) {
-      toast({
-        title: 'Invalid email',
-        description: 'Please enter a valid email address.',
-        variant: 'destructive',
-      })
-      return
-    }
-
-    setIsSavingProfile(true)
-    try {
-      window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile))
-      toast({
-        title: 'Profile saved',
-        description: 'Your profile settings were saved locally.',
-      })
-    } catch (error) {
-      console.error('Failed to save profile settings:', error)
-      toast({
-        title: 'Save failed',
-        description: 'Unable to save profile settings.',
-        variant: 'destructive',
-      })
-    } finally {
-      setIsSavingProfile(false)
-    }
-  }
 
   const selectFontSize = (option: FontSizeOption) => {
     setFontSize(option)
@@ -218,7 +155,6 @@ export default function SettingsPage() {
       )
 
       setTheme('system')
-      setProfile(DEFAULT_PROFILE)
       setFontSize('normal')
       setAnalyticsEnabled(true)
       applyFontScale('normal')
@@ -267,32 +203,7 @@ export default function SettingsPage() {
             <CardDescription>Manage your account preferences</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                placeholder="Your name"
-                value={profile.name}
-                onChange={(event) =>
-                  setProfile((prev) => ({ ...prev, name: event.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="your.email@example.com"
-                value={profile.email}
-                onChange={(event) =>
-                  setProfile((prev) => ({ ...prev, email: event.target.value }))
-                }
-              />
-            </div>
-            <Button type="button" onClick={saveProfile} disabled={isSavingProfile}>
-              {isSavingProfile ? 'Saving...' : 'Save changes'}
-            </Button>
+            <AccountProfileForm />
           </CardContent>
         </Card>
       </TabsContent>
@@ -363,6 +274,10 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="advanced" className="space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Server Conversation Archive</CardTitle></CardHeader>
+            <CardContent><AccountHistoryExport /></CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>Advanced Settings</CardTitle>
