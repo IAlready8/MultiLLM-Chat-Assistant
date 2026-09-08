@@ -194,6 +194,7 @@ try {
   assert.equal(otherArchive.conversations.length, 0)
   assert.equal(otherArchive.messages.length, 0)
   if (process.env.RUN_ACCOUNT_BROWSER_QA === 'true') await testAccountBrowser({ baseUrl: base.toString(), email: `${owner}@example.test`, password })
+  const quotaBeforeRestore = await db.query('SELECT * FROM "LlmQuotaUsage" WHERE "userId" = $1 ORDER BY id', [outsider])
   const restoreRequest = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(archive) }
   const restores = await Promise.all([other('/api/account/restore', restoreRequest), other('/api/account/restore', restoreRequest)])
   assert.ok(restores.every(response => response.status === 200))
@@ -209,7 +210,8 @@ try {
   }
   assert.ok(restoredRows.rows.every(row => !historyIds.includes(row.id)))
   assert.equal((await db.query('SELECT COUNT(*)::int AS count FROM "Generation" WHERE "userId" = $1', [outsider])).rows[0].count, 0)
-  assert.equal((await db.query('SELECT COUNT(*)::int AS count FROM "LlmQuotaUsage" WHERE "userId" = $1', [outsider])).rows[0].count, 0)
+  const quotaAfterRestore = await db.query('SELECT * FROM "LlmQuotaUsage" WHERE "userId" = $1 ORDER BY id', [outsider])
+  assert.deepEqual(quotaAfterRestore.rows, quotaBeforeRestore.rows, 'Restore must neither add usage nor change existing accounting')
   await db.query('DELETE FROM "User" WHERE id = $1', [outsider])
   assert.equal((await other('/api/conversations')).status, 401, 'A deleted account must not retain access through its session token')
   console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation'], providerCalls }))
