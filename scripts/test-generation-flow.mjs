@@ -163,7 +163,7 @@ try {
   assert.equal(page.items.length, 1)
   assert.equal(page.items[0].userId, owner)
   for (const title of ['Pipeline: Page test', 'Roundtable: Page test']) {
-    assert.equal((await request('/api/conversations', json({ title }))).status, 201)
+    assert.equal((await request('/api/conversations', json({ title, messages: [{ role: 'user', content: 'Pagination fixture', clientId: randomUUID() }] }))).status, 201)
   }
   let cursor
   const historyIds = []
