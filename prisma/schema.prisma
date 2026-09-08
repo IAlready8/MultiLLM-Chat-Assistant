@@ -188,12 +188,14 @@ model Generation {
   messageId String @unique
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
   status String @default("running")
+  leaseExpiresAt DateTime @default(now())
   promptTokens Int @default(0)
   completionTokens Int @default(0)
   usageSource String @default("unknown")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([userId, createdAt])
+  @@index([status, leaseExpiresAt])
 }
 
 model StripeWebhookEvent {

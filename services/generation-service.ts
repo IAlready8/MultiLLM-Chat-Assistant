@@ -12,6 +12,43 @@ export type SavedGenerationInput = LlmInput & {
   position?: number
 }
 
+// Longer than the route deadline, with headroom for a final database write.
+export const GENERATION_LEASE_MS = 90_000
+type GenerationUsage = { prompt_tokens: number; completion_tokens: number; usage_source: string }
+
+export async function checkpointGeneration(userId: string, id: string, content: string, usage: GenerationUsage) {
+  await prisma.$transaction(async tx => {
+    const now = new Date()
+    const updated = await tx.generation.updateMany({
+      where: { id, userId, status: 'running', leaseExpiresAt: { gt: now } },
+      data: { leaseExpiresAt: new Date(now.getTime() + GENERATION_LEASE_MS), promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, usageSource: usage.usage_source },
+    })
+    if (updated.count !== 1) throw new LlmRequestError('Generation lease expired. Reload and regenerate.', 409, 'GENERATION_LEASE_LOST')
+    await tx.message.update({ where: { id }, data: { content } })
+  })
+}
+
+/** Recover saved progress without repeating a potentially billable provider call. */
+export async function reconcileExpiredGenerations(userId?: string, conversationId?: string) {
+  const now = new Date()
+  const where = { status: 'running', leaseExpiresAt: { lte: now }, ...(userId ? { userId } : {}), ...(conversationId ? { conversationId } : {}) }
+  const expired = await prisma.generation.findMany({ where, orderBy: [{ leaseExpiresAt: 'asc' }, { id: 'asc' }], take: 100 })
+  let recovered = 0
+  for (const generation of expired) {
+    const changed = await prisma.$transaction(async tx => {
+      const result = await tx.generation.updateMany({ where: { ...where, id: generation.id }, data: { status: 'interrupted' } })
+      if (result.count !== 1) return false
+      await tx.message.update({ where: { id: generation.messageId }, data: { generationStatus: 'interrupted' } })
+      return true
+    })
+    if (changed) {
+      recovered++
+      invalidateApiReadCache(apiReadCacheKey('/api/conversations', generation.userId))
+    }
+  }
+  return { recovered, batchFull: expired.length === 100 }
+}
+
 export async function beginGeneration(userId: string, input: SavedGenerationInput) {
   const id = createHash('sha256').update(`${userId}:${input.requestId}`).digest('hex')
   const requestHash = createHash('sha256').update(JSON.stringify(input)).digest('hex')
@@ -31,7 +68,7 @@ export async function beginGeneration(userId: string, input: SavedGenerationInpu
       const turn = await tx.message.findFirst({ where: { conversationId: input.conversationId, clientId: input.turnId, role: 'user' } })
       if (!turn) throw new LlmRequestError('Save the user message before starting a generation', 409, 'TURN_NOT_FOUND')
       await tx.message.create({ data: { id, conversationId: input.conversationId, role: 'assistant', content: '', provider: input.provider, model: input.model, instanceId: input.instanceId, turnId: input.turnId, position: input.position ?? 0, generationStatus: 'running' } })
-      await tx.generation.create({ data: { id, requestHash, userId, conversationId: input.conversationId, messageId: id, status: 'running' } })
+      await tx.generation.create({ data: { id, requestHash, userId, conversationId: input.conversationId, messageId: id, status: 'running', leaseExpiresAt: new Date(Date.now() + GENERATION_LEASE_MS) } })
       await tx.conversation.update({ where: { id: input.conversationId, userId }, data: { updatedAt: new Date() } })
     })
   } catch (error) {
@@ -49,9 +86,10 @@ export async function finishGeneration(userId: string, id: string, content: stri
   await prisma.$transaction(async tx => {
     const generation = await tx.generation.findFirst({ where: { id, userId } })
     if (!generation) throw new LlmRequestError('The saved generation no longer exists', 404, 'GENERATION_NOT_FOUND')
-    if (generation.status !== 'running') return
+    if (generation.status === 'complete') return
+    if (generation.status !== 'running') throw new LlmRequestError('Generation is no longer active. Reload and regenerate.', 409, 'GENERATION_LEASE_LOST')
     const updated = await tx.generation.updateMany({ where: { id, userId, status: 'running' }, data: { status, promptTokens: usage?.prompt_tokens ?? 0, completionTokens: usage?.completion_tokens ?? 0, usageSource: usage?.usage_source ?? 'unknown' } })
-    if (updated.count !== 1) return
+    if (updated.count !== 1) throw new LlmRequestError('Generation is no longer active', 409, 'GENERATION_LEASE_LOST')
     await tx.message.update({ where: { id: generation.messageId }, data: { content, generationStatus: status } })
   })
   invalidateApiReadCache(apiReadCacheKey('/api/conversations', userId))

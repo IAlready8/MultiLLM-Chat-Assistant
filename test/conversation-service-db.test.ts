@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('@/services/generation-service', async original => ({ ...await original<typeof import('@/services/generation-service')>(), reconcileExpiredGenerations: vi.fn() }))
+
 const DB_UNAVAILABLE_ERROR = new Error(
   'Database access for conversation is not available in this environment.'
 )

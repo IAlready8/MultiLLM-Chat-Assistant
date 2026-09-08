@@ -1,3 +1,4 @@
+import { validateModelRequest } from '@/lib/model-contract'
 import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import { validateApiKeyFormat } from '@/lib/provider-key-test'
@@ -30,7 +31,7 @@ export async function prepareProviderCall(userId: string, input: LlmInput, signa
   const settings = config.settings || {}
   const baseUrl = getProviderBaseUrl(provider, settings.baseUrl)
   const rateConfig = settings.rateLimits as ProviderRateLimitConfig | undefined
-  const rateLimit = await checkProviderRateLimit(userId, provider, rateConfig || defaultRateLimits[provider as keyof typeof defaultRateLimits] || { requests: 60, window: 60000 })
+  const rateLimit = await checkProviderRateLimit(userId, provider, { requests: Math.min(rateConfig?.requests ?? Infinity, (defaultRateLimits[provider as keyof typeof defaultRateLimits]?.requests ?? 60)), window: Math.max(rateConfig?.window ?? 0, (defaultRateLimits[provider as keyof typeof defaultRateLimits]?.window ?? 60000)) })
   if (!rateLimit.allowed) {
     throw new LlmRequestError('Rate limit exceeded', 429, 'RATE_LIMITED', Math.max(1, Math.ceil(rateLimit.retryAfterMs / 1000)))
   }
@@ -42,6 +43,7 @@ export async function prepareProviderCall(userId: string, input: LlmInput, signa
     if (settings.xTitle) extraHeaders['X-Title'] = settings.xTitle
   }
   const request: ProviderRequest = { messages: input.messages, model, temperature: input.temperature, max_tokens: input.max_tokens, reasoning_effort: input.reasoning_effort, userId, signal }
+  validateModelRequest(provider, request)
   signal?.throwIfAborted()
   return { adapter, config: { apiKey: apiKey ?? '', baseUrl, extraHeaders }, request }
 }
@@ -83,6 +85,7 @@ export function llmErrorResponse(error: unknown): Response {
 }
 
 export function createCompletionStream(call: Awaited<ReturnType<typeof prepareProviderCall>>, provider: string, userId: string, controller: AbortController, ndjson: boolean, persistence?: {
+  checkpoint?: (content: string, usage: ReturnType<typeof resolveUsage>) => Promise<void>
   finish: (content: string, status: 'complete' | 'failed' | 'canceled', usage: ReturnType<typeof resolveUsage>) => Promise<void>
   settled: () => void
 }) {
@@ -96,12 +99,17 @@ export function createCompletionStream(call: Awaited<ReturnType<typeof preparePr
   return new ReadableStream<Uint8Array>({
     async start(output) {
       let content = ''
+      let lastCheckpoint = 0
       try {
         for await (const chunk of call.adapter.stream(call.request, call.config)) {
           if (disconnected) break
           controller.signal.throwIfAborted()
           content += chunk
           if (content.length > 1_048_576) throw new LlmRequestError('Provider response exceeded the size limit', 502, 'PROVIDER_RESPONSE_TOO_LARGE')
+          if (persistence?.checkpoint && Date.now() - lastCheckpoint >= 2_000) {
+            await persistence.checkpoint(content, resolveUsage(call.request.messages, content, providerUsage))
+            lastCheckpoint = Date.now()
+          }
           output.enqueue(encoder.encode(ndjson ? JSON.stringify({ type: 'chunk', content: chunk }) + '\n' : chunk))
         }
         controller.signal.throwIfAborted()

@@ -71,6 +71,7 @@ export function parseLlmInput(value: unknown, defaultProvider?: string): LlmInpu
     throw new LlmRequestError('Request body must be an object')
   }
   const input = value as Record<string, unknown>
+  if (['tools', 'tool_choice', 'response_format', 'attachments', 'modalities'].some(key => input[key] !== undefined)) throw new LlmRequestError('Tools, structured output and attachments are not supported by this chat endpoint', 400, 'MODEL_CAPABILITY_UNSUPPORTED')
   const provider = input.provider ?? defaultProvider
   if (typeof provider !== 'string' || !provider.trim() || !Array.isArray(input.messages) || !input.messages.length) {
     throw new LlmRequestError('Provider and messages are required')

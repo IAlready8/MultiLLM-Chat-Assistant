@@ -1,3 +1,4 @@
+import { isModernClaude } from '@/lib/model-contract'
 import { providerSignal } from './util'
 /**
  * Anthropic (Claude) provider adapter.
@@ -17,14 +18,14 @@ const ANTHROPIC_VERSION = '2023-06-01'
 const TIMEOUT_MS = 60_000
 
 function buildAnthropicPayload(request: ProviderRequest, stream: boolean) {
-  const systemMessage = request.messages.find((m) => m.role === 'system')
+  const system = request.messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n')
   const nonSystemMessages = request.messages.filter((m) => m.role !== 'system')
   return {
     body: {
       model: request.model || DEFAULT_MODEL,
       messages: nonSystemMessages,
-      system: systemMessage?.content,
-      temperature: request.temperature ?? 0.7,
+      system: system || undefined,
+      ...(!isModernClaude(request.model ?? DEFAULT_MODEL) ? { temperature: request.temperature ?? 0.7 } : {}),
       max_tokens: request.max_tokens ?? 4096,
       ...(stream ? { stream: true } : {}),
     },
@@ -74,7 +75,7 @@ export const anthropicAdapter: ProviderAdapter = {
 
     const data = await response.json()
     return {
-      content: data.content?.[0]?.text || '',
+      content: Array.isArray(data.content) ? data.content.filter((block: { type?: string; text?: unknown }) => block.type === 'text' && typeof block.text === 'string').map((block: { text: string }) => block.text).join('') : '',
       finish_reason: data.stop_reason,
       usage: {
         prompt_tokens: data.usage?.input_tokens,

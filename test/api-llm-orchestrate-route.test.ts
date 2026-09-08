@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), chat: vi.fn() }))

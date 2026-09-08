@@ -1,4 +1,4 @@
-import { orderConversationMessages } from './generation-service'
+import { orderConversationMessages, reconcileExpiredGenerations } from './generation-service'
 import { prisma } from '@/lib/prisma'
 import { Conversation, Message, PrismaClient } from '@/types/prisma'
 import {
@@ -253,6 +253,7 @@ export const ConversationService = {
     }
 
     try {
+      await reconcileExpiredGenerations(userId, id)
       const conversation = await prisma.conversation.findFirst({
         where: {
           id: id,

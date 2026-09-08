@@ -70,6 +70,15 @@ describe('/api/conversations routes', () => {
     mockRecordAnalyticsEvent.mockResolvedValue(undefined)
   })
 
+  it('persists real-world prompts and responses longer than 200 characters', async () => {
+    const content = 'Long brief. '.repeat(1000)
+    mockConversationService.createConversation.mockResolvedValue({ id: 'conv-1' })
+    mockConversationService.addMessages.mockResolvedValue({ id: 'conv-1' })
+    expect((await createConversation(new Request('http://localhost/api/conversations', { method: 'POST', body: JSON.stringify({ title: 'Long brief', messages: [{ role: 'user', content }] }) }), rootRouteContext)).status).toBe(201)
+    expect((await addMessages(new Request('http://localhost/api/conversations/conv-1', { method: 'POST', body: JSON.stringify([{ role: 'assistant', content }]) }), idRouteContext('conv-1'))).status).toBe(200)
+    expect(mockConversationService.addMessages).toHaveBeenCalledWith('conv-1', 'user-1', expect.arrayContaining([expect.objectContaining({ content })]))
+  })
+
   it('root GET returns conversations for authenticated user', async () => {
     mockConversationService.getConversationsByUserId.mockResolvedValue([
       {

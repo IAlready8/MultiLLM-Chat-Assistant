@@ -7,7 +7,7 @@ vi.mock('@/lib/api-auth', () => ({ getAuthenticatedUser: async () => ({ user: { 
 vi.mock('@/lib/api-key-service', () => ({ getUserApiKey: async () => 'sk-test-12345678901234567890', getUserProviderConfigs: async () => [{ provider: 'openai', settings: {} }] }))
 vi.mock('@/lib/provider-rate-limit', () => ({ checkProviderRateLimit: async () => ({ allowed: true }) }))
 vi.mock('@/services/analytics-service', () => ({ recordAnalyticsEvent: vi.fn() }))
-vi.mock('@/services/generation-service', () => ({ beginGeneration: mocks.begin, finishGeneration: mocks.finish }))
+vi.mock('@/services/generation-service', () => ({ beginGeneration: mocks.begin, finishGeneration: mocks.finish, checkpointGeneration: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('@/lib/providers', async original => ({ ...await original<typeof import('@/lib/providers')>(), getProviderAdapter: () => ({ stream: mocks.stream }) }))
 import { POST } from '@/app/api/llm/stream/route'
 const input = { provider: 'openai', messages: [{ role: 'user', content: 'hello' }], conversationId: 'conversation', requestId: '00000000-0000-4000-8000-000000000001', turnId: '00000000-0000-4000-8000-000000000002' }

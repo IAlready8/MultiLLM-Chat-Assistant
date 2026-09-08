@@ -16,7 +16,7 @@ import { readBoundedJson, LlmRequestError } from '@/lib/llm-request'
 const addMessagesSchema = z.array(
     z.object({
       role: z.enum(['user', 'assistant']),
-      content: z.string().min(1).max(200).max(128_000),
+      content: z.string().min(1).max(128_000),
       clientId: z.string().uuid().nullable().optional(),
       instanceId: z.string().max(128).nullable().optional(),
       provider: z.string().nullable().optional(),
@@ -27,7 +27,7 @@ const addMessagesSchema = z.array(
   ).min(1).max(200)
 
 const updateConversationSchema = z.object({
-  title: z.string().min(1).max(200).max(255),
+  title: z.string().trim().min(1).max(255),
 })
 
 type ConversationRouteContext = {

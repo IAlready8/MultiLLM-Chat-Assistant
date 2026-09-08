@@ -20,6 +20,7 @@ export interface Conversation extends BaseModel {
 }
 
 export interface Generation {
+  leaseExpiresAt: Date
   id: string
   requestHash: string
   userId: string

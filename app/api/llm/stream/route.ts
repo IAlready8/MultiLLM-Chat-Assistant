@@ -3,7 +3,7 @@ import { getAuthenticatedUser } from '@/lib/api-auth'
 import { parseLlmInput, readBoundedJson } from '@/lib/llm-request'
 import { createCompletionStream, llmErrorResponse, prepareProviderCall } from '@/lib/llm-runtime'
 
-import { beginGeneration, finishGeneration } from '@/services/generation-service'
+import { beginGeneration, checkpointGeneration, finishGeneration } from '@/services/generation-service'
 import type { SavedGenerationInput } from '@/services/generation-service'
 
 export const maxDuration = 60
@@ -27,7 +27,11 @@ export async function POST(request: NextRequest) {
       let settled!: () => void
       const completion = new Promise<void>(resolve => { settled = resolve })
       after(() => completion)
-      persistence = { finish: (content, status, usage) => finishGeneration(auth.user.id, generation.id, content, status, usage), settled }
+      persistence = {
+        checkpoint: (content, usage) => checkpointGeneration(auth.user.id, generation.id, content, usage),
+        finish: (content, status, usage) => finishGeneration(auth.user.id, generation.id, content, status, usage),
+        settled,
+      }
     }
     return new Response(createCompletionStream(call, input.provider, auth.user.id, controller, true, persistence), {
       headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' },

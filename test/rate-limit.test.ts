@@ -16,8 +16,18 @@ describe('rate-limit diagnostics', () => {
     } else {
       process.env.REDIS_URL = originalRedisUrl
     }
+    delete process.env.REQUIRE_DISTRIBUTED_RATE_LIMIT
+    vi.unstubAllEnvs()
     vi.doUnmock('redis')
     vi.doUnmock('@/lib/logger')
+  })
+
+  it('blocks production requests if distributed protection is unavailable', async () => {
+    delete process.env.REDIS_URL
+    vi.stubEnv('NODE_ENV', 'production')
+    const { checkAndConsume, getRateLimitDiagnostics } = await loadModule()
+    await expect(checkAndConsume('user', { max: 10, windowMs: 60000 })).rejects.toMatchObject({ status: 503, code: 'RATE_LIMIT_UNAVAILABLE' })
+    expect(getRateLimitDiagnostics()).toMatchObject({ status: 'degraded', message: 'Distributed rate limiting unavailable; requests are blocked' })
   })
 
   it('reports memory mode when Redis is not configured', async () => {
@@ -94,7 +104,7 @@ describe('rate-limit diagnostics', () => {
       createClient: vi.fn(() => ({
         on: vi.fn(),
         connect,
-        eval: evalScript,
+        withCommandOptions: () => ({ eval: evalScript }),
       })),
     }))
 

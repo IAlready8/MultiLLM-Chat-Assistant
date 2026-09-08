@@ -20,7 +20,7 @@ const DEFAULT_MODEL = 'gemini-1.5-flash'
 const TIMEOUT_MS = 60_000
 
 function buildGeminiPayload(messages: ProviderMessage[], request: ProviderRequest) {
-  const systemInstruction = messages.find((m) => m.role === 'system')?.content
+  const systemInstruction = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n')
   const contents = messages
     .filter((m) => m.role !== 'system')
     .map((m) => ({

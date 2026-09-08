@@ -1,3 +1,4 @@
+import { isOpenAiReasoningModel } from '@/lib/model-contract'
 import { providerSignal } from './util'
 /**
  * OpenAI provider adapter.
@@ -18,20 +19,16 @@ import { getProviderBaseUrl, providerFetch } from '@/lib/provider-endpoint'
 const DEFAULT_MODEL = 'gpt-3.5-turbo'
 const TIMEOUT_MS = 60_000
 
-function usesGpt56ChatContract(model: string): boolean {
-  return model === 'gpt-5.6' || model.startsWith('gpt-5.6-')
-}
-
 function buildChatPayload(request: ProviderRequest, stream: boolean) {
   const model = request.model || DEFAULT_MODEL
 
-  if (usesGpt56ChatContract(model)) {
+  if (isOpenAiReasoningModel(model)) {
     return {
       model,
       messages: request.messages,
-      temperature: request.temperature ?? 0.7,
+      ...(!/^o[134](?:-|$)/.test(model) && !model.startsWith('gpt-6-astra') && (!request.reasoning_effort || request.reasoning_effort === 'off') ? { temperature: request.temperature ?? 0.7 } : {}),
       max_completion_tokens: request.max_tokens ?? 4096,
-      reasoning_effort: 'none',
+      reasoning_effort: request.reasoning_effort && request.reasoning_effort !== 'off' ? request.reasoning_effort : (/^o[134](?:-|$)/.test(model) || model.startsWith('gpt-6-astra')) ? 'medium' : 'none',
       stream,
     }
   }
