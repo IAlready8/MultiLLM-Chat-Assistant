@@ -12,11 +12,12 @@ export function AccountHistoryExport() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [complete, setComplete] = useState(false)
+  const [restored, setRestored] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   return <form className="space-y-3" onSubmit={async event => {
     event.preventDefault()
     if (busy || password.length < 12) return
-    setBusy(true); setError(null); setComplete(false)
+    setBusy(true); setError(null); setComplete(false); setRestored(null)
     try {
       const response = await fetch('/api/account/export', { method: 'POST' })
       if (!response.ok) {
@@ -40,8 +41,9 @@ export function AccountHistoryExport() {
     <Input id="history-password" type="password" minLength={12} required
       value={password} disabled={busy} autoComplete="new-password"
       onChange={event => setPassword(event.target.value)} />
-    <p className="text-sm text-muted-foreground">Download your server conversations and messages in a password-encrypted archive. Keep the password to read the file. Provider keys and billing records are excluded. Archive restore is not available yet.</p>
+    <p className="text-sm text-muted-foreground">Download your server conversations and messages in a password-encrypted archive. Keep the password to read the file. Provider keys and billing records are excluded. Restoring creates separate copies and never overwrites existing conversations.</p>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {restored && <p role="status" className="text-sm">{restored}</p>}
     {complete && <p role="status" className="text-sm">Archive prepared. Check your browser downloads.</p>}
     <Button type="submit" disabled={busy || password.length < 12}>{busy ? 'Preparing archive…' : 'Download conversation archive'}</Button>
     <div className="space-y-2 border-t pt-3">
@@ -52,7 +54,7 @@ export function AccountHistoryExport() {
       <Button type="button" variant="outline" disabled={busy || !file || !password}
         onClick={async () => {
           if (!file || busy) return
-          setBusy(true); setError(null); setComplete(false)
+          setBusy(true); setError(null); setComplete(false); setRestored(null)
           try {
             if (file.size > 24 * 1024 * 1024) throw new Error('Archive file exceeds 24 MiB.')
             const content = await decrypt(await file.text(), password)
@@ -67,6 +69,22 @@ export function AccountHistoryExport() {
           } catch { setError('Unable to open archive. Check its format, size and password.') }
           finally { setBusy(false) }
         }}>Open archive as JSON</Button>
+      <p className="text-sm text-muted-foreground">Restore supports archives up to 3 MiB of decrypted JSON, 200 conversations and 2,000 messages. Repeating the same restore skips existing copies. Interrupted responses stay interrupted.</p>
+      <Button type="button" disabled={busy || !file || !password} onClick={async () => {
+        if (!file || busy) return
+        setBusy(true); setError(null); setComplete(false); setRestored(null)
+        try {
+          if (file.size > 24 * 1024 * 1024) throw new Error('Archive file exceeds 24 MiB.')
+          const content = await decrypt(await file.text(), password)
+          if (new Blob([content]).size > 3 * 1024 * 1024) throw new Error('Restore supports up to 3 MiB of decrypted JSON.')
+          const response = await fetch('/api/account/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: content })
+          const result = await response.json()
+          if (!response.ok) throw new Error(result.error || 'Unable to restore archive.')
+          setRestored(`Restored ${result.createdConversations} conversations and ${result.createdMessages} messages. Skipped ${result.skippedConversations} existing copies.`)
+          setPassword('')
+        } catch (failure) { setError(failure instanceof Error ? failure.message : 'Unable to restore archive.') }
+        finally { setBusy(false) }
+      }}>Restore into my account</Button>
     </div>
   </form>
 }
