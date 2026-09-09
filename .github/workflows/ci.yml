@@ -41,6 +41,9 @@ jobs:
       - name: Unit tests
         run: npm run test:run
 
+      - name: Verify Vercel dependency compatibility
+        run: node scripts/test-vercel-tooling.mjs
+
       - name: Build
         run: npm run build
         env:
