@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server'
 import { metrics } from '@/lib/api-logger'
 import { getCacheDiagnostics } from '@/lib/cache'
 import prisma from '@/lib/prisma'
-import { getRateLimitDiagnostics } from '@/lib/rate-limit'
+import { getRateLimitDiagnostics, probeRateLimitBackend } from '@/lib/rate-limit'
 import { getReleaseMetadata } from '@/lib/release-metadata'
 import { getSidecarDiagnostics } from '@/lib/sidecar-health'
 
@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
   }
 
   const rateLimitStart = Date.now()
+  await probeRateLimitBackend()
   const rateLimitDiagnostics = getRateLimitDiagnostics()
   const cacheStart = Date.now()
   const cacheDiagnostics = getCacheDiagnostics()

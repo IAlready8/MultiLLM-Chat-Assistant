@@ -193,6 +193,9 @@ try {
   const otherArchive = await (await other('/api/account/export', { method: 'POST' })).json()
   assert.equal(otherArchive.conversations.length, 0)
   assert.equal(otherArchive.messages.length, 0)
+  const exportRace = await Promise.all(Array.from({ length: 4 }, () => other('/api/account/export', { method: 'POST' })))
+  assert.equal(exportRace.filter(response => response.status === 200).length, 2, 'Shared sliding-window limiter must admit only the two remaining exports')
+  assert.equal(exportRace.filter(response => response.status === 429).length, 2)
   if (process.env.RUN_ACCOUNT_BROWSER_QA === 'true') await testAccountBrowser({ baseUrl: base.toString(), email: `${owner}@example.test`, password })
   const quotaBeforeRestore = await db.query('SELECT * FROM "LlmQuotaUsage" WHERE "userId" = $1 ORDER BY id', [outsider])
   const restoreRequest = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(archive) }

@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 import { reconcileExpiredGenerations } from '@/services/generation-service'
+import { prunePostgresLimits } from '@/lib/postgres-rate-limit'
 
 export const maxDuration = 60
 
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
       recovered += result.recovered
       batchFull = result.batchFull
     } while (batchFull && Date.now() - started < 40_000)
+    if (process.env.RATE_LIMIT_BACKEND === 'postgres') await prunePostgresLimits()
     return Response.json({ recovered, more: batchFull }, { headers: { 'Cache-Control': 'no-store' } })
   } catch {
     console.error('Generation reconciliation failed')

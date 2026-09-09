@@ -54,6 +54,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality-checks
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        rate-limit-backend: [redis, postgres]
 
     services:
       postgres:
@@ -86,6 +90,7 @@ jobs:
       API_KEY_ENCRYPTION_SEED: ci-smoke-encryption-seed-32chars
       REDIS_URL: redis://localhost:6379
       REQUIRE_DISTRIBUTED_RATE_LIMIT: 'true'
+      RATE_LIMIT_BACKEND: ${{ matrix.rate-limit-backend }}
 
     steps:
       - name: Checkout code
@@ -163,7 +168,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: account-browser-qa
+          name: account-browser-qa-${{ matrix.rate-limit-backend }}
           path: ${{ runner.temp }}/multillm-browser/*.png
           if-no-files-found: ignore
 

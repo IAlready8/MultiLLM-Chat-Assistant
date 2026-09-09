@@ -10,7 +10,7 @@ interface LimitConfig {
 }
 
 export interface RateLimitDiagnostics {
-  mode: 'redis' | 'memory'
+  mode: 'redis' | 'postgres' | 'memory'
   status: 'connected' | 'degraded' | 'memory'
   scope: 'distributed' | 'per-instance'
   message: string
@@ -28,11 +28,13 @@ let isRedisConnected = false
 
 let connecting: Promise<void> | null = null
 let retryConnectionAt = 0
+let postgresHealthy = false
+const usesPostgres = () => process.env.RATE_LIMIT_BACKEND === 'postgres'
 const requiresDistributedLimits = () => process.env.NODE_ENV === 'production' || process.env.REQUIRE_DISTRIBUTED_RATE_LIMIT === 'true'
 
 async function initRedis() {
   if (connecting) return connecting
-  if (!process.env.REDIS_URL || isRedisConnected || Date.now() < retryConnectionAt) return
+  if (usesPostgres() || !process.env.REDIS_URL || isRedisConnected || Date.now() < retryConnectionAt) return
   connecting = (async () => {
     try {
       const client = createClient({
@@ -147,6 +149,19 @@ async function checkAndConsumeRedis(key: Key, cfg: LimitConfig) {
 }
 
 export async function checkAndConsume(key: Key, cfg: LimitConfig) {
+  if (!Number.isSafeInteger(cfg.max) || cfg.max < 1 || cfg.max > 10_000 || !Number.isSafeInteger(cfg.windowMs) || cfg.windowMs < 1 || cfg.windowMs > 86_400_000) throw new Error('Invalid rate limit configuration')
+  if (usesPostgres()) {
+    try {
+      const { consumePostgresLimit } = await import('@/lib/postgres-rate-limit')
+      const result = await consumePostgresLimit(key, cfg)
+      postgresHealthy = true
+      return result
+    } catch {
+      postgresHealthy = false
+      logger.warn('rate_limit_postgres_request_failed')
+      throw new LlmRequestError('Request protection is temporarily unavailable. Try again shortly.', 503, 'RATE_LIMIT_UNAVAILABLE', 5)
+    }
+  }
   await initRedis()
   if (redisClient && isRedisConnected) {
     return checkAndConsumeRedis(key, cfg);
@@ -159,6 +174,11 @@ export function resetAll() {
 }
 
 export function getRateLimitDiagnostics(): RateLimitDiagnostics {
+  if (usesPostgres()) return {
+    mode: 'postgres', status: postgresHealthy ? 'connected' : 'degraded', scope: 'distributed',
+    message: postgresHealthy ? 'PostgreSQL-backed rate limiting is connected' : 'PostgreSQL rate limiting unavailable or not yet verified; requests fail closed on storage errors',
+    redisConfigured: Boolean(process.env.REDIS_URL?.trim()), redisConnected: false, inMemoryKeys: 0,
+  }
   const redisConfigured = Boolean(process.env.REDIS_URL?.trim())
   const redisConnected = Boolean(redisClient && isRedisConnected)
   const status =
@@ -182,4 +202,13 @@ export function getRateLimitDiagnostics(): RateLimitDiagnostics {
     redisConnected,
     inMemoryKeys: hits.size,
   }
+}
+
+export async function probeRateLimitBackend() {
+  if (!usesPostgres()) return
+  try {
+    const { checkPostgresLimitStore } = await import('@/lib/postgres-rate-limit')
+    await checkPostgresLimitStore()
+    postgresHealthy = true
+  } catch { postgresHealthy = false }
 }

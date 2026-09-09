@@ -60,6 +60,14 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+model RateLimitBucket {
+  id         String   @id
+  timestamps BigInt[]
+  expiresAt  DateTime
+
+  @@index([expiresAt])
+}
+
 model Conversation {
   id        String    @id @default(cuid())
   title     String

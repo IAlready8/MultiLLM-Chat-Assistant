@@ -100,6 +100,7 @@ export type PrismaModelDelegate<T> = {
 }
 
 export interface PrismaClient {
+  rateLimitBucket: PrismaModelDelegate<{ id: string; timestamps: bigint[]; expiresAt: Date }>
   llmQuotaUsage: PrismaModelDelegate<{ id: string; userId: string; units: number; createdAt: Date }>
   generation: PrismaModelDelegate<Generation>
   stripeWebhookEvent: PrismaModelDelegate<{ id: string; createdAt: Date }>

@@ -24,6 +24,7 @@ vi.mock('@/lib/cache', () => ({
 }))
 
 vi.mock('@/lib/rate-limit', () => ({
+  probeRateLimitBackend: vi.fn().mockResolvedValue(undefined),
   getRateLimitDiagnostics: () => mockGetRateLimitDiagnostics(),
 }))
 
