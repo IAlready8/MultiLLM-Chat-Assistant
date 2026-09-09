@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-// Exercise the actual consumers of the scoped Undici 5 -> 6 security override.
+// Exercise the actual consumers of the Undici 5 -> 6 security override.
 const require = createRequire(import.meta.url);
 const vercelRoot = dirname(require.resolve('vercel/package.json'));
 const vercelRequire = createRequire(join(vercelRoot, 'package.json'));
