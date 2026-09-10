@@ -12,6 +12,7 @@ import prisma from '@/lib/prisma'
 import { readSessionTokenFromCookies } from '@/lib/session-cookie'
 import { validateStartupEnvironment } from '@/lib/startup-validation'
 import { sanitizeLogValue } from '@/lib/log-sanitizer'
+import { authLogger } from '@/lib/auth-logger'
 
 type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
 type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER'
@@ -60,20 +61,6 @@ const resolveAuthSecret = (): string => {
 }
 
 const authSecret = resolveAuthSecret()
-
-const authLogger: NonNullable<NextAuthOptions['logger']> = {
-  error(code, metadata) {
-    console.error(`[next-auth][error][${code}]`, sanitizeLogValue(metadata ?? ''))
-  },
-  warn(code) {
-    console.warn(`[next-auth][warn][${code}]`)
-  },
-  debug(code, metadata) {
-    if (process.env.NODE_ENV === 'development') {
-      console.debug(`[next-auth][debug][${code}]`, sanitizeLogValue(metadata ?? ''))
-    }
-  },
-}
 
 const loadSubscriptionTier = async (
   userId: string,

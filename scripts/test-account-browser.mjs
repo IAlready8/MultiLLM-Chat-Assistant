@@ -22,7 +22,9 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(discoveryAttempts === 1 ? null : {
+        // NextAuth maps an empty discovery object to null. Use that contract
+        // without introducing an unrelated JSON parsing exception in the SDK.
+        body: JSON.stringify(discoveryAttempts === 1 ? {} : {
           google: {
             id: 'google', name: 'Google', type: 'oauth',
             signinUrl: new URL('/api/auth/signin/google', baseUrl).href,

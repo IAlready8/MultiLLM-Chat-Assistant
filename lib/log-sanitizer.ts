@@ -5,7 +5,7 @@ const MAX_DEPTH = 4
 const MAX_ARRAY_ITEMS = 20
 
 const SENSITIVE_KEY_PATTERN =
-  /(authorization|api[-_]?key|token|secret|password|cookie|signature|seed|database_url|connection|string|dsn|webhook|^state$|^nonce$|^code$|code[-_]?(verifier|challenge))/i
+  /(authorization|api[-_]?key|token|secret|password|cookie|signature|seed|database_url|connection|string|dsn|webhook|^state$|^nonce$|code[-_]?(verifier|challenge))/i
 
 const stringRedactors: Array<{
   pattern: RegExp

@@ -102,12 +102,13 @@ describe('logging safety', () => {
 
   it('redacts OAuth callback and PKCE material from structured metadata and URLs', () => {
     const serialized = JSON.stringify(sanitizeLogValue({
-      code: 'private-code', state: 'private-state', nonce: 'private-nonce',
+      state: 'private-state', nonce: 'private-nonce',
       code_verifier: 'private-verifier', code_challenge: 'private-challenge',
       url: 'https://auth.example/callback?code=private-code&state=private-state&access_token=private-access&nonce=private-nonce&code_verifier=private-verifier',
     }))
     expect(serialized).not.toContain('private-')
     expect(serialized).toContain('[REDACTED]')
+    expect(sanitizeLogValue({ code: 'DATABASE_ERROR' })).toEqual({ code: 'DATABASE_ERROR' })
   })
 
   it('bounds circular arrays and objects instead of breaking error logging', () => {

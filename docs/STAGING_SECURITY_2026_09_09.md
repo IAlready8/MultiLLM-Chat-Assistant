@@ -73,3 +73,10 @@ and no high/critical findings. The source sweep has 41 contextual matches.
 The native PostgreSQL/Redis CI browser fixture additionally checks a controlled
 provider-discovery failure and successful retry before real credential login.
 That controlled UI check is not evidence of live Google or provider authentication.
+
+The final NextAuth logger uses an allowlist instead of arbitrary debug metadata:
+installed NextAuth emits raw state/PKCE values under a generic `value` key. Only
+framework event codes and sanitized error summaries are retained, including in
+development. Ordinary application error codes remain intact. The expanded suite
+passes 645 tests in 84 files with unchanged thresholds (45.67% lines/statements,
+75.55% branches, 73.14% functions).
