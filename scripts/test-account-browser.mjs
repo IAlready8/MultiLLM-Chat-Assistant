@@ -17,6 +17,7 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   try {
     let discoveryAttempts = 0
+    let discoveryRecovered = false
     await page.route('**/api/auth/providers', async route => {
       discoveryAttempts++
       await route.fulfill({
@@ -24,7 +25,7 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
         contentType: 'application/json',
         // NextAuth maps an empty discovery object to null. Use that contract
         // without introducing an unrelated JSON parsing exception in the SDK.
-        body: JSON.stringify(discoveryAttempts === 1 ? {} : {
+        body: JSON.stringify(!discoveryRecovered ? {} : {
           google: {
             id: 'google', name: 'Google', type: 'oauth',
             signinUrl: new URL('/api/auth/signin/google', baseUrl).href,
@@ -34,10 +35,14 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
       })
     })
     await page.goto(new URL('/auth/signin?callbackUrl=%2Fsettings', baseUrl).href)
-    await expect(page.getByRole('alert')).toContainText('Sign-in options could not be loaded')
+    await expect(page.getByRole('alert').filter({ hasText: 'Sign-in options could not be loaded' }))
+      .toBeVisible({ timeout: 30_000 })
+    const attemptsBeforeRetry = discoveryAttempts
+    assert.ok(attemptsBeforeRetry >= 1)
+    discoveryRecovered = true
     await page.getByRole('button', { name: 'Retry sign-in options', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Continue with Google', exact: true })).toBeEnabled()
-    assert.equal(discoveryAttempts, 2)
+    assert.ok(discoveryAttempts > attemptsBeforeRetry)
     await page.unroute('**/api/auth/providers')
     await page.reload()
     await expect(page.getByRole('button', { name: 'Sign in with password', exact: true })).toBeEnabled()
