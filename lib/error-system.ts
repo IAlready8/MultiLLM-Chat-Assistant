@@ -1,5 +1,5 @@
 import { logger } from '@/lib/logger'
-import { summarizeErrorForLogs } from '@/lib/log-sanitizer'
+import { sanitizeLogString, summarizeErrorForLogs } from '@/lib/log-sanitizer'
 import { v4 as uuidv4 } from 'uuid'
 
 type AnalyticsRow = { payload?: string | null }
@@ -303,7 +303,7 @@ export class ErrorManager {
                   code: appError.code,
                   category: appError.category,
                   severity: appError.severity,
-                  message: appError.message,
+                  message: sanitizeLogString(appError.message),
                 }),
                 // Analytics.userId is required in schema; default to 'system' if absent
                 userId: appError.context.userId ?? 'system',
@@ -311,7 +311,10 @@ export class ErrorManager {
             })
           }
         } catch (persistErr) {
-          // swallow persistence errors in logger
+          logger.warn('error_analytics_persistence_failed', {
+            errorId: appError.id,
+            error: summarizeErrorForLogs(persistErr),
+          })
         }
       }
 
@@ -352,17 +355,6 @@ export class ErrorManager {
       false,
       0
     )
-  }
-
-  private async reportToMonitoring(error: AppError): Promise<void> {
-    // Implement integration with your monitoring service (e.g., Sentry, DataDog)
-    // This is a placeholder implementation
-    logger.info('monitoring_report_queued', {
-      error: error.message,
-      code: error.code,
-      category: error.category,
-      severity: error.severity,
-    })
   }
 
   createUserFriendlyMessage(error: AppError): string {
@@ -458,7 +450,9 @@ export class ErrorManager {
           const code = payload.code as string | undefined
           const category = payload.category as ErrorCategory | undefined
           const severity = payload.severity as ErrorSeverity | undefined
-          if (!code || !category || !severity) continue
+          if (typeof code !== 'string' || !code || !category || !severity ||
+              !Object.values(ErrorCategory).includes(category as ErrorCategory) ||
+              !Object.values(ErrorSeverity).includes(severity as ErrorSeverity)) continue
           total++
           byCategory[category] = (byCategory[category] || 0) + 1
           bySeverity[severity] = (bySeverity[severity] || 0) + 1

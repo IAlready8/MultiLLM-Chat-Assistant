@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiLog } from '@/lib/api-logger'
 import { logger } from '@/lib/logger'
+import { sanitizeLogValue } from '@/lib/log-sanitizer'
 
 const originalCommitSha = process.env.VERCEL_GIT_COMMIT_SHA
 const originalCommitRef = process.env.VERCEL_GIT_COMMIT_REF
@@ -97,5 +98,26 @@ describe('logging safety', () => {
     expect(payload.authorization).toBe('[REDACTED]')
     expect(payload.connectionString).toBe('[REDACTED]')
     expect(payload.details.webhookSecret).toBe('[REDACTED]')
+  })
+
+  it('redacts OAuth callback and PKCE material from structured metadata and URLs', () => {
+    const serialized = JSON.stringify(sanitizeLogValue({
+      code: 'private-code', state: 'private-state', nonce: 'private-nonce',
+      code_verifier: 'private-verifier', code_challenge: 'private-challenge',
+      url: 'https://auth.example/callback?code=private-code&state=private-state&access_token=private-access&nonce=private-nonce&code_verifier=private-verifier',
+    }))
+    expect(serialized).not.toContain('private-')
+    expect(serialized).toContain('[REDACTED]')
+  })
+
+  it('bounds circular arrays and objects instead of breaking error logging', () => {
+    const array: unknown[] = []
+    array.push(array)
+    const object: Record<string, unknown> = {}
+    object.self = object
+    expect(() => JSON.stringify(sanitizeLogValue({ array, object }))).not.toThrow()
+    expect(JSON.stringify(sanitizeLogValue(array))).toContain('Truncated array depth')
+    expect(JSON.stringify(sanitizeLogValue({ timestamp: 1234567890123456789n })))
+      .toContain('1234567890123456789')
   })
 })

@@ -16,7 +16,28 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   try {
+    let discoveryAttempts = 0
+    await page.route('**/api/auth/providers', async route => {
+      discoveryAttempts++
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(discoveryAttempts === 1 ? null : {
+          google: {
+            id: 'google', name: 'Google', type: 'oauth',
+            signinUrl: new URL('/api/auth/signin/google', baseUrl).href,
+            callbackUrl: new URL('/api/auth/callback/google', baseUrl).href,
+          },
+        }),
+      })
+    })
     await page.goto(new URL('/auth/signin?callbackUrl=%2Fsettings', baseUrl).href)
+    await expect(page.getByRole('alert')).toContainText('Sign-in options could not be loaded')
+    await page.getByRole('button', { name: 'Retry sign-in options', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Continue with Google', exact: true })).toBeEnabled()
+    assert.equal(discoveryAttempts, 2)
+    await page.unroute('**/api/auth/providers')
+    await page.reload()
     await expect(page.getByRole('button', { name: 'Sign in with password', exact: true })).toBeEnabled()
     await page.getByLabel('Email', { exact: true }).fill(email)
     await page.getByLabel('Password', { exact: true }).fill(password)
@@ -57,7 +78,7 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
     await page.getByRole('button', { name: 'Restore into my account', exact: true }).click()
     await expect(page.getByText('Restored 0 conversations and 0 messages. Skipped 3 existing copies.', { exact: true })).toBeVisible()
     assert.deepEqual(errors, [], 'Browser must not report console errors or uncaught exceptions')
-    console.log('Browser QA passed: credential sign-in, persisted profile reload, encrypted archive download/decryption and idempotent restore, desktop and mobile settings; no console errors')
+    console.log('Browser QA passed: controlled provider-discovery failure/retry, credential sign-in, persisted profile reload, encrypted archive download/decryption and idempotent restore, desktop and mobile settings; no console errors')
   } catch (error) {
     console.error('Browser QA diagnostics', { url: page.url(), errors })
     await page.screenshot({ path: path.join(artifacts, 'failure.png'), fullPage: true }).catch(() => {})

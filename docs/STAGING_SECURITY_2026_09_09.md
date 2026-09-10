@@ -42,3 +42,34 @@ Vitest 4.1.11 and matching coverage provider passed all 619 tests in 82 files. U
 ## Final correction validation
 
 Clean installs succeeded with npm 10.9.4 (CI) and npm 11.11.1 (packageManager), with a valid Undici graph. On Node 22, strict typecheck, zero-warning lint, 619 tests / 82 files, coverage gates (44.41% lines, 75% branches, 70.77% functions), Vercel proxy/function compatibility, production build and repository hygiene all passed. Fresh audit reports zero high/critical and three moderate development-only Vitest findings. The final source sweep found mostly form/stream placeholders; the monitoring integration in lib/error-system.ts still only logs locally and must not be described as an external monitoring service.
+
+## September 10 authentication and diagnostic hardening
+
+Production's actual Google authorization request passed callback/state/S256 PKCE
+verification. Following a fresh request reached Google's identifier page without
+`redirect_uri_mismatch`; no credentials were submitted and the authenticated
+callback remains unverified. The preview lacks a branch-scoped `NEXTAUTH_URL`.
+See `AUTHENTICATION_SETUP.md` for exact callback and stable preview requirements.
+No Google Cloud OAuth management capability was available; no redirect allowlist
+or production credentials were changed.
+
+Provider-discovery outages now have an accessible error and retry action instead
+of falsely reporting missing configuration. NextAuth credential whitespace is
+normalized consistently with provider policy. OAuth metadata is sanitized before
+logging; circular arrays and BigInt values cannot break log serialization.
+Critical-error analytics messages are sanitized before persistence; failed
+persistence is observable, and malformed category/severity rows are excluded
+from statistics. The unused fake monitoring-queue method was removed. External
+monitoring remains unconfigured.
+
+Local Node 22 validation passed 643 tests across 83 files, strict typecheck,
+zero-warning lint, unchanged coverage gates (45.68% lines/statements, 75.54%
+branches, 72.87% functions), production build using CI fixture configuration,
+repository hygiene, and Vercel proxy/native-function compatibility. The initial
+unconfigured build correctly failed required-environment validation. A fresh
+dependency audit still reports three moderate development-only Vitest findings
+and no high/critical findings. The source sweep has 41 contextual matches.
+
+The native PostgreSQL/Redis CI browser fixture additionally checks a controlled
+provider-discovery failure and successful retry before real credential login.
+That controlled UI check is not evidence of live Google or provider authentication.

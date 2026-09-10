@@ -104,6 +104,12 @@ npm run ops:auth:check -- \
   --provider google
 ```
 
+Add `--authorize` to also perform NextAuth's CSRF/sign-in handshake and verify
+the actual Google authorization request's exact `redirect_uri`, state, and S256
+PKCE parameters. This does not sign in, create an account, or follow the Google
+URL. It never prints cookies, client IDs, state, or PKCE material. The production
+Google operations workflow performs both checks.
+
 The guard fails when the provider is absent, is not OAuth, the endpoint redirects
 or times out, or the advertised sign-in/callback URL is derived from a different
 domain. It never prints the OAuth client secret. The equivalent manual GitHub
@@ -113,6 +119,31 @@ production domain so an operator cannot accidentally verify a preview URL.
 This guard proves provider availability and callback construction. It does not
 replace the provider-console allowlist: Google must still contain the same exact
 callback URI under **Authorized redirect URIs**.
+
+### Diagnosing `redirect_uri_mismatch`
+
+On September 10, 2026, production discovery and the actual authorization
+request both used:
+
+`https://multi-llm-chat-assistant.vercel.app/api/auth/callback/google`
+
+Following that fresh authorization request reached Google's sign-in page,
+without `redirect_uri_mismatch`. This verifies request acceptance, not a complete
+authenticated callback. If the error persists, inspect **Error details** on the
+failing Google page and compare its `redirect_uri` with the authorized redirect
+URIs on the exact OAuth client used by that deployment. Do not share the full
+authorization URL, tokens, or client secret. Google requires an exact match;
+adding a JavaScript origin alone does not register a redirect URI.
+
+The current completion preview has no branch-specific `NEXTAUTH_URL`; NextAuth
+can derive its callback from the immutable deployment hostname. Before enabling
+stable preview OAuth, register a separate preview web client, choose a stable
+preview hostname, set branch-scoped `NEXTAUTH_URL` to that origin, and deploy.
+Start and finish login on that same hostname so state/PKCE cookies stay in scope.
+Do not set preview `NEXTAUTH_URL` to production or copy production credentials
+as a workaround. Test preview protection and the complete callback before release.
+
+Reference: [Google authorization errors](https://developers.google.com/identity/protocols/oauth2/web-server#authorization-errors-redirect-uri-mismatch).
 
 ## Safe Rollout Order
 

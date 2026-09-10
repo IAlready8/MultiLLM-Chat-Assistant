@@ -5,7 +5,7 @@ const MAX_DEPTH = 4
 const MAX_ARRAY_ITEMS = 20
 
 const SENSITIVE_KEY_PATTERN =
-  /(authorization|api[-_]?key|token|secret|password|cookie|signature|seed|database_url|connection|string|dsn|webhook)/i
+  /(authorization|api[-_]?key|token|secret|password|cookie|signature|seed|database_url|connection|string|dsn|webhook|^state$|^nonce$|^code$|code[-_]?(verifier|challenge))/i
 
 const stringRedactors: Array<{
   pattern: RegExp
@@ -22,7 +22,7 @@ const stringRedactors: Array<{
   },
   {
     pattern:
-      /([?&](?:api[_-]?key|token|secret|password|signature|code|state)=)[^&\s]+/gi,
+      /([?&](?:api[_-]?key|(?:access_|refresh_|id_)?token|secret|password|signature|code|state|nonce|code_challenge|code_verifier)=)[^&\s]+/gi,
     replacement: `$1${REDACTED}`,
   },
   {
@@ -87,11 +87,12 @@ export const sanitizeLogValue = (value: unknown, depth = 0): unknown => {
 
   if (
     typeof value === 'number' ||
-    typeof value === 'boolean' ||
-    typeof value === 'bigint'
+    typeof value === 'boolean'
   ) {
     return value
   }
+
+  if (typeof value === 'bigint') return value.toString()
 
   if (value instanceof Date) {
     return value.toISOString()
@@ -106,6 +107,7 @@ export const sanitizeLogValue = (value: unknown, depth = 0): unknown => {
   }
 
   if (Array.isArray(value)) {
+    if (depth >= MAX_DEPTH) return ['[Truncated array depth]']
     const limited = value.slice(0, MAX_ARRAY_ITEMS)
     return limited.map((entry) => sanitizeLogValue(entry, depth + 1))
   }
@@ -126,4 +128,3 @@ export const summarizeErrorForLogs = (error: unknown): Record<string, unknown> =
     message: sanitizeLogValue(String(error)),
   }
 }
-

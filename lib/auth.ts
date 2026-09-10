@@ -11,6 +11,7 @@ import { hasDatabaseUrl } from '@/lib/database-url'
 import prisma from '@/lib/prisma'
 import { readSessionTokenFromCookies } from '@/lib/session-cookie'
 import { validateStartupEnvironment } from '@/lib/startup-validation'
+import { sanitizeLogValue } from '@/lib/log-sanitizer'
 
 type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
 type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER'
@@ -62,14 +63,14 @@ const authSecret = resolveAuthSecret()
 
 const authLogger: NonNullable<NextAuthOptions['logger']> = {
   error(code, metadata) {
-    console.error(`[next-auth][error][${code}]`, metadata ?? '')
+    console.error(`[next-auth][error][${code}]`, sanitizeLogValue(metadata ?? ''))
   },
   warn(code) {
     console.warn(`[next-auth][warn][${code}]`)
   },
   debug(code, metadata) {
     if (process.env.NODE_ENV === 'development') {
-      console.debug(`[next-auth][debug][${code}]`, metadata ?? '')
+      console.debug(`[next-auth][debug][${code}]`, sanitizeLogValue(metadata ?? ''))
     }
   },
 }
@@ -84,28 +85,32 @@ const loadSubscriptionTier = async (
     })
     return (subscription?.tier as SubscriptionTier) || 'FREE'
   } catch (error) {
-    console.warn('Failed to load subscription tier, defaulting to FREE:', error)
+    console.warn('Failed to load subscription tier, defaulting to FREE:', sanitizeLogValue(error))
     return 'FREE'
   }
 }
 
 const buildProviders = (): NextAuthOptions['providers'] => {
   const providers: NextAuthOptions['providers'] = []
+  const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim()
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim()
+  const githubClientId = process.env.GITHUB_CLIENT_ID?.trim()
+  const githubClientSecret = process.env.GITHUB_CLIENT_SECRET?.trim()
 
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  if (googleClientId && googleClientSecret) {
     providers.push(
       GoogleProvider({
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        clientId: googleClientId,
+        clientSecret: googleClientSecret,
       }),
     )
   }
 
-  if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+  if (githubClientId && githubClientSecret) {
     providers.push(
       GitHubProvider({
-        clientId: process.env.GITHUB_CLIENT_ID,
-        clientSecret: process.env.GITHUB_CLIENT_SECRET,
+        clientId: githubClientId,
+        clientSecret: githubClientSecret,
       }),
     )
   }
