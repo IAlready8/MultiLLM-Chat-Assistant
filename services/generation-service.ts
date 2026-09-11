@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
-import { LlmRequestError, type LlmInput } from '@/lib/llm-request'
+import { LlmRequestError, type GenerationInput } from '@/lib/llm-request'
 import { apiReadCacheKey, invalidateApiReadCache } from '@/lib/api-read-cache'
 import type { Message } from '@/types/prisma'
 
-export type SavedGenerationInput = LlmInput & {
+export type SavedGenerationInput = GenerationInput & {
   conversationId: string
   requestId: string
   turnId: string

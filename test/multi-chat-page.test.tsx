@@ -5,6 +5,7 @@ import MultiChatPage from '@/app/multi-chat/page'
 
 const mockApiClient = vi.hoisted(() => ({
   getConversationPage: vi.fn(),
+  getConversationMessages: vi.fn(),
   createConversation: vi.fn(),
   addMessages: vi.fn(),
 }))
@@ -20,6 +21,7 @@ describe('MultiChatPage provider model picker', () => {
     vi.clearAllMocks()
     Element.prototype.scrollIntoView = vi.fn()
     mockApiClient.getConversationPage.mockResolvedValue({ items: [], nextCursor: null })
+    mockApiClient.getConversationMessages.mockResolvedValue({ id: 'saved-conversation', messages: [], nextMessageCursor: null, pageTurns: 0 })
     mockApiClient.createConversation.mockResolvedValue({ id: 'saved-conversation', title: 'Test conversation', updatedAt: new Date() })
     mockApiClient.addMessages.mockResolvedValue(undefined)
     vi.stubGlobal(
@@ -91,6 +93,8 @@ describe('MultiChatPage provider model picker', () => {
     expect(requests).toHaveLength(2)
     const turn = mockApiClient.createConversation.mock.calls[0][0].messages[0].clientId
     expect(requests.map(request => request.position)).toEqual([0, 1])
+    // The server rebuilds context from saved history; the browser sends identities only.
+    expect(requests.every(request => request.history === 'server' && request.messages === undefined)).toBe(true)
     expect(requests.every(request => request.conversationId === 'saved-conversation' && request.turnId === turn)).toBe(true)
     expect(mockApiClient.addMessages).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: /Regenerate openai/ }))
@@ -98,6 +102,63 @@ describe('MultiChatPage provider model picker', () => {
     expect(requests[2].turnId).toBe(turn)
     expect(requests[2].requestId).not.toBe(requests[0].requestId)
     expect(mockApiClient.createConversation).toHaveBeenCalledTimes(1)
+  })
+
+  it('loads older turns on demand, keeps loaded history when a page fails, and retries', async () => {
+    const user = userEvent.setup()
+    const turn = (index: number) => [
+      { id: `m-user-${index}`, clientId: `client-${index}`, role: 'user', content: `Question ${index}`, createdAt: new Date(Date.UTC(2026, 8, index)).toISOString(), generationStatus: 'complete' },
+      { id: `m-answer-${index}`, role: 'assistant', content: `Answer ${index}`, provider: 'openai', model: 'gpt-test', turnId: `client-${index}`, position: 0, createdAt: new Date(Date.UTC(2026, 8, index, 1)).toISOString(), generationStatus: 'complete' },
+    ]
+    mockApiClient.getConversationPage.mockResolvedValue({ items: [{ id: 'saved-conversation', title: 'Long conversation', updatedAt: new Date() }], nextCursor: null })
+    mockApiClient.getConversationMessages.mockResolvedValueOnce({ id: 'saved-conversation', messages: turn(20), nextMessageCursor: 'older-cursor', pageTurns: 1 })
+    mockApiClient.getConversationMessages.mockRejectedValueOnce(new Error('History page unavailable'))
+    mockApiClient.getConversationMessages.mockResolvedValueOnce({ id: 'saved-conversation', messages: turn(19), nextMessageCursor: null, pageTurns: 1 })
+    render(<MultiChatPage />)
+
+    expect(await screen.findByText('Answer 20')).toBeVisible()
+    await user.click(await screen.findByRole('button', { name: 'Load earlier messages' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load earlier messages')
+    expect(screen.getByText('Answer 20')).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Retry loading earlier messages' }))
+    expect(await screen.findByText('Question 19')).toBeVisible()
+    expect(screen.getByText('Answer 20')).toBeVisible()
+    await waitFor(() => expect(screen.queryByRole('button', { name: /earlier messages/ })).not.toBeInTheDocument())
+    expect(mockApiClient.getConversationMessages.mock.calls.slice(1)).toEqual([
+      ['saved-conversation', 'older-cursor'],
+      ['saved-conversation', 'older-cursor'],
+    ])
+  })
+
+  it('ignores an older-page failure after starting a new conversation', async () => {
+    const user = userEvent.setup()
+    let rejectPage!: (error: Error) => void
+    mockApiClient.getConversationPage.mockResolvedValue({ items: [{ id: 'saved-conversation', title: 'Long conversation', updatedAt: new Date() }], nextCursor: null })
+    mockApiClient.getConversationMessages.mockResolvedValueOnce({ id: 'saved-conversation', messages: [{ id: 'saved-message', role: 'user', content: 'Saved question', createdAt: new Date().toISOString() }], nextMessageCursor: 'older-cursor', pageTurns: 1 })
+    mockApiClient.getConversationMessages.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectPage = reject }))
+    render(<MultiChatPage />)
+    await user.click(await screen.findByRole('button', { name: 'Load earlier messages' }))
+    expect(screen.getByRole('button', { name: 'New Chat' })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'New Chat' }))
+    await act(async () => rejectPage(new Error('Late history failure')))
+    expect(screen.queryByText('Unable to load earlier messages. Try again.')).not.toBeInTheDocument()
+  })
+
+  it('states when earlier context was omitted to fit the model budget', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === '/api/config') return Response.json({ configuredProviders: ['openai'] })
+      return new Response('{"type":"chunk","content":"Answer"}\n{"type":"done"}\n', {
+        headers: { 'X-Context-Included-Turns': '10', 'X-Context-Omitted-Turns': '42', 'X-Context-Truncated': 'true' },
+      })
+    }))
+    render(<MultiChatPage />)
+    const input = screen.getByRole('textbox', { name: 'Message' })
+    await waitFor(() => expect(input).toBeEnabled())
+    await user.type(input, 'Continue the long conversation')
+    await user.click(screen.getByRole('button', { name: 'Send message' }))
+    expect(await screen.findByText('Earlier context omitted to fit the model limit: 42 older turns.')).toBeVisible()
   })
 
   it('preserves an unsaved prompt and never dispatches when saving fails', async () => {

@@ -17,8 +17,10 @@ const db = new pg.Pool({ connectionString: database.toString() })
 const runId = randomUUID()
 const owner = `generation-test-owner-${runId}`
 const outsider = `generation-test-outsider-${runId}`
+const historianId = `generation-test-historian-${runId}`
 const password = randomUUID()
 let providerCalls = 0
+const providerPrompts = []
 const modelApi = createServer(async (req, res) => {
   if (req.url === '/api/tags') { res.setHeader('Content-Type', 'application/json'); res.end('{"models":[]}'); return }
   assert.equal(req.url, '/api/chat')
@@ -26,6 +28,7 @@ const modelApi = createServer(async (req, res) => {
   for await (const chunk of req) body += chunk
   const input = JSON.parse(body)
   providerCalls++
+  providerPrompts.push(input.messages ?? [])
   if (input.model === 'qa-fail') { res.writeHead(429); res.end('{"error":"private provider error detail"}'); return }
   if (input.stream === false) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ message: { content: `answer:${input.model}` }, done: true, prompt_eval_count: 12, eval_count: 4 })); return }
   res.setHeader('Content-Type', 'application/x-ndjson')
@@ -72,8 +75,9 @@ async function events(response) {
 
 try {
   const hash = await bcrypt.hash(password, 10)
-  for (const id of [owner, outsider]) await db.query('INSERT INTO "User" (id, email, name, password) VALUES ($1, $2, $1, $3)', [id, `${id}@example.test`, hash])
+  for (const id of [owner, outsider, historianId]) await db.query('INSERT INTO "User" (id, email, name, password) VALUES ($1, $2, $1, $3)', [id, `${id}@example.test`, hash])
   await db.query('INSERT INTO "ProviderConfig" (id, provider, "userId", settings, "updatedAt") VALUES ($1, $2, $3, $4, NOW())', [`config-${runId}`, 'ollama', owner, JSON.stringify({ baseUrl: 'http://localhost:11434', models: ['qa-fast'] })])
+  await db.query('INSERT INTO "ProviderConfig" (id, provider, "userId", settings, "updatedAt") VALUES ($1, $2, $3, $4, NOW())', [`historian-config-${runId}`, 'ollama', historianId, JSON.stringify({ baseUrl: 'http://localhost:11434', models: ['qa-fast'] })])
   modelApi.listen(11434)
   await once(modelApi, 'listening')
   const request = await login(owner)
@@ -164,6 +168,47 @@ try {
   const batchReplay = await (await request('/api/llm/orchestrate', json(savedBatch))).json()
   assert.ok(batchReplay.every(item => item.replay === true))
   assert.equal(providerCalls, callsBeforeBatchReplay)
+  // Server-assembled history: the browser sends identities only, and the model
+  // still receives persisted context from turns it never loaded. A separate
+  // account keeps the owner's quota and history assertions unchanged.
+  const historian = await login(historianId)
+  const longConversation = await (await historian('/api/conversations', json({ title: 'Server history pagination', messages: [{ role: 'user', content: 'History turn 1', clientId: randomUUID() }] }))).json()
+  assert.ok(longConversation.id)
+  const longTurns = []
+  for (let index = 2; index <= 6; index++) {
+    const clientId = randomUUID()
+    longTurns.push(clientId)
+    assert.equal((await historian(`/api/conversations/${longConversation.id}`, json([{ role: 'user', content: `History turn ${index}`, clientId }]))).status, 200)
+    assert.equal((await events(await historian('/api/llm/stream', json({ provider: 'ollama', model: 'qa-fast', history: 'server', conversationId: longConversation.id, requestId: randomUUID(), turnId: clientId, instanceId: 'history-instance', position: 0 })))).at(-1).type, 'done')
+  }
+  const serverHistoryPrompt = providerPrompts.at(-1)
+  assert.equal(serverHistoryPrompt[0].content, 'History turn 1', 'Server history must start at the oldest persisted turn')
+  assert.equal(serverHistoryPrompt.at(-1).content, 'History turn 6')
+  assert.equal(serverHistoryPrompt.filter(message => message.role === 'user').length, 6)
+  assert.equal(serverHistoryPrompt.filter(message => message.role === 'assistant' && message.content === 'answer:qa-fast').length, 4)
+  assert.equal((await historian('/api/llm/stream', json({ provider: 'ollama', model: 'qa-fast', history: 'server', conversationId: longConversation.id, requestId: randomUUID(), turnId: longTurns.at(-1), messages: [{ role: 'user', content: 'stale browser history' }] }))).status, 400)
+  const callsBeforeDeniedHistory = providerCalls
+  assert.equal((await request('/api/llm/stream', json({ provider: 'ollama', model: 'qa-fast', history: 'server', conversationId: longConversation.id, requestId: randomUUID(), turnId: longTurns.at(-1), position: 0 }))).status, 404)
+  assert.equal(providerCalls, callsBeforeDeniedHistory, 'Denied server history must not dispatch a provider call')
+  assert.equal((await request(`/api/conversations/${longConversation.id}?messagesLimit=5`)).status, 404)
+  assert.equal((await historian(`/api/conversations/${longConversation.id}?messagesLimit=0`)).status, 400)
+  assert.equal((await historian(`/api/conversations/${longConversation.id}?messagesLimit=5&before=not-a-cursor`)).status, 400)
+  const pagedTurnIds = []
+  let messageCursor
+  let messagePages = 0
+  do {
+    const messagePage = await (await historian(`/api/conversations/${longConversation.id}?messagesLimit=2${messageCursor ? `&before=${encodeURIComponent(messageCursor)}` : ''}`)).json()
+    const userMessages = messagePage.messages.filter(message => message.role === 'user')
+    assert.ok(userMessages.length <= 2)
+    for (const message of userMessages) pagedTurnIds.push(message.clientId)
+    for (const answer of messagePage.messages.filter(message => message.role === 'assistant')) {
+      assert.ok(userMessages.some(message => message.clientId === answer.turnId), 'A page must not split a turn from its responses')
+    }
+    messageCursor = messagePage.nextMessageCursor
+    assert.ok(++messagePages <= 4, 'Message cursor must make progress')
+  } while (messageCursor)
+  assert.equal(pagedTurnIds.length, 6, 'Message pagination must not duplicate or skip turns')
+  assert.equal(new Set(pagedTurnIds).size, 6)
   const page = await (await request('/api/conversations?limit=1')).json()
   assert.equal(page.items.length, 1)
   assert.equal(page.items[0].userId, owner)
@@ -217,11 +262,11 @@ try {
   assert.deepEqual(quotaAfterRestore.rows, quotaBeforeRestore.rows, 'Restore must neither add usage nor change existing accounting')
   await db.query('DELETE FROM "User" WHERE id = $1', [outsider])
   assert.equal((await other('/api/conversations')).status, 401, 'A deleted account must not retain access through its session token')
-  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation'], providerCalls }))
+  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'server-assembled model context', 'owned turn-aligned message pagination', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation'], providerCalls }))
 } finally {
   modelApi.closeAllConnections()
   if (modelApi.listening) await new Promise(resolve => modelApi.close(resolve))
-  await db.query('DELETE FROM "User" WHERE id = ANY($1::text[])', [[owner, outsider]])
-  await db.query('DELETE FROM "Analytics" WHERE "userId" = ANY($1::text[])', [[owner, outsider]])
+  await db.query('DELETE FROM "User" WHERE id = ANY($1::text[])', [[owner, outsider, historianId]])
+  await db.query('DELETE FROM "Analytics" WHERE "userId" = ANY($1::text[])', [[owner, outsider, historianId]])
   await db.end()
 }

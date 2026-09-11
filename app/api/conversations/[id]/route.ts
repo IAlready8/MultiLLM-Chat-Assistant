@@ -11,6 +11,7 @@ import {
 } from '@/lib/api-read-cache'
 import { z } from 'zod'
 import { readBoundedJson, LlmRequestError } from '@/lib/llm-request'
+import { getConversationMessagePage, parseMessagePage } from '@/services/conversation-context'
 
 // Zod schema for adding messages
 const addMessagesSchema = z.array(
@@ -36,10 +37,12 @@ type ConversationRouteContext = {
 
 /**
  * GET /api/conversations/[id]
- * Retrieves a single, full conversation with all messages.
+ * Without paging parameters, retrieves the full conversation (legacy workspaces).
+ * With ?messagesLimit=N[&before=cursor], returns the newest N complete user
+ * turns and a cursor for older turns.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   context: ConversationRouteContext
 ) {
   const authCheck = await getAuthenticatedUser()
@@ -49,6 +52,16 @@ export async function GET(
   try {
     const { params } = context
     const { id } = await params
+    let page: ReturnType<typeof parseMessagePage>
+    try { page = parseMessagePage(new URL(req.url).searchParams) } catch (error) {
+      if (error instanceof LlmRequestError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+      throw error
+    }
+    if (page) {
+      const paged = await getConversationMessagePage(id, user.id, page)
+      if (!paged) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+      return NextResponse.json(paged, { headers: { 'Cache-Control': 'no-store' } })
+    }
     const conversation = await ConversationService.getFullConversation(id, user.id)
 
     if (!conversation) {
@@ -57,6 +70,7 @@ export async function GET(
 
     return NextResponse.json(conversation)
   } catch (error) {
+    if (error instanceof LlmRequestError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     console.error('Error loading conversation:', error)
     return NextResponse.json(
       { error: 'Failed to load conversation' },

@@ -32,6 +32,13 @@ vi.mock('@/services/conversation-service.db', () => ({
   },
 }))
 
+const mockGetConversationMessagePage = vi.fn()
+
+vi.mock('@/services/conversation-context', async original => ({
+  ...await original<typeof import('@/services/conversation-context')>(),
+  getConversationMessagePage: (...args: unknown[]) => mockGetConversationMessagePage(...args),
+}))
+
 vi.mock('@/services/analytics-service', () => ({
   recordAnalyticsEvent: (event: unknown) => mockRecordAnalyticsEvent(event),
 }))
@@ -279,6 +286,44 @@ describe('/api/conversations routes', () => {
     expect(mockConversationService.createConversation).toHaveBeenCalled()
 
     consoleSpy.mockRestore()
+  })
+
+  it('id GET returns a turn-aligned message page with its older-page cursor', async () => {
+    mockGetConversationMessagePage.mockResolvedValue({ id: 'conv-1', title: 'Paged', messages: [{ id: 'm1', role: 'user', content: 'prompt' }], nextMessageCursor: 'cursor-2', pageTurns: 20 })
+
+    const response = await getConversationById(
+      new Request('http://localhost/api/conversations/conv-1?messagesLimit=20&before=' + Buffer.from(JSON.stringify({ id: 'm9', createdAt: '2026-09-01T00:00:00.000Z' })).toString('base64url')),
+      idRouteContext('conv-1')
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ nextMessageCursor: 'cursor-2', pageTurns: 20 })
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(mockGetConversationMessagePage).toHaveBeenCalledWith('conv-1', 'user-1', { limit: 20, cursor: { id: 'm9', createdAt: new Date('2026-09-01T00:00:00.000Z') } })
+    expect(mockConversationService.getFullConversation).not.toHaveBeenCalled()
+  })
+
+  it('id GET returns 404 for a paged request on another account conversation', async () => {
+    mockGetConversationMessagePage.mockResolvedValue(null)
+
+    const response = await getConversationById(
+      new Request('http://localhost/api/conversations/conv-1?messagesLimit=20'),
+      idRouteContext('conv-1')
+    )
+
+    expect(response.status).toBe(404)
+  })
+
+  it('id GET rejects invalid page parameters before reading any conversation', async () => {
+    for (const query of ['messagesLimit=0', 'messagesLimit=500', 'messagesLimit=20&before=not-a-cursor']) {
+      const response = await getConversationById(
+        new Request(`http://localhost/api/conversations/conv-1?${query}`),
+        idRouteContext('conv-1')
+      )
+      expect(response.status).toBe(400)
+    }
+    expect(mockGetConversationMessagePage).not.toHaveBeenCalled()
+    expect(mockConversationService.getFullConversation).not.toHaveBeenCalled()
   })
 
   it('id GET returns 404 when conversation is missing', async () => {

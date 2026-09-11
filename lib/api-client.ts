@@ -131,6 +131,14 @@ export const apiClient = {
   ): Promise<Conversation & { messages: Message[] }> {
     return handleResponse(await fetch(`/api/conversations/${id}`))
   },
+  async getConversationMessages(
+    id: string,
+    before?: string
+  ): Promise<Conversation & { messages: Message[]; nextMessageCursor: string | null; pageTurns: number }> {
+    const query = new URLSearchParams({ messagesLimit: '20' })
+    if (before) query.set('before', before)
+    return handleResponse(await fetch(`/api/conversations/${id}?${query}`, { cache: 'no-store' }))
+  },
   async createConversation(data: NewConversation): Promise<Conversation> {
     return handleResponse(
       await fetch('/api/conversations', {
