@@ -25,7 +25,9 @@ describe('lib/stripe getOrCreateStripeCustomer', () => {
   })
 
   it('returns existing customer id without creating a new customer', async () => {
-    const mockFindUnique = vi.fn().mockResolvedValue({ stripeCustomerId: 'cus_existing' })
+    const mockFindUnique = vi
+      .fn()
+      .mockResolvedValue({ stripeCustomerId: 'cus_existing' })
     const mockUpsert = vi.fn()
 
     vi.doMock('@/lib/prisma', () => ({
@@ -38,14 +40,18 @@ describe('lib/stripe getOrCreateStripeCustomer', () => {
     }))
 
     const stripeModule = await import('@/lib/stripe')
+    const retrieveSpy = vi
+      .spyOn(stripeModule.stripe.customers, 'retrieve')
+      .mockResolvedValue({ id: 'cus_existing', deleted: false } as never)
     const createSpy = vi.spyOn(stripeModule.stripe.customers, 'create')
 
     const customerId = await stripeModule.getOrCreateStripeCustomer(
       'user-1',
-      'user@example.com'
+      'user@example.com',
     )
 
     expect(customerId).toBe('cus_existing')
+    expect(retrieveSpy).toHaveBeenCalledWith('cus_existing')
     expect(createSpy).not.toHaveBeenCalled()
     expect(mockUpsert).not.toHaveBeenCalled()
   })
@@ -70,15 +76,19 @@ describe('lib/stripe getOrCreateStripeCustomer', () => {
 
     const customerId = await stripeModule.getOrCreateStripeCustomer(
       'user-2',
-      'new@example.com'
+      'new@example.com',
     )
 
     expect(customerId).toBe('cus_new')
     expect(createSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         email: 'new@example.com',
-        metadata: { userId: 'user-2' },
-      })
+        metadata: {
+          app: 'multi-llm-chat-assistant',
+          userId: 'user-2',
+        },
+      }),
+      { idempotencyKey: 'multi-llm-customer:user-2:new' },
     )
     expect(mockUpsert).toHaveBeenCalledWith({
       where: { userId: 'user-2' },

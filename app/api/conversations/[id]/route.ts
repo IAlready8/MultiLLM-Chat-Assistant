@@ -10,21 +10,25 @@ import {
   invalidateApiReadCache,
 } from '@/lib/api-read-cache'
 import { z } from 'zod'
+import { readBoundedJson, LlmRequestError } from '@/lib/llm-request'
+import { getConversationMessagePage, parseMessagePage } from '@/services/conversation-context'
 
 // Zod schema for adding messages
 const addMessagesSchema = z.array(
     z.object({
       role: z.enum(['user', 'assistant']),
-      content: z.string().min(1),
+      content: z.string().min(1).max(128_000),
+      clientId: z.string().uuid().nullable().optional(),
+      instanceId: z.string().max(128).nullable().optional(),
       provider: z.string().nullable().optional(),
       model: z.string().nullable().optional(),
       cost: z.number().optional(),
       latency: z.number().optional(),
     })
-  ).min(1)
+  ).min(1).max(200)
 
 const updateConversationSchema = z.object({
-  title: z.string().min(1).max(255),
+  title: z.string().trim().min(1).max(255),
 })
 
 type ConversationRouteContext = {
@@ -33,10 +37,12 @@ type ConversationRouteContext = {
 
 /**
  * GET /api/conversations/[id]
- * Retrieves a single, full conversation with all messages.
+ * Without paging parameters, retrieves the full conversation (legacy workspaces).
+ * With ?messagesLimit=N[&before=cursor], returns the newest N complete user
+ * turns and a cursor for older turns.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   context: ConversationRouteContext
 ) {
   const authCheck = await getAuthenticatedUser()
@@ -46,6 +52,16 @@ export async function GET(
   try {
     const { params } = context
     const { id } = await params
+    let page: ReturnType<typeof parseMessagePage>
+    try { page = parseMessagePage(new URL(req.url).searchParams) } catch (error) {
+      if (error instanceof LlmRequestError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+      throw error
+    }
+    if (page) {
+      const paged = await getConversationMessagePage(id, user.id, page)
+      if (!paged) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+      return NextResponse.json(paged, { headers: { 'Cache-Control': 'no-store' } })
+    }
     const conversation = await ConversationService.getFullConversation(id, user.id)
 
     if (!conversation) {
@@ -54,6 +70,7 @@ export async function GET(
 
     return NextResponse.json(conversation)
   } catch (error) {
+    if (error instanceof LlmRequestError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     console.error('Error loading conversation:', error)
     return NextResponse.json(
       { error: 'Failed to load conversation' },
@@ -77,7 +94,11 @@ export async function POST(
   try {
     const { params } = context
     const { id } = await params
-    const body = await req.json()
+    let body: unknown
+    try { body = await readBoundedJson(req) } catch (error) {
+      if (error instanceof LlmRequestError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+      throw error
+    }
     const validation = addMessagesSchema.safeParse(body)
 
     if (!validation.success) {
@@ -88,11 +109,13 @@ export async function POST(
     }
 
     // Map messages to match Prisma schema (strip out extra fields like cost/latency)
-    const prismaMessages = validation.data.map(({ role, content, provider, model }) => ({
+    const prismaMessages = validation.data.map(({ role, content, provider, model, clientId, instanceId }) => ({
       role,
       content,
       provider: provider ?? null,
       model: model ?? null,
+    ...(clientId ? { clientId } : {}),
+    ...(instanceId ? { instanceId } : {}),
     }))
 
     const updatedConversation = await ConversationService.addMessages(id, user.id, prismaMessages)
@@ -160,7 +183,11 @@ export async function PUT(
   try {
     const { params } = context
     const { id } = await params
-    const body = await req.json()
+    let body: unknown
+    try { body = await readBoundedJson(req) } catch (error) {
+      if (error instanceof LlmRequestError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+      throw error
+    }
     const validation = updateConversationSchema.safeParse(body)
 
     if (!validation.success) {

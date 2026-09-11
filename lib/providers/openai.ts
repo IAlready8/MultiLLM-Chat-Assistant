@@ -1,3 +1,5 @@
+import { isOpenAiReasoningModel } from '@/lib/model-contract'
+import { providerSignal } from './util'
 /**
  * OpenAI provider adapter.
  *
@@ -17,20 +19,16 @@ import { getProviderBaseUrl, providerFetch } from '@/lib/provider-endpoint'
 const DEFAULT_MODEL = 'gpt-3.5-turbo'
 const TIMEOUT_MS = 60_000
 
-function usesGpt56ChatContract(model: string): boolean {
-  return model === 'gpt-5.6' || model.startsWith('gpt-5.6-')
-}
-
 function buildChatPayload(request: ProviderRequest, stream: boolean) {
   const model = request.model || DEFAULT_MODEL
 
-  if (usesGpt56ChatContract(model)) {
+  if (isOpenAiReasoningModel(model)) {
     return {
       model,
       messages: request.messages,
-      temperature: request.temperature ?? 0.7,
+      ...(!/^o[134](?:-|$)/.test(model) && !model.startsWith('gpt-6-astra') && (!request.reasoning_effort || request.reasoning_effort === 'off') ? { temperature: request.temperature ?? 0.7 } : {}),
       max_completion_tokens: request.max_tokens ?? 4096,
-      reasoning_effort: 'none',
+      reasoning_effort: request.reasoning_effort && request.reasoning_effort !== 'off' ? request.reasoning_effort : (/^o[134](?:-|$)/.test(model) || model.startsWith('gpt-6-astra')) ? 'medium' : 'none',
       stream,
     }
   }
@@ -77,7 +75,7 @@ export const openaiAdapter: ProviderAdapter = {
         ...config.extraHeaders,
       },
       body: JSON.stringify(buildChatPayload(request, false)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('openai', response, false)
@@ -103,13 +101,13 @@ export const openaiAdapter: ProviderAdapter = {
         Authorization: `Bearer ${config.apiKey}`,
         ...config.extraHeaders,
       },
-      body: JSON.stringify(buildChatPayload(request, true)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      body: JSON.stringify({ ...buildChatPayload(request, true), stream_options: { include_usage: true } }),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('openai', response, true)
     const body = requireBody('openai', response)
 
-    yield* parseSSEStream(body, (parsed) => parsed.choices?.[0]?.delta?.content)
+    yield* parseSSEStream(body, (parsed) => parsed.choices?.[0]?.delta?.content, request.onUsage)
   },
 }

@@ -252,3 +252,5 @@ Operational note:
 
 ## License
 MIT (`LICENSE`)
+
+Production completion work and the migration/test contract are documented in [the September engineering handoff](docs/PRODUCTION_COMPLETION_2026_09_07.md).

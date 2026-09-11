@@ -51,6 +51,7 @@ export function ExportImportDialog({
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
+      URL.revokeObjectURL(element.href);
       
       // Reset form
       setExportPassword("");
@@ -108,7 +109,7 @@ export function ExportImportDialog({
       </DialogTrigger>
       <DialogContent className="bg-gray-900 border-gray-800">
         <DialogHeader>
-          <DialogTitle>Export/Import Data</DialogTitle>
+          <DialogTitle>Export/Import Legacy Local Data</DialogTitle>
         </DialogHeader>
         
         <Tabs defaultValue="export" value={activeTab} onValueChange={setActiveTab}>
@@ -129,10 +130,10 @@ export function ExportImportDialog({
                 className="bg-gray-800 border-gray-700"
               />
               <p className="text-xs text-gray-500">
-                You&apos;ll need this password when importing your data
+                Use at least 12 characters. You&apos;ll need this password to import the file.
               </p>
               <p className="text-xs text-gray-500">
-                Provider API keys are intentionally excluded from exports and must be re-entered after import.
+                This file contains older browser data and preferences. It does not back up server conversation history or provider keys.
               </p>
             </div>
             

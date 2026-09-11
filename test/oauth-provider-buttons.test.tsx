@@ -73,4 +73,26 @@ describe('OAuthProviderButtons', () => {
     })
     expect(screen.queryByText(/GitHub/i)).not.toBeInTheDocument()
   })
+
+  it.each([null, new Error('offline')])('lets users retry failed provider discovery', async (failure) => {
+    if (failure instanceof Error) mockGetProviders.mockRejectedValueOnce(failure)
+    else mockGetProviders.mockResolvedValueOnce(failure)
+    mockGetProviders.mockResolvedValueOnce({
+      google: { id: 'google', name: 'Google', type: 'oauth' },
+    })
+    render(<OAuthProviderButtons callbackUrl="/" />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
+    expect(screen.queryByText(/operator must add/i)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Retry sign-in options' }))
+    expect(await screen.findByRole('button', { name: 'Continue with Google' })).toBeEnabled()
+  })
+
+  it('re-enables the button when starting sign-in fails', async () => {
+    mockGetProviders.mockResolvedValue({ google: { id: 'google', name: 'Google', type: 'oauth' } })
+    mockSignIn.mockRejectedValueOnce(new Error('offline'))
+    render(<OAuthProviderButtons callbackUrl="/" />)
+    const button = await screen.findByRole('button', { name: 'Continue with Google' })
+    await userEvent.click(button)
+    await waitFor(() => expect(button).toBeEnabled())
+  })
 })

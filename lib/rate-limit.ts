@@ -1,3 +1,4 @@
+import { LlmRequestError } from '@/lib/llm-request'
 import { logger } from '@/lib/logger'
 import { createClient } from 'redis'
 
@@ -9,8 +10,9 @@ interface LimitConfig {
 }
 
 export interface RateLimitDiagnostics {
-  mode: 'redis' | 'memory'
+  mode: 'redis' | 'postgres' | 'memory'
   status: 'connected' | 'degraded' | 'memory'
+  scope: 'distributed' | 'per-instance'
   message: string
   redisConfigured: boolean
   redisConnected: boolean
@@ -24,37 +26,46 @@ const hits = new Map<Key, number[]>()
 let redisClient: ReturnType<typeof createClient> | null = null
 let isRedisConnected = false
 
-// Initialize Redis connection if REDIS_URL is provided
+let connecting: Promise<void> | null = null
+let retryConnectionAt = 0
+let postgresHealthy = false
+const usesPostgres = () => process.env.RATE_LIMIT_BACKEND === 'postgres'
+const requiresDistributedLimits = () => process.env.NODE_ENV === 'production' || process.env.REQUIRE_DISTRIBUTED_RATE_LIMIT === 'true'
+
 async function initRedis() {
-  if (!process.env.REDIS_URL || redisClient) return
-
-  try {
-    redisClient = createClient({
-      url: process.env.REDIS_URL,
-    })
-
-    redisClient.on('error', (err: Error) => {
-      logger.warn('rate_limit_redis_client_error', { error: err })
+  if (connecting) return connecting
+  if (usesPostgres() || !process.env.REDIS_URL || isRedisConnected || Date.now() < retryConnectionAt) return
+  connecting = (async () => {
+    try {
+      const client = createClient({
+        url: process.env.REDIS_URL,
+        disableOfflineQueue: true,
+        socket: { connectTimeout: 2_000, reconnectStrategy: false },
+      })
+      redisClient = client
+      client.on('error', () => {
+        logger.warn('rate_limit_redis_client_error')
+        isRedisConnected = false
+      })
+      await client.connect()
+      isRedisConnected = true
+    } catch {
+      logger.warn('rate_limit_redis_connect_failed')
+      if (redisClient?.isOpen) redisClient.destroy()
+      redisClient = null
       isRedisConnected = false
-    })
-
-    await redisClient.connect()
-    isRedisConnected = true
-    logger.info('rate_limit_redis_connected')
-  } catch (error) {
-    logger.warn('rate_limit_redis_connect_failed', {
-      error,
-      fallback: 'memory',
-    })
-    redisClient = null
-    isRedisConnected = false
-  }
+      retryConnectionAt = Date.now() + 5_000
+    }
+  })().finally(() => { connecting = null })
+  return connecting
 }
 
-// Initialize Redis on module load
-initRedis().catch((error) => {
-  logger.error('rate_limit_init_failed', { error })
-})
+void initRedis()
+
+function unavailableOrMemory(key: Key, cfg: LimitConfig) {
+  if (requiresDistributedLimits()) throw new LlmRequestError('Request protection is temporarily unavailable. Try again shortly.', 503, 'RATE_LIMIT_UNAVAILABLE', 5)
+  return checkAndConsumeInMemory(key, cfg)
+}
 
 function now() {
   return Date.now()
@@ -63,6 +74,12 @@ function now() {
 // In-memory fallback implementation
 function checkAndConsumeInMemory(key: Key, cfg: LimitConfig) {
   const t = now()
+  if (hits.size >= 10_000 && !hits.has(key)) {
+    for (const [storedKey, timestamps] of hits) {
+      if ((timestamps.at(-1) ?? 0) < t - 86_400_000) hits.delete(storedKey)
+    }
+    if (hits.size >= 10_000) return { allowed: false as const, remaining: 0, retryAfterMs: cfg.windowMs }
+  }
   const windowStart = t - cfg.windowMs
   const arr = hits.get(key) || []
   const recent = arr.filter((ts) => ts > windowStart)
@@ -102,13 +119,13 @@ return {1, math.max(0, max_requests - current_count - 1), 0}
 // Redis-based implementation
 async function checkAndConsumeRedis(key: Key, cfg: LimitConfig) {
   if (!redisClient || !isRedisConnected) {
-    return checkAndConsumeInMemory(key, cfg)
+    return unavailableOrMemory(key, cfg)
   }
 
   try {
     const timestamp = now()
     const member = `${timestamp}-${Math.random()}`
-    const result = await redisClient.eval(REDIS_SLIDING_WINDOW_SCRIPT, {
+    const result = await redisClient.withCommandOptions({ abortSignal: AbortSignal.timeout(2_000) }).eval(REDIS_SLIDING_WINDOW_SCRIPT, {
       keys: [key],
       arguments: [
         String(timestamp),
@@ -117,6 +134,7 @@ async function checkAndConsumeRedis(key: Key, cfg: LimitConfig) {
         member,
       ],
     }) as Array<number | string>
+    if (!Array.isArray(result) || result.length !== 3 || result.some(value => !Number.isFinite(Number(value)))) throw new Error('Invalid limiter response')
     const [allowed, remaining, retryAfterMs] = result.map(Number)
 
     return {
@@ -124,20 +142,31 @@ async function checkAndConsumeRedis(key: Key, cfg: LimitConfig) {
       remaining: Math.max(0, remaining),
       retryAfterMs: Math.max(0, retryAfterMs),
     }
-  } catch (error) {
-    logger.warn('rate_limit_redis_request_failed', {
-      error,
-      fallback: 'memory',
-    })
-    return checkAndConsumeInMemory(key, cfg)
+  } catch {
+    logger.warn('rate_limit_redis_request_failed')
+    return unavailableOrMemory(key, cfg)
   }
 }
 
 export async function checkAndConsume(key: Key, cfg: LimitConfig) {
+  if (!Number.isSafeInteger(cfg.max) || cfg.max < 1 || cfg.max > 10_000 || !Number.isSafeInteger(cfg.windowMs) || cfg.windowMs < 1 || cfg.windowMs > 86_400_000) throw new Error('Invalid rate limit configuration')
+  if (usesPostgres()) {
+    try {
+      const { consumePostgresLimit } = await import('@/lib/postgres-rate-limit')
+      const result = await consumePostgresLimit(key, cfg)
+      postgresHealthy = true
+      return result
+    } catch {
+      postgresHealthy = false
+      logger.warn('rate_limit_postgres_request_failed')
+      throw new LlmRequestError('Request protection is temporarily unavailable. Try again shortly.', 503, 'RATE_LIMIT_UNAVAILABLE', 5)
+    }
+  }
+  await initRedis()
   if (redisClient && isRedisConnected) {
     return checkAndConsumeRedis(key, cfg);
   }
-  return Promise.resolve(checkAndConsumeInMemory(key, cfg));
+  return unavailableOrMemory(key, cfg);
 }
 
 export function resetAll() {
@@ -145,23 +174,41 @@ export function resetAll() {
 }
 
 export function getRateLimitDiagnostics(): RateLimitDiagnostics {
+  if (usesPostgres()) return {
+    mode: 'postgres', status: postgresHealthy ? 'connected' : 'degraded', scope: 'distributed',
+    message: postgresHealthy ? 'PostgreSQL-backed rate limiting is connected' : 'PostgreSQL rate limiting unavailable or not yet verified; requests fail closed on storage errors',
+    redisConfigured: Boolean(process.env.REDIS_URL?.trim()), redisConnected: false, inMemoryKeys: 0,
+  }
   const redisConfigured = Boolean(process.env.REDIS_URL?.trim())
   const redisConnected = Boolean(redisClient && isRedisConnected)
   const status =
-    redisConnected ? 'connected' : redisConfigured ? 'degraded' : 'memory'
+    redisConnected ? 'connected' : redisConfigured || requiresDistributedLimits() ? 'degraded' : 'memory'
+  const scope = redisConnected ? 'distributed' : 'per-instance'
   const message =
     status === 'connected'
       ? 'Redis-backed rate limiting is connected'
+      : requiresDistributedLimits()
+        ? 'Distributed rate limiting unavailable; requests are blocked'
       : status === 'degraded'
-        ? 'Redis configured but unavailable; using in-memory rate limiting'
-        : 'Redis not configured; using in-memory rate limiting'
+        ? 'Redis configured but unavailable; using per-instance in-memory rate limiting'
+        : 'Redis not configured; using per-instance in-memory rate limiting'
 
   return {
     mode: redisConnected ? 'redis' : 'memory',
     status,
+    scope,
     message,
     redisConfigured,
     redisConnected,
     inMemoryKeys: hits.size,
   }
+}
+
+export async function probeRateLimitBackend() {
+  if (!usesPostgres()) return
+  try {
+    const { checkPostgresLimitStore } = await import('@/lib/postgres-rate-limit')
+    await checkPostgresLimitStore()
+    postgresHealthy = true
+  } catch { postgresHealthy = false }
 }

@@ -1,3 +1,5 @@
+import { isModernClaude } from '@/lib/model-contract'
+import { providerSignal } from './util'
 /**
  * Anthropic (Claude) provider adapter.
  */
@@ -16,14 +18,14 @@ const ANTHROPIC_VERSION = '2023-06-01'
 const TIMEOUT_MS = 60_000
 
 function buildAnthropicPayload(request: ProviderRequest, stream: boolean) {
-  const systemMessage = request.messages.find((m) => m.role === 'system')
+  const system = request.messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n')
   const nonSystemMessages = request.messages.filter((m) => m.role !== 'system')
   return {
     body: {
       model: request.model || DEFAULT_MODEL,
       messages: nonSystemMessages,
-      system: systemMessage?.content,
-      temperature: request.temperature ?? 0.7,
+      system: system || undefined,
+      ...(!isModernClaude(request.model ?? DEFAULT_MODEL) ? { temperature: request.temperature ?? 0.7 } : {}),
       max_tokens: request.max_tokens ?? 4096,
       ...(stream ? { stream: true } : {}),
     },
@@ -66,14 +68,14 @@ export const anthropicAdapter: ProviderAdapter = {
         ...config.extraHeaders,
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('anthropic', response, false)
 
     const data = await response.json()
     return {
-      content: data.content?.[0]?.text || '',
+      content: Array.isArray(data.content) ? data.content.filter((block: { type?: string; text?: unknown }) => block.type === 'text' && typeof block.text === 'string').map((block: { text: string }) => block.text).join('') : '',
       finish_reason: data.stop_reason,
       usage: {
         prompt_tokens: data.usage?.input_tokens,
@@ -100,13 +102,21 @@ export const anthropicAdapter: ProviderAdapter = {
         ...config.extraHeaders,
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('anthropic', response, true)
     const streamBody = requireBody('anthropic', response)
 
+    let inputTokens: number | undefined
     yield* parseSSEStream(streamBody, (parsed) => {
+      if (parsed.type === 'message_start' && parsed.message?.usage) {
+        const usage = parsed.message.usage
+        inputTokens = usage.input_tokens + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0)
+      }
+      if (parsed.type === 'message_delta' && inputTokens !== undefined && typeof parsed.usage?.output_tokens === 'number') {
+        request.onUsage?.({ prompt_tokens: inputTokens, completion_tokens: parsed.usage.output_tokens, total_tokens: inputTokens + parsed.usage.output_tokens })
+      }
       if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
         return parsed.delta.text
       }

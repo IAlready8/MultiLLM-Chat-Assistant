@@ -66,7 +66,7 @@ const localStorageMock = {
   removeItem: vi.fn(),
   clear: vi.fn(),
 }
-Object.defineProperty(window, 'localStorage', {
+if (typeof window !== 'undefined') Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
 })
 
