@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import pg from 'pg'
 import bcrypt from 'bcryptjs'
-import { testAccountBrowser } from './test-account-browser.mjs'
+import { testAccountBrowser, testHistoryBrowser } from './test-account-browser.mjs'
 
 // This runner needs a migrated disposable database and a development server.
 // The application stays real; only the external model API is controlled here.
@@ -209,6 +209,13 @@ try {
   } while (messageCursor)
   assert.equal(pagedTurnIds.length, 6, 'Message pagination must not duplicate or skip turns')
   assert.equal(new Set(pagedTurnIds).size, 6)
+  if (process.env.RUN_ACCOUNT_BROWSER_QA === 'true') {
+    // Exceed multi-chat's 20-turn first page without consuming provider quota.
+    for (let index = 7; index <= 26; index++) {
+      assert.equal((await historian(`/api/conversations/${longConversation.id}`, json([{ role: 'user', content: `History turn ${index}`, clientId: randomUUID() }]))).status, 200)
+    }
+    await testHistoryBrowser({ baseUrl: base.toString(), email: `${historianId}@example.test`, password })
+  }
   const page = await (await request('/api/conversations?limit=1')).json()
   assert.equal(page.items.length, 1)
   assert.equal(page.items[0].userId, owner)

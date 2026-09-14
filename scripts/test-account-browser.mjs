@@ -4,6 +4,47 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium, expect } from '@playwright/test'
 
+export async function testHistoryBrowser({ baseUrl, email, password }) {
+  assert.ok(['localhost', '127.0.0.1'].includes(new URL(baseUrl).hostname))
+  const browser = await chromium.launch()
+  const artifacts = path.join(process.env.RUNNER_TEMP || tmpdir(), 'multillm-browser')
+  await mkdir(artifacts, { recursive: true })
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+  page.setDefaultTimeout(30_000)
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+  try {
+    await page.goto(new URL('/auth/signin?callbackUrl=%2Fmulti-chat', baseUrl).href)
+    await page.getByLabel('Email', { exact: true }).fill(email)
+    await page.getByLabel('Password', { exact: true }).fill(password)
+    await page.getByRole('button', { name: 'Sign in with password', exact: true }).click()
+    await page.waitForURL('**/multi-chat')
+    for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport)
+      await page.reload()
+      await expect(page.getByText('History turn 26', { exact: true })).toBeVisible()
+      await expect(page.getByText('History turn 1', { exact: true })).toHaveCount(0)
+      const older = page.getByRole('button', { name: 'Load earlier messages', exact: true })
+      await expect(older).toBeEnabled()
+      await older.click()
+      await expect(page.getByText('History turn 1', { exact: true })).toHaveCount(1)
+      await expect(page.getByText('History turn 26', { exact: true })).toHaveCount(1)
+      await expect(older).toHaveCount(0)
+      for (let index = 1; index <= 26; index++) {
+        await expect(page.getByText(`History turn ${index}`, { exact: true })).toHaveCount(1)
+      }
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Chat must not overflow horizontally')
+      await page.screenshot({ path: path.join(artifacts, `history-${viewport.width}.png`), fullPage: true })
+    }
+    assert.deepEqual(errors, [], 'History browser QA must not report console errors or uncaught exceptions')
+    console.log('History browser QA passed: real credential login, bounded initial history, older-page loading without duplicates or missing turns, reload, desktop and mobile')
+  } catch (error) {
+    await page.screenshot({ path: path.join(artifacts, 'history-failure.png'), fullPage: true }).catch(() => {})
+    throw error
+  } finally { await browser.close() }
+}
+
 export async function testAccountBrowser({ baseUrl, email, password }) {
   assert.ok(['localhost', '127.0.0.1'].includes(new URL(baseUrl).hostname))
   const browser = await chromium.launch()
