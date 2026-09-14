@@ -20,9 +20,12 @@ export async function testHistoryBrowser({ baseUrl, email, password }) {
     await page.getByLabel('Password', { exact: true }).fill(password)
     await page.getByRole('button', { name: 'Sign in with password', exact: true }).click()
     await page.waitForURL('**/multi-chat')
+    // URL navigation completes before the page's provider/history requests.
+    // Wait for the first real load instead of aborting it with an immediate reload.
+    await expect(page.getByText('History turn 26', { exact: true })).toBeVisible()
     for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport)
-      await page.reload()
+      if (viewport.width === 390) await page.reload()
       await expect(page.getByText('History turn 26', { exact: true })).toBeVisible()
       await expect(page.getByText('History turn 1', { exact: true })).toHaveCount(0)
       const older = page.getByRole('button', { name: 'Load earlier messages', exact: true })
