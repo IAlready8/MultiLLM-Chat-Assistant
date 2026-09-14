@@ -34,7 +34,14 @@ export async function testHistoryBrowser({ baseUrl, email, password }) {
       for (let index = 1; index <= 26; index++) {
         await expect(page.getByText(`History turn ${index}`, { exact: true })).toHaveCount(1)
       }
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Chat must not overflow horizontally')
+      const layout = await page.evaluate(() => ({
+        viewport: window.innerWidth,
+        width: document.documentElement.scrollWidth,
+        overflowing: [...document.querySelectorAll('main *')]
+          .filter(element => element.getBoundingClientRect().right > window.innerWidth + 1)
+          .slice(0, 8).map(element => ({ tag: element.tagName, className: element.getAttribute('class') })),
+      }))
+      assert.ok(layout.width <= layout.viewport + 1, `Chat must not overflow horizontally: ${JSON.stringify(layout)}`)
       await page.screenshot({ path: path.join(artifacts, `history-${viewport.width}.png`), fullPage: true })
     }
     assert.deepEqual(errors, [], 'History browser QA must not report console errors or uncaught exceptions')

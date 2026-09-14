@@ -590,13 +590,13 @@ export default function MultiChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] max-w-6xl mx-auto">
+    <div className="flex min-w-0 w-full flex-col h-[calc(100vh-120px)] max-w-6xl mx-auto">
       <Card className="mb-4">
         <CardHeader className="pb-3 space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle>Multi-LLM Chat</CardTitle>
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center space-x-1 flex-wrap gap-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-1">
                 {chatState.activeInstances.map(instance => (
                   <Badge key={instance.id} variant="secondary" className="text-xs">
                     {instance.provider}/{instance.model.split('/').pop()?.slice(0, 12)}
@@ -620,8 +620,8 @@ export default function MultiChatPage() {
         </CardHeader>
       </Card>
 
-      <div className="flex-1 flex flex-col md:flex-row gap-4">
-        <div className="flex-1 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col md:flex-row gap-4">
+        <div className="flex-1 min-w-0 flex flex-col">
           <div ref={scrollContainerRef} className="flex-1 mb-4 rounded-md border p-4 bg-muted/20 max-h-[calc(100vh-200px)] overflow-y-auto">
             <div className="space-y-4">
               {(olderMessagesCursor || olderMessagesError) && (
@@ -640,13 +640,13 @@ export default function MultiChatPage() {
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] rounded-lg p-4 ${
+                    className={`min-w-0 max-w-[80%] rounded-lg p-4 ${
                       message.role === 'user'
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-card border'
                     }`}
                   >
-                    <div className="flex items-center mb-1 gap-2">
+                    <div className="flex flex-wrap items-center mb-1 gap-2">
                       {message.role === 'user' ? (
                         <User className="h-4 w-4" />
                       ) : (
@@ -656,7 +656,7 @@ export default function MultiChatPage() {
                         <span className="text-xs font-medium capitalize">{message.provider}</span>
                       )}
                       {message.model && (
-                        <span className="text-xs text-muted-foreground">({message.model.split('/').pop()})</span>
+                        <span className="min-w-0 break-all text-xs text-muted-foreground">({message.model.split('/').pop()})</span>
                       )}
                     </div>
                     <div className="whitespace-pre-wrap break-words">{message.content || (message.generationStatus === 'running' ? 'Thinking...' : '')}</div>
@@ -692,7 +692,7 @@ export default function MultiChatPage() {
               placeholder="Type your message here..."
               aria-label="Message"
               disabled={isBusy}
-              className="flex-1"
+              className="min-w-0 flex-1"
             />
             <Button
               type="submit"
@@ -719,7 +719,7 @@ export default function MultiChatPage() {
                     size="sm"
                     onClick={() => addModelInstance(provider.id)}
                     disabled={isBusy || chatState.activeInstances.length >= 8}
-                    className="text-xs"
+                    className="h-auto min-h-8 min-w-0 whitespace-normal px-2 text-xs"
                     title={provider.description}
                   >
                     <Plus className="h-3 w-3 mr-1" />
@@ -758,7 +758,7 @@ export default function MultiChatPage() {
                       <select
                         value={instance.model}
                         onChange={(e) => updateInstanceModel(instance.id, e.target.value)}
-                        className="w-full p-1.5 border rounded text-xs bg-background"
+                        className="min-w-0 w-full p-1.5 border rounded text-xs bg-background"
                         disabled={isBusy}
                       >
                         {getModelsForProvider(instance.provider).map(model => (
