@@ -47,8 +47,25 @@ export async function testHistoryBrowser({ baseUrl, email, password }) {
       assert.ok(layout.width <= layout.viewport + 1, `Chat must not overflow horizontally: ${JSON.stringify(layout)}`)
       await page.screenshot({ path: path.join(artifacts, `history-${viewport.width}.png`), fullPage: true })
     }
+    for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport)
+      const boundedRead = page.waitForResponse(response => {
+        const url = new URL(response.url())
+        return url.pathname.startsWith('/api/conversations/') && url.searchParams.get('messagesLimit') === '1'
+      })
+      await page.goto(new URL('/comparison', baseUrl).href)
+      await page.getByRole('tab', { name: 'Response Comparison', exact: true }).click()
+      const historyResponse = await boundedRead
+      assert.equal(historyResponse.status(), 200)
+      const history = await historyResponse.json()
+      assert.equal(history.messages.filter(message => message.role === 'user').length, 1)
+      await expect(page.getByText('History turn 26', { exact: true })).toBeVisible()
+      await expect(page.getByText('History turn 1', { exact: true })).toHaveCount(0)
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Mobile comparison must not overflow horizontally')
+      await page.screenshot({ path: path.join(artifacts, `comparison-${viewport.width}.png`), fullPage: true })
+    }
     assert.deepEqual(errors, [], 'History browser QA must not report console errors or uncaught exceptions')
-    console.log('History browser QA passed: real credential login, bounded initial history, older-page loading without duplicates or missing turns, reload, desktop and mobile')
+    console.log('History browser QA passed: real credential login, bounded initial history, older-page loading without duplicates or missing turns, reload, bounded comparison, desktop and mobile')
   } catch (error) {
     await page.screenshot({ path: path.join(artifacts, 'history-failure.png'), fullPage: true }).catch(() => {})
     throw error

@@ -66,7 +66,7 @@ const liveAnalyticsPayload = (
 })
 
 test.describe('Comparison flow', () => {
-  test('renders model metrics and conversation response comparison from real API payloads', async ({
+  test('renders model metrics and bounded conversation response comparison from API fixtures', async ({
     page,
   }) => {
     await page.route('**/api/auth/session', async route => {
@@ -86,11 +86,11 @@ test.describe('Comparison flow', () => {
       })
     })
 
-    await page.route('**/api/conversations', async route => {
+    await page.route('**/api/conversations?*', async route => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify([
+        body: JSON.stringify({ items: [
           {
             id: 'conv-1',
             title: 'Release planning',
@@ -105,12 +105,14 @@ test.describe('Comparison flow', () => {
             createdAt: '2026-03-02T08:00:00.000Z',
             updatedAt: '2026-03-02T08:05:00.000Z',
           },
-        ]),
+        ], nextCursor: null }),
       })
     })
 
     await page.route('**/api/conversations/*', async route => {
-      const id = new URL(route.request().url()).pathname.split('/').pop()
+      const url = new URL(route.request().url())
+      expect(url.searchParams.get('messagesLimit')).toBe('1')
+      const id = url.pathname.split('/').pop()
       if (id === 'conv-2') {
         await route.fulfill({
           status: 200,
@@ -251,11 +253,11 @@ test.describe('Comparison flow', () => {
       })
     })
 
-    await page.route('**/api/conversations', async route => {
+    await page.route('**/api/conversations?*', async route => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify([]),
+        body: JSON.stringify({ items: [], nextCursor: null }),
       })
     })
 

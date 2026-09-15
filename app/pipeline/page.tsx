@@ -76,6 +76,7 @@ export default function PipelinePage() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [historical, setHistorical] = useState(false)
+  const [loadingSavedRun, setLoadingSavedRun] = useState(false)
   const runRef = useRef(false)
   const loadHistory = useCallback(async (cursor?: string) => {
     setHistoryLoading(true)
@@ -193,21 +194,24 @@ export default function PipelinePage() {
   }
 
   const loadRun = async (id: string) => {
-    if (runRef.current) return
+    if (runRef.current || historyLoading) return
+    setLoadingSavedRun(true)
     setHistoryLoading(true)
     setHistoryError(null)
     try {
-      const saved = await apiClient.getConversation(id)
+      const saved = await apiClient.getConversationMessages(id, undefined, 1)
       setPrompt(saved.messages.find(message => message.role === 'user')?.content ?? '')
       setResults(saved.messages.filter(message => message.role === 'assistant').map(message => ({ provider: message.provider ?? '', model: message.model ?? '', content: message.content, status: message.generationStatus, prompt_tokens: 0, completion_tokens: 0, latency_ms: 0, cost_usd: null })))
       setHistorical(true)
+      setError(null)
+      setFallbackMode(null)
     } catch { setHistoryError('Could not open this saved run. Try again.') }
-    finally { setHistoryLoading(false) }
+    finally { setHistoryLoading(false); setLoadingSavedRun(false) }
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (runRef.current) return
+    if (runRef.current || historyLoading) return
 
     const promptValue = prompt.trim()
     if (!promptValue) {
@@ -299,6 +303,7 @@ export default function PipelinePage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <Textarea
               aria-label="Pipeline prompt"
+              disabled={loadingSavedRun || isLoading}
               maxLength={10000}
               value={prompt}
               onChange={event => setPrompt(event.target.value)}

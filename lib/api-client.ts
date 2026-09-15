@@ -133,9 +133,10 @@ export const apiClient = {
   },
   async getConversationMessages(
     id: string,
-    before?: string
+    before?: string,
+    pageTurns = 20
   ): Promise<Conversation & { messages: Message[]; nextMessageCursor: string | null; pageTurns: number }> {
-    const query = new URLSearchParams({ messagesLimit: '20' })
+    const query = new URLSearchParams({ messagesLimit: String(pageTurns) })
     if (before) query.set('before', before)
     return handleResponse(await fetch(`/api/conversations/${id}?${query}`, { cache: 'no-store' }))
   },

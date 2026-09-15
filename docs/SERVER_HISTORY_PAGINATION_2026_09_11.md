@@ -37,7 +37,7 @@ Server mode responses carry three headers:
 | `X-Context-Truncated` | Whether any earlier context was dropped |
 
 `GET /api/conversations/[id]` is unchanged without query parameters, so
-roundtable, pipeline and comparison keep the full-load behavior. With
+roundtable keeps the full-load behavior. Pipeline and comparison request one complete latest turn because each pipeline run has one prompt and comparison displays the latest prompt. With
 `?messagesLimit=N` (1-50) and an optional opaque `before` cursor it returns the
 newest N complete user turns plus `nextMessageCursor` and `pageTurns`.
 
@@ -143,10 +143,14 @@ integration commit; a successful build alone is not that evidence.
 
 ## Remaining workspace adoption
 
-- Roundtable, pipeline and comparison still load whole conversations and still
-  send browser-built history. They should move to server mode and paged loads
-  once this lands.
+- Roundtable still loads whole conversations and still
+  sends browser-built history. Its shared-agent transcript needs a dedicated
+  server context contract before adopting paged loads.
 - The remaining release gates are unchanged: Google OAuth callback
   registration, password recovery and verified email change, Stripe plan
   configuration, live provider matrix, and the Vitest upgrade behind real
   coverage improvement.
+
+## September 15 follow-up
+
+Pipeline saved runs and response comparison now request `messagesLimit=1`, retaining every response in the latest turn while bounding database reads. Comparison ignores results and errors from a previously selected conversation, clears old results while loading, and supports retry after failure. Pipeline protects the prompt while a saved run loads. Component regression tests cover these behaviors; native browser QA also checks the comparison request and its desktop/mobile rendering against persisted history. Roundtable shared-transcript context remains separate work.

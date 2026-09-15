@@ -206,6 +206,8 @@ export default function ComparisonPage() {
   const [selectedPrompt, setSelectedPrompt] = useState('Select a conversation to compare responses.')
   const [responseSamples, setResponseSamples] = useState<ResponseSample[]>([])
   const [loadingResponses, setLoadingResponses] = useState(false)
+  const [responseError, setResponseError] = useState<string | null>(null)
+  const [responseRetry, setResponseRetry] = useState(0)
 
   const loadMetrics = useCallback(async () => {
     setLoading(true)
@@ -252,38 +254,37 @@ export default function ComparisonPage() {
     }
   }, [])
 
-  const loadConversationComparison = useCallback(async (conversationId: string) => {
-    if (!conversationId) {
-      setSelectedPrompt('No conversation selected.')
-      setResponseSamples([])
-      return
-    }
-
-    setLoadingResponses(true)
-    try {
-      const conversation = await apiClient.getConversation(conversationId)
-      const { prompt, responses } = extractConversationSamples(conversation.messages)
-      setSelectedPrompt(prompt)
-      setResponseSamples(responses)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load conversation details')
-      setSelectedPrompt('Unable to load selected conversation.')
-      setResponseSamples([])
-    } finally {
-      setLoadingResponses(false)
-    }
-  }, [])
-
   useEffect(() => {
     void Promise.all([loadMetrics(), loadConversations()])
   }, [loadMetrics, loadConversations])
 
   useEffect(() => {
+    let active = true
+    setResponseSamples([])
+    setResponseError(null)
     if (!selectedConversationId) {
+      setSelectedPrompt('No conversation selected.')
+      setLoadingResponses(false)
       return
     }
-    void loadConversationComparison(selectedConversationId)
-  }, [selectedConversationId, loadConversationComparison])
+
+    setSelectedPrompt('Loading selected prompt...')
+    setLoadingResponses(true)
+    // Comparison displays one complete turn, including its later regenerations.
+    void apiClient.getConversationMessages(selectedConversationId, undefined, 1).then(conversation => {
+      if (!active) return
+      const { prompt, responses } = extractConversationSamples(conversation.messages)
+      setSelectedPrompt(prompt)
+      setResponseSamples(responses)
+    }).catch((err: unknown) => {
+      if (!active) return
+      setResponseError(err instanceof Error ? err.message : 'Failed to load conversation details')
+      setSelectedPrompt('Unable to load selected conversation.')
+    }).finally(() => {
+      if (active) setLoadingResponses(false)
+    })
+    return () => { active = false }
+  }, [selectedConversationId, responseRetry])
 
   const modelTableRows = useMemo(
     () => comparisonData.slice().sort((a, b) => b.usageCount - a.usageCount),
@@ -420,7 +421,7 @@ export default function ComparisonPage() {
               value={selectedConversationId}
               onChange={(event) => setSelectedConversationId(event.target.value)}
               aria-label="Conversation to compare"
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              className="h-10 min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-sm"
             >
               {conversations.length === 0 && (
                 <option value="">No conversations available</option>
@@ -437,6 +438,10 @@ export default function ComparisonPage() {
             {historyCursor && <Button variant="outline" disabled={loadingHistory} onClick={() => void loadConversations(historyCursor)}>{loadingHistory ? 'Loading…' : 'Load more'}</Button>}
           </div>
 
+          {responseError && <div role="alert" className="space-y-2 text-sm text-destructive">
+            <p>{responseError}</p>
+            <Button variant="outline" onClick={() => setResponseRetry(value => value + 1)}>Retry responses</Button>
+          </div>}
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <h3 className="font-medium mb-2">Prompt</h3>
@@ -460,7 +465,7 @@ export default function ComparisonPage() {
                       <h4 className="font-medium">{sample.model}</h4>
                       <Badge variant="outline">{sample.provider}</Badge>
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">{sample.content}</p>
+                    <p className="text-sm whitespace-pre-wrap break-words">{sample.content}</p>
                   </div>
                 ))}
             </div>
