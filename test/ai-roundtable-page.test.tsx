@@ -224,7 +224,7 @@ describe('AIRoundtablePage history behavior', () => {
     expect(mockFetch.mock.calls.filter(call => String(call[0]).includes('/api/llm/stream'))).toHaveLength(1)
   })
 
-  it.each(['interrupted', 'cancelled', 'failed'])('shows saved %s generation status on reload', async status => {
+  it.each(['interrupted', 'cancelled', 'failed', 'running'])('shows saved %s generation status on reload', async status => {
     mockApiClient.getConversationMessages.mockResolvedValue({ ...roundtableConversation, messages: [
       { id: 'goal', role: 'user', content: 'Goal: Recovery goal', createdAt: new Date() },
       { id: 'partial', role: 'assistant', content: 'Saved partial content', instanceId: 'Researcher', generationStatus: status, createdAt: new Date() },
@@ -233,7 +233,7 @@ describe('AIRoundtablePage history behavior', () => {
     render(<AIRoundtablePage />)
     await user.click((await screen.findByText('Roundtable: Old test chat')).closest('button')!)
     expect(await screen.findByText('Saved partial content')).toBeVisible()
-    expect(screen.getByText({ interrupted: 'Interrupted', cancelled: 'Stopped', failed: 'Failed' }[status]!)).toBeVisible()
+    expect(screen.getByText({ interrupted: 'Interrupted', cancelled: 'Stopped', failed: 'Failed', running: 'Generating' }[status]!)).toBeVisible()
     expect(mockApiClient.getConversationMessages).toHaveBeenCalledWith('roundtable-1', undefined, 1)
   })
 

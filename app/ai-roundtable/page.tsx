@@ -59,7 +59,7 @@ type StatusMessage = {
 }
 
 const generationLabels: Record<string, string> = {
-  pending: 'Generating', complete: 'Complete', failed: 'Failed',
+  pending: 'Generating', running: 'Generating', complete: 'Complete', failed: 'Failed',
   cancelled: 'Stopped', interrupted: 'Interrupted',
 }
 
