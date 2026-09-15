@@ -1,5 +1,3 @@
-import { getErrorMessage } from '@/lib/db-fallback'
-
 export type SidecarDiagnostics = {
   status: 'connected' | 'degraded' | 'disabled'
   message: string
@@ -54,10 +52,10 @@ export async function getSidecarDiagnostics(
       message: `Python sidecar health check failed (${response.status})`,
       configured: true,
     }
-  } catch (error) {
+  } catch {
     return {
       status: 'degraded',
-      message: getErrorMessage(error) || 'Python sidecar health check failed',
+      message: 'Python sidecar health check failed',
       configured: true,
     }
   }

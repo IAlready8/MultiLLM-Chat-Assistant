@@ -1,3 +1,4 @@
+import { providerSignal } from './util'
 /**
  * DeepSeek V4 Flash community provider adapter.
  *
@@ -136,7 +137,7 @@ export const historicalDeepseekAdapter: ProviderAdapter = {
         method: 'POST',
         headers: buildHeaders(),
         body: JSON.stringify(buildPayload(request, false)),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: providerSignal(request.signal, TIMEOUT_MS),
       },
     )
 
@@ -173,7 +174,7 @@ export const historicalDeepseekAdapter: ProviderAdapter = {
         method: 'POST',
         headers: buildHeaders(),
         body: JSON.stringify(buildPayload(request, true)),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: providerSignal(request.signal, TIMEOUT_MS),
       },
     )
 
@@ -184,6 +185,7 @@ export const historicalDeepseekAdapter: ProviderAdapter = {
     yield* parseSSEStream(
       body,
       (parsed) => parsed.choices?.[0]?.delta?.content,
+      request.onUsage,
     )
   },
 }

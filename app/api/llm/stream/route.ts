@@ -1,278 +1,59 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { reserveLlmQuota } from '@/lib/llm-quota'
+import { after, NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
-import { getUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service'
-import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
-import { validateApiKeyFormat } from '@/lib/provider-key-test'
-import {
-  getProviderDisabledMessage,
-  isProviderApiKeyRequired,
-  isProviderDisabled,
-  PROVIDER_DISABLED_ERROR_CODE,
-} from '@/lib/provider-registry'
-import { checkProviderRateLimit, type ProviderRateLimitConfig } from '@/lib/provider-rate-limit'
-import { recordAnalyticsEvent } from '@/services/analytics-service'
-import {
-  getProviderAdapter,
-  classifyProviderError,
-} from '@/lib/providers'
-import type { ProviderRequest, ProviderAdapterConfig } from '@/lib/providers'
-import { getProviderBaseUrl } from '@/lib/provider-endpoint'
+import { parseGenerationInput, readBoundedJson, usesServerHistory, type LlmInput } from '@/lib/llm-request'
+import { createCompletionStream, llmErrorResponse, prepareProviderCall } from '@/lib/llm-runtime'
+import { assembleServerHistory } from '@/services/conversation-context'
+import { beginGeneration, checkpointGeneration, finishGeneration } from '@/services/generation-service'
+import type { SavedGenerationInput } from '@/services/generation-service'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface LLMStreamRequest {
-  provider: string
-  messages: Array<{ role: string; content: string }>
-  model?: string
-  reasoning_effort?: 'off' | 'low' | 'high' | 'max'
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const jsonErrorResponse = (
-  status: number,
-  error: string,
-  code: string,
-  retryAfterSeconds?: number,
-) =>
-  new Response(
-    JSON.stringify({ error, code }),
-    {
-      status,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(retryAfterSeconds
-          ? { 'Retry-After': String(retryAfterSeconds) }
-          : {}),
-      },
-    },
-  )
-
-const safeRecordEvent = async (event: {
-  event: string
-  userId: string
-  payload?: Record<string, unknown>
-}) => {
-  try {
-    await recordAnalyticsEvent(event)
-  } catch {
-    // swallow analytics failures
-  }
-}
-
-const estimatePromptTokens = (messages: any[]): number => {
-  const contentLength = messages.reduce((acc: number, m: any) => {
-    return acc + (typeof m?.content === 'string' ? m.content.length : 0)
-  }, 0)
-  return Math.max(1, Math.round(contentLength / 4))
-}
-
-// ---------------------------------------------------------------------------
-// Route handler
-// ---------------------------------------------------------------------------
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
-    let body: LLMStreamRequest
-    try {
-      body = await request.json()
-    } catch {
-      return jsonErrorResponse(400, 'Request body must be valid JSON', 'INVALID_JSON')
+    const parsed = parseGenerationInput(await readBoundedJson(request))
+    const auth = await getAuthenticatedUser()
+    if (auth instanceof NextResponse) return auth
+    const headers: Record<string, string> = { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' }
+    let input: LlmInput
+    if (usesServerHistory(parsed)) {
+      // Ownership and turn existence are verified before any provider work.
+      const context = await assembleServerHistory(auth.user.id, parsed)
+      const { history: _history, ...generation } = parsed
+      void _history
+      input = { ...generation, messages: context.messages }
+      headers['X-Context-Included-Turns'] = String(context.includedTurns)
+      headers['X-Context-Omitted-Turns'] = String(context.omittedTurns)
+      headers['X-Context-Truncated'] = String(context.truncated)
+    } else {
+      input = parsed
     }
-
-    const providerRaw = body?.provider
-    const messages = body?.messages
-    const model = body?.model
-    const reasoningEffort = body?.reasoning_effort
-
-    if (
-      typeof providerRaw !== 'string' ||
-      providerRaw.trim().length === 0 ||
-      !messages ||
-      !Array.isArray(messages) ||
-      messages.length === 0
-    ) {
-      return jsonErrorResponse(400, 'Provider and messages are required', 'VALIDATION_ERROR')
-    }
-    if (
-      reasoningEffort !== undefined &&
-      !['off', 'low', 'high', 'max'].includes(reasoningEffort)
-    ) {
-      return jsonErrorResponse(
-        400,
-        'reasoning_effort must be one of: off, low, high, max',
-        'VALIDATION_ERROR',
-      )
-    }
-    const provider = providerRaw.trim().toLowerCase()
-
-    const authCheck = await getAuthenticatedUser()
-    if (authCheck instanceof NextResponse) return authCheck
-    const userId = authCheck.user.id
-
-    if (isProviderDisabled(provider)) {
-      return jsonErrorResponse(
-        503,
-        getProviderDisabledMessage(provider),
-        PROVIDER_DISABLED_ERROR_CODE,
-      )
-    }
-
-    // Validate provider via shared registry
-    if (!getProviderAdapter(provider)) {
-      return jsonErrorResponse(400, `Provider '${provider}' not supported`, 'PROVIDER_UNSUPPORTED')
-    }
-
-    const [providerConfigs, apiKey] = await Promise.all([
-      getUserProviderConfigs(userId),
-      getUserApiKey(userId, provider),
-    ])
-
-    const providerConfig = providerConfigs.find((config: any) => config.provider === provider)
-
-    if (!providerConfig || (apiKey === null && isProviderApiKeyRequired(provider))) {
-      return jsonErrorResponse(400, `Provider ${provider} is not configured`, 'PROVIDER_NOT_CONFIGURED')
-    }
-
-    const formatError = validateApiKeyFormat(provider, apiKey ?? '')
-    if (formatError) {
-      return jsonErrorResponse(
-        400,
-        'Invalid API key format for the selected provider',
-        'PROVIDER_KEY_FORMAT_INVALID',
-      )
-    }
-
-    const settings = providerConfig?.settings || {}
-    const providerRateLimits = (settings.rateLimits as ProviderRateLimitConfig | undefined) ||
-      defaultRateLimits[provider as keyof typeof defaultRateLimits] ||
-      { requests: 60, window: 60000 }
-    const providerModels = (settings.models as string[] | undefined) ||
-      defaultProviderModels[provider as keyof typeof defaultProviderModels] ||
-      []
-
-    const rateLimit = await checkProviderRateLimit(
-      userId,
-      provider,
-      providerRateLimits,
-    )
-    if (!rateLimit.allowed) {
-      const retryAfterSeconds = Math.max(
-        1,
-        Math.ceil(rateLimit.retryAfterMs / 1000),
-      )
-      return jsonErrorResponse(
-        429,
-        'Rate limit exceeded',
-        'RATE_LIMITED',
-        retryAfterSeconds,
-      )
-    }
-
-    // Resolve adapter from shared provider runtime
-    const adapter = getProviderAdapter(provider)!
-
-    // Build adapter config from provider settings
-    const baseUrl = getProviderBaseUrl(provider, settings.baseUrl)
-    const extraHeaders: Record<string, string> = {}
-    if (provider === 'openrouter') {
-      if (settings.httpReferer) extraHeaders['HTTP-Referer'] = settings.httpReferer
-      if (settings.xTitle) extraHeaders['X-Title'] = settings.xTitle
-    }
-
-    const adapterConfig: ProviderAdapterConfig = { apiKey: apiKey ?? '', baseUrl, extraHeaders }
-    const providerRequest: ProviderRequest = {
-      messages: messages as any,
-      model: model || providerModels[0],
-      reasoning_effort: reasoningEffort,
-      userId,
-    }
-
-    // NDJSON streaming via TransformStream
-    const { readable, writable } = new TransformStream()
-    const writer = writable.getWriter()
-    const encoder = new TextEncoder()
-    const analyticsModel = providerRequest.model || 'default'
-    const streamStart = Date.now()
-    const promptTokens = estimatePromptTokens(messages)
-
-    const writeEvent = async (data: any) => {
-      const json = JSON.stringify(data) + '\n'
-      await writer.write(encoder.encode(json))
-    }
-
-    const streamPromise = (async () => {
-      try {
-        let completionContent = ''
-        const generator = adapter.stream(providerRequest, adapterConfig)
-        for await (const chunk of generator) {
-          completionContent += chunk
-          await writeEvent({ type: 'chunk', content: chunk })
-        }
-        await writeEvent({ type: 'done' })
-
-        // Record analytics (was previously missing from stream route)
-        const completionTokens = Math.max(1, Math.round(completionContent.length / 4))
-        await safeRecordEvent({
-          event: 'llm_request',
-          userId,
-          payload: {
-            provider,
-            model: analyticsModel,
-            stream: true,
-            prompt_tokens: promptTokens,
-            completion_tokens: completionTokens,
-            total_tokens: promptTokens + completionTokens,
-            responseTime: Date.now() - streamStart,
-          },
-        })
-      } catch (error: any) {
-        const mappedError = classifyProviderError(error)
-        await writeEvent({
-          type: 'error',
-          error: mappedError.error,
-          code: mappedError.code,
-          retryAfterSeconds: mappedError.retryAfterSeconds,
-          details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-        })
-
-        await safeRecordEvent({
-          event: 'llm_error',
-          userId,
-          payload: {
-            provider,
-            model: analyticsModel,
-            stream: true,
-            responseTime: Date.now() - streamStart,
-            message: error instanceof Error ? error.message : 'stream_error',
-          },
-        })
-      } finally {
-        writer.close()
+    const controller = new AbortController()
+    const signal = AbortSignal.any([request.signal, controller.signal, AbortSignal.timeout(45_000)])
+    const call = await prepareProviderCall(auth.user.id, input, signal)
+    let persistence: Parameters<typeof createCompletionStream>[5]
+    if (input.conversationId) {
+      // Server-history replays are keyed by client intent, not by the context
+      // snapshot, so a transport retry still replays after history changes.
+      const generation = await beginGeneration(auth.user.id, (usesServerHistory(parsed) ? parsed : input) as SavedGenerationInput)
+      if (generation.replay !== null) {
+        return new Response(JSON.stringify({ type: 'chunk', content: generation.replay }) + '\n' + JSON.stringify({ type: 'done', replay: true }) + '\n', { headers })
       }
-    })()
-
-    streamPromise.catch(console.error)
-
-    return new Response(readable, {
-      headers: {
-        'Content-Type': 'application/x-ndjson',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    })
-  } catch (error: any) {
-    console.error('Streaming API error:', error)
-    const mappedError = classifyProviderError(error)
-    return jsonErrorResponse(
-      mappedError.status,
-      mappedError.error,
-      mappedError.code,
-      mappedError.retryAfterSeconds,
-    )
+      let settled!: () => void
+      const completion = new Promise<void>(resolve => { settled = resolve })
+      after(() => completion)
+      persistence = {
+        checkpoint: (content, usage) => checkpointGeneration(auth.user.id, generation.id, content, usage),
+        finish: (content, status, usage) => finishGeneration(auth.user.id, generation.id, content, status, usage),
+        settled,
+      }
+    }
+    try { await reserveLlmQuota(auth.user.id) } catch (error) {
+      try { await persistence?.finish('', 'failed', { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, usage_source: 'estimated' }) } finally { persistence?.settled() }
+      throw error
+    }
+    return new Response(createCompletionStream(call, input.provider, auth.user.id, controller, true, persistence), { headers })
+  } catch (error) {
+    return llmErrorResponse(error)
   }
 }

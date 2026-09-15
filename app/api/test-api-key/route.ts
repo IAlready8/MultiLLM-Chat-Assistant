@@ -1,3 +1,4 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { getUserApiKey } from '@/lib/api-key-service'
@@ -112,7 +113,8 @@ export async function POST(request: NextRequest) {
   const { user } = authCheck
 
   try {
-    const body = await request.json()
+    const body = await readApiObject(request)
+  if (body instanceof NextResponse) return body
     const providerRaw = body?.provider
     const testSaved = body?.testSaved === true
 

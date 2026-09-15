@@ -35,7 +35,7 @@ export async function saveConversation(
   data: any
 ): Promise<string> {
   const db = await getDB();
-  const id = `${type}_${Date.now()}`;
+  const id = `${type}_${crypto.randomUUID()}`;
   
   await db.put('conversations', {
     id,

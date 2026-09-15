@@ -12,20 +12,24 @@ import {
   invalidateApiReadCache,
 } from '@/lib/api-read-cache'
 import { z } from 'zod'
+import { readBoundedJson, LlmRequestError } from '@/lib/llm-request'
+import { parseConversationPage } from '@/lib/conversation-pagination'
 
 // Zod schema for creating a conversation
 const createConvoSchema = z.object({
-  title: z.string().min(1).max(255),
+  title: z.string().trim().min(1).max(255),
   messages: z.array(
     z.object({
       role: z.enum(['user', 'assistant']),
-      content: z.string().min(1),
+      content: z.string().min(1).max(128_000),
+      clientId: z.string().uuid().nullable().optional(),
+      instanceId: z.string().max(128).nullable().optional(),
       provider: z.string().nullable().optional(),
       model: z.string().nullable().optional(),
       cost: z.number().optional(),
       latency: z.number().optional(),
     })
-  ).min(1),
+  ).min(1).max(200),
 })
 
 /**
@@ -38,12 +42,17 @@ export const GET = withApiMetrics(async (_req: Request) => {
   const { user } = authCheck
 
   try {
+    const params = new URL(_req.url).searchParams
+    if (['limit', 'cursor', 'workspace'].some(key => params.has(key))) {
+      return NextResponse.json(await ConversationService.getConversationPage(user.id, parseConversationPage(params)), { headers: { 'Cache-Control': 'no-store' } })
+    }
     return await cachedJsonResponse(
       '/api/conversations',
       apiReadCacheKey('/api/conversations', user.id),
       () => ConversationService.getConversationsByUserId(user.id)
     )
   } catch (error) {
+    if (error instanceof LlmRequestError) return NextResponse.json({ error: error.message }, { status: error.status })
     console.error('Error loading conversations:', error)
     return NextResponse.json(
       { error: 'Failed to load conversations' },
@@ -61,7 +70,11 @@ export const POST = withApiMetrics(async (req: Request) => {
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const body = await req.json()
+  let body: unknown
+    try { body = await readBoundedJson(req) } catch (error) {
+      if (error instanceof LlmRequestError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+      throw error
+    }
   const validation = createConvoSchema.safeParse(body)
 
   if (!validation.success) {
@@ -74,11 +87,13 @@ export const POST = withApiMetrics(async (req: Request) => {
   const { title, messages } = validation.data
 
   // Map messages to match Prisma schema (strip out extra fields like cost/latency)
-  const prismaMessages = messages.map(({ role, content, provider, model }) => ({
+  const prismaMessages = messages.map(({ role, content, provider, model, clientId, instanceId }) => ({
     role,
     content,
     provider: provider ?? null,
     model: model ?? null,
+    ...(clientId ? { clientId } : {}),
+    ...(instanceId ? { instanceId } : {}),
   }))
 
   try {

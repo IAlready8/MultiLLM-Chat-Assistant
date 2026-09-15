@@ -1,3 +1,4 @@
+import { providerSignal } from './util'
 /**
  * Grok (xAI) provider adapter.
  *
@@ -57,7 +58,7 @@ export const grokAdapter: ProviderAdapter = {
         max_tokens: request.max_tokens ?? 4096,
         stream: false,
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('grok', response, false)
@@ -91,12 +92,12 @@ export const grokAdapter: ProviderAdapter = {
         max_tokens: request.max_tokens ?? 4096,
         stream: true,
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('grok', response, true)
     const body = requireBody('grok', response)
 
-    yield* parseSSEStream(body, (parsed) => parsed.choices?.[0]?.delta?.content)
+    yield* parseSSEStream(body, (parsed) => parsed.choices?.[0]?.delta?.content, request.onUsage)
   },
 }

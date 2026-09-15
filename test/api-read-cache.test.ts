@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   cachedJsonResponse,
   clearApiReadCache,
+  invalidateApiReadCache,
 } from '@/lib/api-read-cache'
 
 describe('api-read-cache', () => {
@@ -31,4 +32,24 @@ describe('api-read-cache', () => {
     expect(await second.json()).toEqual({ value: 'loaded' })
     expect(load).toHaveBeenCalledTimes(1)
   })
+  it('does not repopulate stale data after a concurrent save invalidates an in-flight read', async () => {
+    let finishOld!: (value: string) => void
+    let finishNew!: (value: string) => void
+    const key = 'conversation:user-1'
+    const old = cachedJsonResponse('/api/conversations', key, () => new Promise<string>(resolve => { finishOld = resolve }))
+    invalidateApiReadCache(key)
+    const loadNew = vi.fn(() => new Promise<string>(resolve => { finishNew = resolve }))
+    const fresh = cachedJsonResponse('/api/conversations', key, loadNew)
+    finishOld('before-save')
+    await old
+    const coalesced = cachedJsonResponse('/api/conversations', key, loadNew)
+    expect(loadNew).toHaveBeenCalledTimes(1)
+    finishNew('after-save')
+    expect(await (await fresh).json()).toBe('after-save')
+    expect(await (await coalesced).json()).toBe('after-save')
+    const cached = await cachedJsonResponse('/api/conversations', key, loadNew)
+    expect(await cached.json()).toBe('after-save')
+    expect(loadNew).toHaveBeenCalledTimes(1)
+  })
+
 })

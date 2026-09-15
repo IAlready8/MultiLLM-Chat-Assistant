@@ -10,6 +10,11 @@ type SubscriptionTier = BillingPlanId
 
 interface BillingClientProps {
   tier: SubscriptionTier
+  status?: string | null
+  cancelAtPeriodEnd?: boolean
+  hasBillingAccount?: boolean
+  quota?: { limit: number | null; used: number; resetsAt: string } | null
+  proPriceLabel?: string
   periodEnd: string | null
   plans: BillingPlan[]
   freePlanWeeklySavedBriefGuidance: number
@@ -38,6 +43,7 @@ const formatPeriodEnd = (periodEnd: string | null) => {
 export function BillingClient({
   tier,
   periodEnd,
+  status, cancelAtPeriodEnd, hasBillingAccount, quota, proPriceLabel,
   plans,
   freePlanWeeklySavedBriefGuidance,
   weeklySavedBriefComparisons,
@@ -143,7 +149,7 @@ export function BillingClient({
             <Badge variant={tier === 'PRO' ? 'default' : 'outline'}>{tier}</Badge>
             {tier === 'PRO' && formattedPeriodEnd ? (
               <p className="text-sm text-muted-foreground">
-                Renews on {formattedPeriodEnd}
+                {cancelAtPeriodEnd ? 'Access ends on' : 'Renews on'} {formattedPeriodEnd}
               </p>
             ) : null}
             {tier === 'FREE' ? (
@@ -152,6 +158,8 @@ export function BillingClient({
               </p>
             ) : null}
           </div>
+          {status && ['past_due', 'unpaid', 'incomplete', 'paused'].includes(status) ? <p role="status" className="text-sm text-destructive">Payment needs attention. Update your payment details in the billing portal.</p> : null}
+          {quota ? <p className="text-sm">{quota.used} of {quota.limit ?? 'unlimited'} monthly generations used. Resets {formatPeriodEnd(quota.resetsAt)}. Failed and stopped attempts count toward this allowance.</p> : null}
           {shouldRecommendUpgrade ? (
             <p className="text-sm font-medium text-amber-600">
               Upgrade recommended: the free-plan guidance threshold has been reached for this week.
@@ -171,7 +179,7 @@ export function BillingClient({
                 {isLoading === 'checkout' ? 'Starting checkout...' : 'Upgrade to Pro'}
               </Button>
             ) : null}
-            {tier === 'PRO' ? (
+            {tier === 'PRO' || hasBillingAccount ? (
               <Button
                 onClick={handleManageSubscription}
                 disabled={isLoading !== null || !portalEnabled}
@@ -205,6 +213,7 @@ export function BillingClient({
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
+                {plan.id === 'PRO' && proPriceLabel ? <p className="font-medium text-foreground">{proPriceLabel}</p> : null}
                 <p>{plan.summary}</p>
                 <p>{plan.weeklySavedBriefComparisonGuidance}</p>
                 <p>Analytics: {plan.analyticsAccess}</p>

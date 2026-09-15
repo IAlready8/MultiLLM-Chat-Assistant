@@ -62,7 +62,7 @@ type SystemStatusResponse = {
       memorySize: number
     }
     rateLimit: {
-      mode: 'redis' | 'memory'
+      mode: 'redis' | 'postgres' | 'memory'
       redisConfigured: boolean
       redisConnected: boolean
       inMemoryKeys: number

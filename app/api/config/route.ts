@@ -1,3 +1,4 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { storeUserApiKey, getUserProviderConfigs, deleteUserProviderConfig } from '@/lib/api-key-service'
@@ -50,7 +51,8 @@ export async function POST(request: NextRequest) {
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const body = await request.json()
+  const body = await readApiObject(request)
+  if (body instanceof NextResponse) return body
   const providerRaw = body?.provider
   const apiKeyRaw = body?.apiKey
   const clear = body?.clear === true
@@ -76,6 +78,8 @@ export async function POST(request: NextRequest) {
   if (!providerMeta || !defaultProviderModels[provider]) {
     return NextResponse.json({ error: `Unsupported provider: ${provider}` }, { status: 400 })
   }
+
+  if (!clear && isProviderApiKeyRequired(provider) && typeof apiKeyRaw !== 'string') return NextResponse.json({ error: 'API key must be a string; use clear to remove a provider' }, { status: 400 })
 
   const apiKey = typeof apiKeyRaw === 'string' ? apiKeyRaw.trim() : ''
   if (clear || (!apiKey && isProviderApiKeyRequired(provider))) {

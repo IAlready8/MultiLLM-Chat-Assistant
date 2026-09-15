@@ -113,6 +113,13 @@ describe('/api/config route', () => {
     expect(mockStoreUserApiKey).not.toHaveBeenCalled()
   })
 
+  it('rejects malformed keys without deleting existing provider credentials', async () => {
+    for (const apiKey of [undefined, null, {}, 123]) {
+      expect((await POST(makePostRequest({ provider: 'openai', apiKey }))).status).toBe(400)
+    }
+    expect(mockDeleteUserProviderConfig).not.toHaveBeenCalled()
+  })
+
   it('POST clears provider config when apiKey is empty', async () => {
     const response = await POST(
       makePostRequest({ provider: 'OpenAI', apiKey: '   ' })

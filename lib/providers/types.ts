@@ -15,6 +15,9 @@ export interface ProviderMessage {
 }
 
 export interface ProviderRequest {
+  signal?: AbortSignal
+  /** Normalized usage reported by the provider; never serialized upstream. */
+  onUsage?: (usage: ProviderUsage) => void
   messages: ProviderMessage[]
   model?: string
   temperature?: number

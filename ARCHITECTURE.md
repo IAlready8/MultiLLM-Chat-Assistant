@@ -90,8 +90,21 @@ Primary auth files:
   - `app/api/llm/stream/route.ts`
 - Orchestration bridge:
   - `app/api/llm/orchestrate/route.ts`
-  - Proxies to Python core (`PYTHON_CORE_URL`, default `http://127.0.0.1:8008`)
-  - Includes local fallback orchestration path when sidecar is unavailable
+  - Uses the shared server provider runtime directly when `PYTHON_CORE_URL` is unset
+  - Runs at most three provider calls concurrently, preserves selection order, and isolates individual failures
+  - An explicitly configured Python sidecar is a separate server-managed execution path; failures are not automatically redispatched because upstream work may already be billable
+- Shared request lifecycle: `lib/llm-request.ts`, `lib/llm-runtime.ts`, and `lib/providers/*`
+  - Bounded bodies, normalized errors, per-provider limits, cancellation and timeouts
+  - Provider-reported usage when supplied; explicitly labeled estimates otherwise; unknown monetary cost remains null
+- Saved multi-chat generations: `services/generation-service.ts`
+  - Reserves a generation and assistant message in an owned conversation before calling a provider
+  - User turn IDs and request IDs provide duplicate protection; retries of completed requests replay saved content
+  - Completion, partial failure/cancellation, and usage are committed before the terminal stream event
+  - Turn and model-position metadata make reload order independent of provider completion order
+- Billing: `lib/billing-lock.ts` and `app/api/webhooks/stripe/route.ts`
+  - Customer-scoped transaction locks serialize checkout and webhook reconciliation
+  - Webhook event IDs and entitlement changes commit atomically
+  - The latest Stripe subscription state determines entitlement; stale cancellations cannot downgrade a newer subscription
 
 ## Build, QA, and Release Controls
 ### Local quality gates

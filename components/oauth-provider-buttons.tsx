@@ -48,6 +48,8 @@ export function OAuthProviderButtons({
 }: OAuthProviderButtonsProps) {
   const [providers, setProviders] = useState<ClientSafeProvider[] | null>(null)
   const [activeProvider, setActiveProvider] = useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -56,20 +58,26 @@ export function OAuthProviderButtons({
     getProviders()
       .then((availableProviders) => {
         if (cancelled) return
-        const oauthProviders = Object.values(availableProviders ?? {}).filter(
-          (provider) => provider.id !== 'credentials',
+        // NextAuth returns null when discovery fails, including network errors.
+        // Do not present an outage as an operator configuration problem.
+        if (!availableProviders) {
+          setLoadFailed(true)
+          return
+        }
+        const oauthProviders = Object.values(availableProviders).filter(
+          (provider) => provider.type === 'oauth',
         )
         setProviders(oauthProviders)
       })
       .catch((error) => {
         console.error('Failed to load OAuth providers:', error)
-        if (!cancelled) setProviders([])
+        if (!cancelled) setLoadFailed(true)
       })
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadAttempt])
 
   const handleSignIn = async (provider: ClientSafeProvider) => {
     setActiveProvider(provider.id)
@@ -86,9 +94,24 @@ export function OAuthProviderButtons({
     }
   }
 
+  if (loadFailed) {
+    return (
+      <div role="alert" className="space-y-2 rounded-md border p-3 text-sm">
+        <p>Sign-in options could not be loaded. Please try again.</p>
+        <Button type="button" variant="outline" onClick={() => {
+          setLoadFailed(false)
+          setProviders(null)
+          setLoadAttempt((attempt) => attempt + 1)
+        }}>
+          Retry sign-in options
+        </Button>
+      </div>
+    )
+  }
+
   if (providers === null) {
     return (
-      <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+      <div role="status" className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
         Loading secure sign-in options...
       </div>

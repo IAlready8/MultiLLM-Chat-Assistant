@@ -1,3 +1,4 @@
+import { providerSignal } from './util'
 /**
  * Google AI (Gemini) provider adapter.
  *
@@ -19,7 +20,7 @@ const DEFAULT_MODEL = 'gemini-1.5-flash'
 const TIMEOUT_MS = 60_000
 
 function buildGeminiPayload(messages: ProviderMessage[], request: ProviderRequest) {
-  const systemInstruction = messages.find((m) => m.role === 'system')?.content
+  const systemInstruction = messages.filter(m => m.role === 'system').map(m => m.content).join('\n\n')
   const contents = messages
     .filter((m) => m.role !== 'system')
     .map((m) => ({
@@ -72,7 +73,7 @@ export const googleaiAdapter: ProviderAdapter = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...config.extraHeaders },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: providerSignal(request.signal, TIMEOUT_MS),
       },
     )
 
@@ -107,7 +108,7 @@ export const googleaiAdapter: ProviderAdapter = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...config.extraHeaders },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: providerSignal(request.signal, TIMEOUT_MS),
       },
     )
 
@@ -116,7 +117,13 @@ export const googleaiAdapter: ProviderAdapter = {
 
     yield* parseSSEStream(
       body,
-      (parsed) => parsed.candidates?.[0]?.content?.parts?.[0]?.text,
+      (parsed) => {
+        const usage = parsed.usageMetadata
+        if (typeof usage?.promptTokenCount === 'number' && typeof usage?.totalTokenCount === 'number') {
+          request.onUsage?.({ prompt_tokens: usage.promptTokenCount, completion_tokens: usage.totalTokenCount - usage.promptTokenCount, total_tokens: usage.totalTokenCount })
+        }
+        return parsed.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text ?? '').join('')
+      },
     )
   },
 }

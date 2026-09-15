@@ -18,7 +18,9 @@ const getBaseUrl = () => {
     try {
       return new URL(configured)
     } catch {
-      console.warn('Invalid NEXTAUTH_URL; falling back to http://localhost:3000')
+      console.warn(
+        'Invalid NEXTAUTH_URL; falling back to http://localhost:3000',
+      )
     }
   }
   return new URL('http://localhost:3000')
@@ -42,13 +44,16 @@ export async function POST(req: Request) {
     ensureStripeConfigured('api')
 
     // Get the Stripe Customer ID
-    const stripeCustomerId = await getOrCreateStripeCustomer(user.id, user.email)
+    const stripeCustomerId = await getOrCreateStripeCustomer(
+      user.id,
+      user.email,
+    )
     const baseUrl = getBaseUrl()
 
     // Create a Stripe Customer Portal session
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: `${baseUrl.href}billing`,
+      return_url: new URL('/billing', baseUrl).toString(),
     })
 
     try {
@@ -76,7 +81,7 @@ export async function POST(req: Request) {
       })
       return NextResponse.json(
         { error: getStripeConfigurationUserMessage('api') },
-        { status: 503 }
+        { status: 503 },
       )
     }
     logger.error('stripe_portal_failed', {
@@ -86,7 +91,7 @@ export async function POST(req: Request) {
     })
     return NextResponse.json(
       { error: 'Failed to create portal session' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

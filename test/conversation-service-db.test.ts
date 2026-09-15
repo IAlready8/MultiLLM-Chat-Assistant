@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('@/services/generation-service', async original => ({ ...await original<typeof import('@/services/generation-service')>(), reconcileExpiredGenerations: vi.fn() }))
+
 const DB_UNAVAILABLE_ERROR = new Error(
   'Database access for conversation is not available in this environment.'
 )
@@ -273,6 +275,16 @@ describe('ConversationService DB fallback', () => {
       .__multiLlmConversationFallbackStore
   })
 
+  it('returns not-found for cross-account deletion without touching the owned data', async () => {
+    const mock = makeStatefulPrismaMock()
+    const { ConversationService } = await loadServiceWithPrismaMock(mock)
+    const conversation = await ConversationService.createConversation('owner', 'Private conversation', [{ role: 'user', content: 'Keep this', provider: null, model: null }])
+    expect(await ConversationService.deleteConversation(conversation.id, 'intruder')).toBe(false)
+    expect(mock.message.deleteMany).not.toHaveBeenCalled()
+    expect(mock.conversation.delete).not.toHaveBeenCalled()
+    expect((await ConversationService.getFullConversation(conversation.id, 'owner'))?.messages[0].content).toBe('Keep this')
+  })
+
   it('creates, reads, updates, and deletes via in-memory fallback when DB is unavailable', async () => {
     const { ConversationService } = await loadService()
 
@@ -544,6 +556,8 @@ describe('ConversationService DB fallback', () => {
       expect(prismaMock.message.findMany).toHaveBeenCalledWith({
         where: {
           role: 'assistant',
+          generationStatus: 'complete',
+          content: { not: '' },
           provider: { not: null },
           conversation: { userId: 'user-1' },
         },

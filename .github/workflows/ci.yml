@@ -41,6 +41,9 @@ jobs:
       - name: Unit tests
         run: npm run test:run
 
+      - name: Verify Vercel dependency compatibility
+        run: node scripts/test-vercel-tooling.mjs
+
       - name: Build
         run: npm run build
         env:
@@ -54,6 +57,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality-checks
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        rate-limit-backend: [redis, postgres]
 
     services:
       postgres:
@@ -69,12 +76,24 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
 
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/multillm_smoke
       NEXTAUTH_SECRET: ci-smoke-test-secret-32chars-min
       NEXTAUTH_URL: http://localhost:3000
       API_KEY_ENCRYPTION_SEED: ci-smoke-encryption-seed-32chars
+      REDIS_URL: redis://localhost:6379
+      REQUIRE_DISTRIBUTED_RATE_LIMIT: 'true'
+      RATE_LIMIT_BACKEND: ${{ matrix.rate-limit-backend }}
 
     steps:
       - name: Checkout code
@@ -117,6 +136,44 @@ jobs:
           done
 
           bash scripts/smoke-test.sh --base-url http://localhost:3000
+
+
+      - name: Install Chromium for authenticated browser QA
+        run: npx playwright install --with-deps chromium
+
+      - name: Authenticated generation integration tests
+        env:
+          GENERATION_INTEGRATION_TEST: 'true'
+          RUN_ACCOUNT_BROWSER_QA: 'true'
+          LLM_MONTHLY_REQUEST_LIMITS: '{"FREE":8,"PRO":100,"ENTERPRISE":null}'
+          GENERATION_TEST_BASE_URL: http://localhost:3001
+          NEXTAUTH_URL: http://localhost:3001
+        run: |
+          set -euo pipefail
+          # Ollama is intentionally local-development only. All auth, database,
+          # routes and streaming code are real; the runner controls the model API.
+          ./node_modules/.bin/next dev --webpack --hostname 127.0.0.1 --port 3001 > generation-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 45); do
+            if curl -sf http://localhost:3001/api/health >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$i" = "45" ]; then
+              cat generation-server.log
+              exit 1
+            fi
+            sleep 1
+          done
+          node scripts/test-generation-flow.mjs || { cat generation-server.log; exit 1; }
+
+      - name: Upload browser QA screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-browser-qa-${{ matrix.rate-limit-backend }}
+          path: ${{ runner.temp }}/multillm-browser/*.png
+          if-no-files-found: ignore
 
   coverage:
     name: Coverage

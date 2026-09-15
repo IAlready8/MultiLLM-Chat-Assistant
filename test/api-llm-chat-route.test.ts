@@ -128,7 +128,7 @@ describe('/api/llm/chat route', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
-      error: 'Messages are required',
+      error: 'Provider and messages are required',
       code: 'VALIDATION_ERROR',
     })
   })
@@ -205,7 +205,7 @@ describe('/api/llm/chat route', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
-      error: 'Provider openai not configured',
+      error: 'Provider openai is not configured',
       code: 'PROVIDER_NOT_CONFIGURED',
     })
   })
@@ -223,7 +223,7 @@ describe('/api/llm/chat route', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
-      error: 'Provider openai not configured',
+      error: 'Provider openai is not configured',
       code: 'PROVIDER_NOT_CONFIGURED',
     })
   })
@@ -307,7 +307,7 @@ describe('/api/llm/chat route', () => {
 
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toEqual({
-      error: 'database unavailable during provider lookup',
+      error: 'Unable to complete the provider request',
       code: 'INTERNAL_ERROR',
     })
   })

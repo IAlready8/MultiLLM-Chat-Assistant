@@ -174,11 +174,11 @@ describe('deepseekAdapter', () => {
 
   it('streams final content across chunk boundaries and omits reasoning text', async () => {
     const body = streamFromChunks([
-      'data: {"choices":[{"delta":{"reasoning_content":"private"}}]}\r\n',
+      'data: {"choices":[{"delta":{"reasoning_content":"private"}}]}\r\n\r\n',
       'data: {"choices":[{"del',
-      'ta":{"content":"Hel"}}]}\r\n',
-      'data: {"choices":[{"delta":{"content":"lo"}}]}\r\n',
-      'data: [DONE]\r\n',
+      'ta":{"content":"Hel"}}]}\r\n\r\n',
+      'data: {"choices":[{"delta":{"content":"lo"}}]}\r\n\r\n',
+      'data: [DONE]\r\n\r\n',
     ])
     vi.stubGlobal(
       'fetch',

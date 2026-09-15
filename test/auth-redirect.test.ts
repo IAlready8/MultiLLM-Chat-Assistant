@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveAuthCallbackUrl } from '@/lib/auth-redirect'
 
 describe('resolveAuthCallbackUrl', () => {
-  it.each([undefined, null, '', 'https://evil.example', '//evil.example']) (
+  it.each([undefined, null, '', 'https://evil.example', '//evil.example', '/\\evil.example', '/\t/evil.example']) (
     'falls back to the workspace root for unsafe callback %s',
     (value) => {
       expect(resolveAuthCallbackUrl(value)).toBe('/')

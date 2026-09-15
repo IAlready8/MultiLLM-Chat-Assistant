@@ -1,3 +1,4 @@
+import { readBoundedJson } from '@/lib/llm-request'
 type BillingRequestBody = {
   source?: unknown
 }
@@ -19,7 +20,7 @@ export const readBillingSource = async (
   }
 
   try {
-    const body = (await req.json()) as BillingRequestBody
+    const body = (await readBoundedJson(req, 16_384)) as BillingRequestBody
     if (typeof body.source === 'string' && body.source.trim()) {
       return body.source.trim().slice(0, maxLength)
     }

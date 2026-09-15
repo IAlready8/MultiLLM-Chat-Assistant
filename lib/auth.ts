@@ -11,6 +11,8 @@ import { hasDatabaseUrl } from '@/lib/database-url'
 import prisma from '@/lib/prisma'
 import { readSessionTokenFromCookies } from '@/lib/session-cookie'
 import { validateStartupEnvironment } from '@/lib/startup-validation'
+import { sanitizeLogValue } from '@/lib/log-sanitizer'
+import { authLogger } from '@/lib/auth-logger'
 
 type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
 type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER'
@@ -42,7 +44,8 @@ declare module 'next-auth/jwt' {
 validateStartupEnvironment()
 
 const resolveAuthSecret = (): string => {
-  const configuredSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
+  const configuredSecret =
+    process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
 
   if (configuredSecret?.trim()) {
     return configuredSecret.trim()
@@ -59,37 +62,42 @@ const resolveAuthSecret = (): string => {
 
 const authSecret = resolveAuthSecret()
 
-const authLogger: NonNullable<NextAuthOptions['logger']> = {
-  error(code, metadata) {
-    console.error(`[next-auth][error][${code}]`, metadata ?? '')
-  },
-  warn(code) {
-    console.warn(`[next-auth][warn][${code}]`)
-  },
-  debug(code, metadata) {
-    if (process.env.NODE_ENV === 'development') {
-      console.debug(`[next-auth][debug][${code}]`, metadata ?? '')
-    }
-  },
+const loadSubscriptionTier = async (
+  userId: string,
+): Promise<SubscriptionTier> => {
+  try {
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+      select: { tier: true },
+    })
+    return (subscription?.tier as SubscriptionTier) || 'FREE'
+  } catch (error) {
+    console.warn('Failed to load subscription tier, defaulting to FREE:', sanitizeLogValue(error))
+    return 'FREE'
+  }
 }
 
 const buildProviders = (): NextAuthOptions['providers'] => {
   const providers: NextAuthOptions['providers'] = []
+  const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim()
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim()
+  const githubClientId = process.env.GITHUB_CLIENT_ID?.trim()
+  const githubClientSecret = process.env.GITHUB_CLIENT_SECRET?.trim()
 
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  if (googleClientId && googleClientSecret) {
     providers.push(
       GoogleProvider({
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        clientId: googleClientId,
+        clientSecret: googleClientSecret,
       }),
     )
   }
 
-  if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+  if (githubClientId && githubClientSecret) {
     providers.push(
       GitHubProvider({
-        clientId: process.env.GITHUB_CLIENT_ID,
-        clientSecret: process.env.GITHUB_CLIENT_SECRET,
+        clientId: githubClientId,
+        clientSecret: githubClientSecret,
       }),
     )
   }
@@ -127,19 +135,11 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        try {
-          const subscription = await prisma.subscription.findUnique({
-            where: { userId: user.id },
-            select: { tier: true },
-          })
-          token.tier = (subscription?.tier as SubscriptionTier) || 'FREE'
-        } catch (error) {
-          console.warn(
-            'Failed to load subscription tier, defaulting to FREE:',
-            error,
-          )
-          token.tier = 'FREE'
-        }
+      }
+
+      const userId = (user?.id || token.id || token.sub) as string | undefined
+      if (userId) {
+        token.tier = await loadSubscriptionTier(userId)
       }
 
       token.role = resolveAuthTeamRole(user?.email ?? token.email)
@@ -191,6 +191,8 @@ export async function auth() {
     return null
   }
 
+  const tier = await loadSubscriptionTier(userId)
+
   return {
     expires: new Date(Number(token.exp) * 1000).toISOString(),
     user: {
@@ -198,7 +200,7 @@ export async function auth() {
       name: token.name,
       email: token.email,
       role: (token.role || 'MEMBER') as TeamRole,
-      tier: (token.tier || 'FREE') as SubscriptionTier,
+      tier,
     },
   }
 }

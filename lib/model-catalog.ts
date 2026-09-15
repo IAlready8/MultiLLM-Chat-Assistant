@@ -36,7 +36,7 @@ export interface ModelInfo {
   id: string
   /** Human-readable display name shown in the UI. */
   displayName: string
-  /** Published context window in tokens. Keep in sync with lib/token-counter.ts. */
+  /** Published context window in tokens. Also used by the server budget guard. */
   contextWindow: number
   /** Whether this model is the default selection for this provider. */
   isDefault: boolean
@@ -52,6 +52,13 @@ export interface ModelInfo {
 
 export const MODEL_CATALOG: Record<string, ModelInfo[]> = {
   openai: [
+    {
+      id: 'gpt-6-astra',
+      displayName: 'GPT-6 Astra',
+      contextWindow: 1_050_000,
+      isDefault: false,
+      tag: 'reasoning',
+    },
     {
       id: 'gpt-5.6-sol',
       displayName: 'GPT-5.6 Sol',

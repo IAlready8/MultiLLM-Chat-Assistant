@@ -24,6 +24,7 @@ vi.mock('@/lib/cache', () => ({
 }))
 
 vi.mock('@/lib/rate-limit', () => ({
+  probeRateLimitBackend: vi.fn().mockResolvedValue(undefined),
   getRateLimitDiagnostics: () => mockGetRateLimitDiagnostics(),
 }))
 
@@ -55,7 +56,8 @@ describe('/api/health route', () => {
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'memory',
       status: 'memory',
-      message: 'Redis not configured; using in-memory rate limiting',
+      scope: 'per-instance',
+      message: 'Redis not configured; using per-instance in-memory rate limiting',
       redisConfigured: false,
       redisConnected: false,
       inMemoryKeys: 0,
@@ -129,8 +131,9 @@ describe('/api/health route', () => {
       payload.checks.rateLimit.responseTimeMs
     )
     expect(payload.checks.rateLimit.message).toBe(
-      'Redis not configured; using in-memory rate limiting'
+      'Redis not configured; using per-instance in-memory rate limiting'
     )
+    expect(payload.checks.rateLimit.scope).toBe('per-instance')
     expect(payload.checks.sidecar.status).toBe('disabled')
     expect(payload.checks.sidecar.responseTimeMs).toBeTypeOf('number')
     expect(payload.checks.sidecar.responseTime).toBe(
@@ -168,13 +171,26 @@ describe('/api/health route', () => {
     const payload = await response.json()
     expect(payload.status).toBe('degraded')
     expect(payload.checks.database.status).toBe('degraded')
-    expect(payload.checks.database.message).toContain('in-memory fallback')
+    expect(payload.checks.database.message).toBe('Database health check failed')
     expect(payload.summary).toEqual({
       coreAvailability: 'degraded',
       degradedChecks: ['database'],
       alertLevel: 'critical',
       shouldPage: true,
     })
+  })
+
+  it('does not expose connection credentials in public health errors', async () => {
+    const privateConnection = 'postgresql://example:private-password@internal-db/private-database'
+    mockQueryRaw.mockRejectedValue(new Error(`Connection failed: ${privateConnection}`))
+    process.env.PYTHON_CORE_URL = 'http://sidecar.internal'
+    mockFetch.mockRejectedValue(new Error('Cannot use credentials: http://user:private-password@sidecar.internal'))
+    const response = await GET(new NextRequest('http://localhost/api/health'))
+    const payload = await response.text()
+    expect(payload).not.toContain('private-password')
+    expect(payload).not.toContain('internal-db')
+    expect(payload).not.toContain('sidecar.internal')
+    expect(JSON.parse(payload).status).toBe('degraded')
   })
 
   it('returns degraded status when configured sidecar is unavailable', async () => {
@@ -189,7 +205,7 @@ describe('/api/health route', () => {
     expect(payload.status).toBe('degraded')
     expect(payload.checks.sidecar.status).toBe('degraded')
     expect(payload.checks.sidecar.url).toBeUndefined()
-    expect(payload.checks.sidecar.message).toContain('ECONNREFUSED')
+    expect(payload.checks.sidecar.message).toBe('Python sidecar health check failed')
     expect(payload.summary).toEqual({
       coreAvailability: 'available',
       degradedChecks: ['sidecar'],
@@ -230,7 +246,8 @@ describe('/api/health route', () => {
     mockGetRateLimitDiagnostics.mockReturnValue({
       mode: 'memory',
       status: 'degraded',
-      message: 'Redis configured but unavailable; using in-memory rate limiting',
+      scope: 'per-instance',
+      message: 'Redis configured but unavailable; using per-instance in-memory rate limiting',
       redisConfigured: true,
       redisConnected: false,
       inMemoryKeys: 3,
@@ -244,7 +261,7 @@ describe('/api/health route', () => {
     expect(payload.status).toBe('degraded')
     expect(payload.checks.rateLimit.status).toBe('degraded')
     expect(payload.checks.rateLimit.message).toBe(
-      'Redis configured but unavailable; using in-memory rate limiting'
+      'Redis configured but unavailable; using per-instance in-memory rate limiting'
     )
     expect(payload.summary).toEqual({
       coreAvailability: 'available',

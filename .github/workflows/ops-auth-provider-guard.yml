@@ -32,3 +32,10 @@ jobs:
           BASE_URL: https://multi-llm-chat-assistant.vercel.app
           OAUTH_PROVIDER_ID: ${{ inputs.provider }}
         run: node scripts/auth-provider-guard.mjs
+
+      - name: Verify actual Google authorization request
+        if: inputs.provider == 'google'
+        env:
+          BASE_URL: https://multi-llm-chat-assistant.vercel.app
+          OAUTH_PROVIDER_ID: google
+        run: node scripts/auth-provider-guard.mjs --authorize
