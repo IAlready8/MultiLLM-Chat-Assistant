@@ -1,5 +1,8 @@
 # Step 11 User Acquisition Playbook
 
+## Private Pilot Execution
+Use `docs/STEP11_PRIVATE_PILOT_PLAN.md` as the operational wrapper for the first invite-only pilot. It preserves the Step 11 ICP, channel lock, counting rules, and private-access guardrails while giving the owner a concrete tracker and demo cadence.
+
 ## Objective
 Acquire the first real users from the locked ICP using one channel only, validate that they can complete the core workflow, and record why they do or do not get value.
 

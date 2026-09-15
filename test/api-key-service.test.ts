@@ -220,6 +220,17 @@ describe('api-key-service encryption contract', () => {
         isActive: true,
       })
       expect('apiKey' in configs[0]).toBe(false)
+
+      await service.storeUserApiKey('user-1', 'deepseek', '', {
+        models: ['deepseek-ai/DeepSeek-V4-Flash-0731'],
+      })
+
+      const deepSeekConfig = records.get('user-1:deepseek')
+      expect(deepSeekConfig?.apiKey).toBeNull()
+      expect(cryptoMocks.aesGcmEncrypt).toHaveBeenCalledTimes(1)
+      await expect(
+        service.getUserApiKey('user-1', 'deepseek')
+      ).resolves.toBeNull()
     } finally {
       env.NODE_ENV = previousNodeEnv
     }

@@ -5,7 +5,7 @@
 #
 # --base-url URL   Override the default http://localhost:3000
 # --start-server   Start a Next.js production server, run tests, then stop it
-# --session-cookie Auth cookie for protected endpoint roundtrips in strict mode
+# --session-cookie Auth cookie for protected endpoint roundtrips
 
 set -euo pipefail
 
@@ -19,7 +19,7 @@ START_SERVER=false
 SESSION_COOKIE="${SMOKE_SESSION_COOKIE:-}"
 AUTH_EMAIL="${SMOKE_AUTH_EMAIL:-}"
 AUTH_PASSWORD="${SMOKE_AUTH_PASSWORD:-}"
-AUTH_NAME="${SMOKE_AUTH_NAME:-Preview Smoke}"
+REQUIRE_AUTH="${SMOKE_REQUIRE_AUTH:-false}"
 USE_VERCEL_CURL="${USE_VERCEL_CURL:-false}"
 VERCEL_CURL_DEPLOYMENT="${VERCEL_CURL_DEPLOYMENT:-}"
 SERVER_PID=""
@@ -36,7 +36,6 @@ while [[ $# -gt 0 ]]; do
     --session-cookie) SESSION_COOKIE="$2"; shift 2 ;;
     --auth-email) AUTH_EMAIL="$2"; shift 2 ;;
     --auth-password) AUTH_PASSWORD="$2"; shift 2 ;;
-    --auth-name) AUTH_NAME="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -105,7 +104,6 @@ request_json() {
 obtain_session_cookie() {
   local email="$1"
   local password="$2"
-  local name="$3"
   local cookie_jar
   local body_file
   local csrf_json
@@ -143,7 +141,6 @@ except Exception:
     --data-urlencode "redirect=false" \
     --data-urlencode "email=${email}" \
     --data-urlencode "password=${password}" \
-    --data-urlencode "name=${name}" \
     2>/dev/null || echo "000")
 
   if [ "$auth_status" != "200" ] && [ "$auth_status" != "302" ]; then
@@ -255,8 +252,13 @@ fi
 
 if [ -z "$SESSION_COOKIE" ] && [ -n "$AUTH_EMAIL" ] && [ -n "$AUTH_PASSWORD" ]; then
   echo -e "${YELLOW}Obtaining authenticated session cookie for smoke run...${NC}"
-  obtain_session_cookie "$AUTH_EMAIL" "$AUTH_PASSWORD" "$AUTH_NAME"
+  obtain_session_cookie "$AUTH_EMAIL" "$AUTH_PASSWORD"
   echo -e "${GREEN}Authenticated smoke session ready for ${AUTH_EMAIL}${NC}"
+fi
+
+if [ "$REQUIRE_AUTH" = true ] && [ -z "$SESSION_COOKIE" ]; then
+  echo -e "${RED}Authenticated smoke mode requires SMOKE_SESSION_COOKIE or both SMOKE_AUTH_EMAIL and SMOKE_AUTH_PASSWORD for an existing account.${NC}" >&2
+  exit 1
 fi
 
 echo ""
@@ -324,7 +326,7 @@ assert_status_any "GET /api/config (list)" "$HTTP_STATUS" "200" "401"
 
 if [ "$HTTP_STATUS" = "401" ]; then
   AUTH_BLOCKED_MODE=true
-  echo -e "  ${YELLOW}SKIP${NC} strict auth mode detected without session cookie; protected lifecycle roundtrips will be skipped."
+  echo -e "  ${YELLOW}SKIP${NC} authentication is required and no session cookie was supplied; protected lifecycle roundtrips will be skipped."
   SKIP=$((SKIP + 1))
 else
   request_json "POST" "/api/config" '{"provider":"openai","apiKey":"sk-smoke-test-0000000000000000000000000000000000000000000000"}'

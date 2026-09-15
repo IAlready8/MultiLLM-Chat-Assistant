@@ -72,17 +72,17 @@ Health contract:
 2. `cp .env.example .env.local`
 3. Set minimum local env:
    - `NEXTAUTH_URL=http://localhost:3000`
-   - `API_KEY_ENCRYPTION_SEED=<32+ char secret>`
-4. Optional strict-auth local parity:
-   - `AUTH_REQUIRE_LOGIN=true`
-   - `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=true`
    - `NEXTAUTH_SECRET=<32+ char secret>`
+   - `API_KEY_ENCRYPTION_SEED=<32+ char secret>`
+   - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/<db_name>`
+4. Configure a Google or GitHub OAuth pair when testing new account creation.
 5. `npm run dev`
 
 Expected outcome:
 - app loads at `http://localhost:3000`
-- guest mode works when strict-auth flags are false
-- strict-auth redirects unauthenticated users when strict-auth flags are true
+- unauthenticated workspace requests redirect to `/auth/signin`
+- `/auth/register` offers only configured OAuth providers
+- existing password accounts can sign in without creating a new user
 
 ## 4. Production-Like Local Gate (Verified Locally)
 
@@ -93,13 +93,6 @@ export NEXTAUTH_URL=http://localhost:3000
 export NEXTAUTH_SECRET=verify-secret-32chars
 export API_KEY_ENCRYPTION_SEED=verify-encryption-seed-32chars
 export DATABASE_URL=postgresql://<user>@127.0.0.1:5432/<db_name>
-```
-
-Optional parity toggles:
-
-```bash
-export AUTH_REQUIRE_LOGIN=false
-export NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false
 ```
 
 Execution order:
@@ -186,10 +179,14 @@ Execution order used in live proof:
 4. Promote the deployment to the canonical alias:
    - `npx vercel promote <deployment-id> --yes -S itsokialready8`
 5. Verify on the canonical production URL:
-   - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app`
+   - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app --expected-commit-sha <full-release-commit-sha> --expected-version <exact-release-version> --require-oauth-provider google`
 6. Run smoke:
    - `bash scripts/smoke-test.sh --base-url https://multi-llm-chat-assistant.vercel.app`
-7. If billing-ready proof is in scope:
+7. Run the credential-free canonical alias guard:
+   - `npm run ops:alias:check -- --base-url https://multi-llm-chat-assistant.vercel.app --expected-commit-sha <full-release-commit-sha> --expected-version <exact-release-version>`
+8. Run the credential-free canonical OAuth callback guard:
+   - `npm run ops:auth:check -- --base-url https://multi-llm-chat-assistant.vercel.app --provider google`
+9. If billing-ready proof is in scope:
    - `node scripts/run-with-dotenv.js <tmp-prod-env> bash scripts/verify-production.sh --base-url https://multi-llm-chat-assistant.vercel.app --require-stripe --check-webhook`
 
 Live proof captured:
@@ -251,7 +248,8 @@ Triage map:
 - Auth failures or redirect loops:
   - verify `NEXTAUTH_URL`
   - verify `NEXTAUTH_SECRET` or `AUTH_SECRET`
-  - verify strict-auth flags match intended environment
+  - verify the Google/GitHub client ID and secret are a complete pair
+  - verify the provider callback exactly matches the deployed domain
 - Billing routes return unavailable:
   - verify `STRIPE_SECRET_KEY`
   - verify `STRIPE_PRO_PRICE_ID`

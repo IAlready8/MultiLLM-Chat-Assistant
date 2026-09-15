@@ -1,7 +1,7 @@
 import NextAuth, { DefaultSession } from 'next-auth'
 
 type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
-type UserRole = 'USER' | 'ADMIN' | 'OWNER'
+type UserRole = 'MEMBER' | 'ADMIN' | 'OWNER'
 
 declare module 'next-auth' {
   /**

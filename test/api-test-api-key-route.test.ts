@@ -7,7 +7,7 @@ const mockTestProviderKey = vi.fn()
 const mockValidateApiKeyFormat = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/api-key-service', () => ({
@@ -74,7 +74,7 @@ describe('/api/test-api-key route', () => {
       valid: true,
       reason: 'ok',
     })
-    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
+    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith()
     expect(mockGetUserApiKey).toHaveBeenCalledWith('user-1', 'openai')
   })
 
@@ -138,6 +138,24 @@ describe('/api/test-api-key route', () => {
     expect(body.reason).toBe('rate_limited')
     expect(typeof body.latencyMs).toBe('number')
   })
+
+  it.each([false, true])(
+    'returns disabled for DeepSeek without accessing any key (testSaved=%s)',
+    async (testSaved) => {
+      const response = await POST(makeRequest({ provider: 'deepseek', testSaved }))
+
+      expect(response.status).toBe(503)
+      await expect(response.json()).resolves.toEqual({
+        valid: false,
+        message: 'DeepSeek is currently unavailable.',
+        reason: 'disabled',
+        code: 'PROVIDER_DISABLED',
+      })
+      expect(mockGetUserApiKey).not.toHaveBeenCalled()
+      expect(mockValidateApiKeyFormat).not.toHaveBeenCalled()
+      expect(mockTestProviderKey).not.toHaveBeenCalled()
+    },
+  )
 
   it('returns unreachable when provider request throws', async () => {
     mockTestProviderKey.mockRejectedValue(new Error('network down'))

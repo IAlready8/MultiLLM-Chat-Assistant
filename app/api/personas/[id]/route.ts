@@ -1,3 +1,4 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { PersonaService } from '@/services/persona-service.db'
@@ -37,7 +38,7 @@ export const GET = withApiMetrics(async (
   _req: Request,
   ctx: MetricsRouteContext
 ) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
   const id = await getPersonaIdFromContext(ctx)
@@ -64,13 +65,14 @@ export const PUT = withApiMetrics(async (
   req: Request,
   ctx: MetricsRouteContext
 ) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
   const id = await getPersonaIdFromContext(ctx)
 
   try {
-    const body = await req.json()
+    const body = await readApiObject(req)
+  if (body instanceof NextResponse) return body
     const validation = updatePersonaSchema.safeParse(body)
 
     if (!validation.success) {
@@ -124,7 +126,7 @@ export const DELETE = withApiMetrics(async (
   _req: Request,
   ctx: MetricsRouteContext
 ) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
   const id = await getPersonaIdFromContext(ctx)

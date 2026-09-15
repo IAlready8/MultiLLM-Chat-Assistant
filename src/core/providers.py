@@ -1,6 +1,7 @@
 from .schemas import ProviderError, ProviderRequest, ProviderResponse
 from .config import settings
-from .llm_manager import LLMManager, LLMRequest, ProviderType
+from .llm_manager import LLMError, LLMManager, LLMRequest, ProviderType
+from .capability_loader import get_cost_rate
 from .security_utils import scrub_sensitive_info
 import time
 import logging
@@ -10,7 +11,7 @@ llm_manager = LLMManager()
 
 # Initialize providers if API keys are available
 async def initialize_providers():
-    from .llm_manager import OpenAIProvider, AnthropicProvider, GoogleProvider
+    from .llm_manager import OpenAIProvider, AnthropicProvider, GoogleProvider, KimiProvider
 
     if settings.OPENAI_API_KEY:
         await llm_manager.register_provider(ProviderType.OPENAI, OpenAIProvider())
@@ -21,6 +22,9 @@ async def initialize_providers():
     if settings.GOOGLE_AI_API_KEY:
         await llm_manager.register_provider(ProviderType.GOOGLE, GoogleProvider())
 
+
+    if settings.MOONSHOT_API_KEY:
+        await llm_manager.register_provider(ProviderType.KIMI, KimiProvider())
 
 async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
     """
@@ -37,7 +41,8 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
             provider=ProviderType(req.provider),
             model=req.model,
             max_tokens=req.max_tokens,
-            temperature=req.temperature
+            temperature=req.temperature,
+            reasoning_effort=req.reasoning_effort,
         )
 
         # Execute using the LLM manager
@@ -59,6 +64,10 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
             cost_usd=calculate_cost(response.provider, response.tokens_used),  # Calculate based on provider/model
             latency_ms=latency_ms
         )
+    except LLMError:
+        # Preserve HTTP status and Retry-After for direct chat; orchestration
+        # captures this exception as a structured per-provider failure.
+        raise
     except ValueError as e:
         # Handle validation errors
         logging.error(f"Request validation error: {str(e)}")
@@ -83,18 +92,13 @@ async def execute_llm_request(req: ProviderRequest) -> ProviderResponse:
 
 def calculate_cost(provider: ProviderType, tokens_used: int) -> float:
     """
-    Calculate estimated cost based on provider and tokens used.
-    This is a simplified calculation - in production, use actual pricing.
+    Calculate estimated cost from the capability matrix.
     """
-    # Simplified cost calculation - in production, use actual pricing from each provider
-    cost_per_thousand_tokens = {
-        ProviderType.OPENAI: 0.002,  # Example: $0.002 per 1k tokens for gpt-3.5-turbo
-        ProviderType.ANTHROPIC: 0.008,  # Example: $0.008 per 1k tokens for Claude
-        ProviderType.GOOGLE: 0.0005,  # Example: $0.0005 per 1k tokens for Gemini
-    }
-
-    cost_per_token = cost_per_thousand_tokens.get(provider, 0.002) / 1000
-    return cost_per_token * tokens_used
+    if provider == ProviderType.DEEPSEEK:
+        raise ValueError("DeepSeek is currently unavailable.")
+    rate = get_cost_rate(provider.value)
+    average_cost_per_thousand = (rate["prompt"] + rate["completion"]) / 2
+    return (tokens_used / 1000) * average_cost_per_thousand
 
 
 def _looks_like_error_content(content: str) -> bool:

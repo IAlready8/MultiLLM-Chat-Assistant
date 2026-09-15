@@ -21,8 +21,7 @@
  *     -> 400 { error: "Unknown provider: unknown", code: "UNKNOWN_PROVIDER" }
  *
  * Auth:
- *   Requires a valid session. Returns 401 in strict auth mode when unauthenticated.
- *   Allows guest access in non-strict mode so the model picker works before login.
+ *   Requires a valid session. Returns 401 when unauthenticated.
  *
  * Caching:
  *   The catalog is static (no DB call). We set Cache-Control headers to allow
@@ -33,11 +32,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
-  MODEL_CATALOG,
   getModelsForProvider,
-  getAllProviderIds,
   type ModelInfo,
 } from '@/lib/model-catalog'
+import {
+  getProviderDisabledMessage,
+  isProviderDisabled,
+  supportedProviderIds,
+  PROVIDER_DISABLED_ERROR_CODE,
+} from '@/lib/provider-registry'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,8 +73,7 @@ function jsonError(status: number, error: string, code: string): NextResponse {
 // ---------------------------------------------------------------------------
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  // Auth check - allow guest so model picker works in demo mode
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
 
   const { searchParams } = req.nextUrl
@@ -79,12 +81,22 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   // Full catalog - no provider filter
   if (!providerParam) {
-    return jsonOk({ catalog: MODEL_CATALOG })
+    const catalog = Object.fromEntries(
+      supportedProviderIds.map((provider) => [provider, getModelsForProvider(provider)]),
+    )
+    return jsonOk({ catalog })
   }
 
   // Validate provider
   const provider = providerParam.trim().toLowerCase()
-  const knownProviders = getAllProviderIds()
+  if (isProviderDisabled(provider)) {
+    return jsonError(
+      503,
+      getProviderDisabledMessage(provider),
+      PROVIDER_DISABLED_ERROR_CODE,
+    )
+  }
+  const knownProviders: readonly string[] = supportedProviderIds
   if (!knownProviders.includes(provider)) {
     return jsonError(
       400,

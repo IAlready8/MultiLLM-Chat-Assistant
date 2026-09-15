@@ -16,8 +16,18 @@ describe('rate-limit diagnostics', () => {
     } else {
       process.env.REDIS_URL = originalRedisUrl
     }
+    delete process.env.REQUIRE_DISTRIBUTED_RATE_LIMIT
+    vi.unstubAllEnvs()
     vi.doUnmock('redis')
     vi.doUnmock('@/lib/logger')
+  })
+
+  it('blocks production requests if distributed protection is unavailable', async () => {
+    delete process.env.REDIS_URL
+    vi.stubEnv('NODE_ENV', 'production')
+    const { checkAndConsume, getRateLimitDiagnostics } = await loadModule()
+    await expect(checkAndConsume('user', { max: 10, windowMs: 60000 })).rejects.toMatchObject({ status: 503, code: 'RATE_LIMIT_UNAVAILABLE' })
+    expect(getRateLimitDiagnostics()).toMatchObject({ status: 'degraded', message: 'Distributed rate limiting unavailable; requests are blocked' })
   })
 
   it('reports memory mode when Redis is not configured', async () => {
@@ -30,7 +40,8 @@ describe('rate-limit diagnostics', () => {
     expect(getRateLimitDiagnostics()).toEqual({
       mode: 'memory',
       status: 'memory',
-      message: 'Redis not configured; using in-memory rate limiting',
+      scope: 'per-instance',
+      message: 'Redis not configured; using per-instance in-memory rate limiting',
       redisConfigured: false,
       redisConnected: false,
       inMemoryKeys: 0,
@@ -65,7 +76,8 @@ describe('rate-limit diagnostics', () => {
     expect(getRateLimitDiagnostics()).toEqual({
       mode: 'memory',
       status: 'degraded',
-      message: 'Redis configured but unavailable; using in-memory rate limiting',
+      scope: 'per-instance',
+      message: 'Redis configured but unavailable; using per-instance in-memory rate limiting',
       redisConfigured: true,
       redisConnected: false,
       inMemoryKeys: 0,
@@ -74,5 +86,64 @@ describe('rate-limit diagnostics', () => {
     expect(warn).not.toHaveBeenCalledWith('rate_limit_redis_connected')
     expect(info).not.toHaveBeenCalledWith('rate_limit_redis_connected')
     expect(error).not.toHaveBeenCalled()
+  })
+
+  it('uses one atomic Redis script and preserves Retry-After metadata', async () => {
+    process.env.REDIS_URL = 'redis://127.0.0.1:6379'
+
+    const evalScript = vi
+      .fn()
+      .mockResolvedValueOnce([1, 4, 0])
+      .mockResolvedValueOnce([0, 0, 42_000])
+    const connect = vi.fn().mockResolvedValue(undefined)
+
+    vi.doMock('@/lib/logger', () => ({
+      logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+    }))
+    vi.doMock('redis', () => ({
+      createClient: vi.fn(() => ({
+        on: vi.fn(),
+        connect,
+        withCommandOptions: () => ({ eval: evalScript }),
+      })),
+    }))
+
+    const { checkAndConsume, getRateLimitDiagnostics, resetAll } =
+      await loadModule()
+    await vi.waitFor(() => {
+      expect(getRateLimitDiagnostics().mode).toBe('redis')
+    })
+
+    await expect(
+      checkAndConsume('provider:user-1:openai', {
+        max: 5,
+        windowMs: 60_000,
+      })
+    ).resolves.toEqual({ allowed: true, remaining: 4, retryAfterMs: 0 })
+    await expect(
+      checkAndConsume('provider:user-1:openai', {
+        max: 5,
+        windowMs: 60_000,
+      })
+    ).resolves.toEqual({
+      allowed: false,
+      remaining: 0,
+      retryAfterMs: 42_000,
+    })
+
+    expect(evalScript).toHaveBeenCalledTimes(2)
+    expect(evalScript.mock.calls[0][0]).toContain("redis.call('ZADD'")
+    expect(evalScript.mock.calls[0][1]).toMatchObject({
+      keys: ['provider:user-1:openai'],
+      arguments: [expect.any(String), '60000', '5', expect.any(String)],
+    })
+    expect(getRateLimitDiagnostics()).toMatchObject({
+      mode: 'redis',
+      status: 'connected',
+      scope: 'distributed',
+    })
+
+    resetAll()
+    expect(evalScript).toHaveBeenCalledTimes(2)
   })
 })

@@ -1,3 +1,4 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { storeUserApiKey, getUserProviderConfigs, deleteUserProviderConfig } from '@/lib/api-key-service'
@@ -6,25 +7,32 @@ import {
 } from '@/lib/acquisition-attribution'
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import {
+  getProviderDisabledMessage,
   getProviderMeta,
   isProviderApiKeyRequired,
+  isProviderDisabled,
+  isProviderOperational,
+  PROVIDER_DISABLED_ERROR_CODE,
 } from '@/lib/provider-registry'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import {
   apiReadCacheKey,
   invalidateApiReadCache,
 } from '@/lib/api-read-cache'
+import { getProviderBaseUrl, ProviderEndpointError } from '@/lib/provider-endpoint'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
 export async function GET() {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
   try {
     const configs = await getUserProviderConfigs(user.id)
-    const configuredProviders = configs.map(c => c.provider)
+    const configuredProviders = configs
+      .map((config) => config.provider)
+      .filter(isProviderOperational)
 
     const response = NextResponse.json({ configuredProviders })
     response.headers.set('Cache-Control', 'no-store')
@@ -39,11 +47,12 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const body = await request.json()
+  const body = await readApiObject(request)
+  if (body instanceof NextResponse) return body
   const providerRaw = body?.provider
   const apiKeyRaw = body?.apiKey
   const clear = body?.clear === true
@@ -55,10 +64,22 @@ export async function POST(request: NextRequest) {
   const provider = normalizeProvider(providerRaw)
   const providerMeta = getProviderMeta(provider)
 
+  if (isProviderDisabled(provider)) {
+    return NextResponse.json(
+      {
+        error: getProviderDisabledMessage(provider),
+        code: PROVIDER_DISABLED_ERROR_CODE,
+      },
+      { status: 503 },
+    )
+  }
+
   // Validate provider
   if (!providerMeta || !defaultProviderModels[provider]) {
     return NextResponse.json({ error: `Unsupported provider: ${provider}` }, { status: 400 })
   }
+
+  if (!clear && isProviderApiKeyRequired(provider) && typeof apiKeyRaw !== 'string') return NextResponse.json({ error: 'API key must be a string; use clear to remove a provider' }, { status: 400 })
 
   const apiKey = typeof apiKeyRaw === 'string' ? apiKeyRaw.trim() : ''
   if (clear || (!apiKey && isProviderApiKeyRequired(provider))) {
@@ -89,6 +110,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    getProviderBaseUrl(provider, undefined)
     await storeUserApiKey(user.id, provider, apiKey, settings)
     invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
     try {
@@ -108,6 +130,12 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof ProviderEndpointError) {
+      return NextResponse.json(
+        { error: 'Provider endpoint is not allowed', code: error.code },
+        { status: 400 }
+      )
+    }
     console.error('Failed to store API key.')
     return NextResponse.json(
       { error: 'Failed to store API key securely' },

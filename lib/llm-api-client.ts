@@ -233,8 +233,10 @@ export async function callLLM(
     switch (provider) {
       case 'openai':
         return await callOpenAI(messages, apiKey, options);
+      case 'anthropic':
       case 'claude':
         return await callClaude(messages, apiKey, options);
+      case 'googleai':
       case 'google':
         return await callGoogleAI(messages, apiKey, options);
       default:
@@ -267,6 +269,7 @@ export async function streamLLM(
       case 'openai':
         await streamOpenAI(messages, apiKey, callbacks, options);
         break;
+      case 'anthropic':
       case 'claude':
         await streamClaude(messages, apiKey, callbacks, options);
         break;

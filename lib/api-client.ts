@@ -14,11 +14,14 @@ type NewGoal = Omit<Goal, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
 
 // Types for Orchestration
 type ProviderRequest = {
+  requestId?: string
   provider: string
   model: string
   prompt: string
 }
 type OrchestrateRequest = {
+  conversationId?: string
+  turnId?: string
   requests: ProviderRequest[]
   prompt: string
 }
@@ -27,15 +30,14 @@ type ProviderResponse = {
   provider: string
   model: string
   success?: boolean
-  content?: string
-  error?: {
-    code: string
-    message: string
-    retryable: boolean
-  }
+  content: string
+  code?: string
+  retryable?: boolean
   prompt_tokens: number
   completion_tokens: number
-  cost_usd: number
+  status?: string
+  error?: string
+  cost_usd: number | null
   latency_ms: number
   usage?: {
     inputTokens?: number
@@ -125,6 +127,11 @@ export const apiClient = {
   },
 
   // --- Conversation API Calls ---
+  async getConversationPage(workspace = 'all', cursor?: string): Promise<{ items: Conversation[]; nextCursor: string | null }> {
+    const query = new URLSearchParams({ limit: '30', workspace })
+    if (cursor) query.set('cursor', cursor)
+    return handleResponse(await fetch(`/api/conversations?${query}`, { cache: 'no-store' }))
+  },
   async getConversations(): Promise<Conversation[]> {
     return handleResponse(await fetch('/api/conversations'))
   },
@@ -132,6 +139,14 @@ export const apiClient = {
     id: string
   ): Promise<Conversation & { messages: Message[] }> {
     return handleResponse(await fetch(`/api/conversations/${id}`))
+  },
+  async getConversationMessages(
+    id: string,
+    before?: string
+  ): Promise<Conversation & { messages: Message[]; nextMessageCursor: string | null; pageTurns: number }> {
+    const query = new URLSearchParams({ messagesLimit: '20' })
+    if (before) query.set('before', before)
+    return handleResponse(await fetch(`/api/conversations/${id}?${query}`, { cache: 'no-store' }))
   },
   async createConversation(data: NewConversation): Promise<Conversation> {
     return handleResponse(

@@ -49,14 +49,15 @@ export async function callLLMApi(
         return callOpenAI(prompt, apiKey, effOptions);
       case "openrouter":
         return callOpenRouter(prompt, apiKey, effOptions);
+      case "anthropic":
       case "claude":
         return callClaude(prompt, apiKey, effOptions);
+      case "googleai":
       case "google":
         return callGoogleAI(prompt, apiKey, effOptions);
+      case "ollama":
       case "llama":
         return callLlama(prompt, apiKey, effOptions);
-      case "github":
-        return callGitHubCopilot(prompt, apiKey, effOptions);
       case "grok":
         return callGrok(prompt, apiKey, effOptions);
       default:
@@ -489,18 +490,7 @@ async function callLlama(
   }, { timeoutMs: options.timeoutMs, retries: options.retries, abortSignal: options.abortSignal });
 
   if (!response.ok) {
-    // Fallback to simulated response if Ollama not available
-    console.warn("Ollama not available, using simulated response");
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    return {
-      text: `Llama response: ${Array.isArray(prompt) ? prompt[prompt.length - 1] : prompt}`,
-      usage: {
-        promptTokens: 20,
-        completionTokens: 50,
-        totalTokens: 70
-      }
-    };
+    throw new Error(`Ollama request failed (${response.status})`);
   }
 
   const data = await response.json();
@@ -546,18 +536,7 @@ async function callGitHubCopilot(
   }, { timeoutMs: options.timeoutMs, retries: options.retries, abortSignal: options.abortSignal });
 
   if (!response.ok) {
-    // Fallback to simulated response if GitHub Copilot not available
-    console.warn("GitHub Copilot not available, using simulated response");
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    return {
-      text: `GitHub Copilot response: ${Array.isArray(prompt) ? prompt[prompt.length - 1] : prompt}`,
-      usage: {
-        promptTokens: 15,
-        completionTokens: 45,
-        totalTokens: 60
-      }
-    };
+    throw new Error(`GitHub Copilot request failed (${response.status})`);
   }
 
   const data = await response.json();
@@ -596,18 +575,7 @@ async function callGrok(
   }, { timeoutMs: options.timeoutMs, retries: options.retries });
 
   if (!response.ok) {
-    // Fallback to simulated response if Grok not available
-    console.warn("Grok API not available, using simulated response");
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    return {
-      text: `Grok response: ${Array.isArray(prompt) ? prompt[prompt.length - 1] : prompt}`,
-      usage: {
-        promptTokens: 18,
-        completionTokens: 55,
-        totalTokens: 73
-      }
-    };
+    throw new Error(`Grok request failed (${response.status})`);
   }
 
   const data = await response.json();

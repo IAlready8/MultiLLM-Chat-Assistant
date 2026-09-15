@@ -36,7 +36,7 @@ export interface ModelInfo {
   id: string
   /** Human-readable display name shown in the UI. */
   displayName: string
-  /** Published context window in tokens. Keep in sync with lib/token-counter.ts. */
+  /** Published context window in tokens. Also used by the server budget guard. */
   contextWindow: number
   /** Whether this model is the default selection for this provider. */
   isDefault: boolean
@@ -52,6 +52,34 @@ export interface ModelInfo {
 
 export const MODEL_CATALOG: Record<string, ModelInfo[]> = {
   openai: [
+    {
+      id: 'gpt-6-astra',
+      displayName: 'GPT-6 Astra',
+      contextWindow: 1_050_000,
+      isDefault: false,
+      tag: 'reasoning',
+    },
+    {
+      id: 'gpt-5.6-sol',
+      displayName: 'GPT-5.6 Sol',
+      contextWindow: 1_050_000,
+      isDefault: false,
+      tag: 'frontier',
+    },
+    {
+      id: 'gpt-5.6-terra',
+      displayName: 'GPT-5.6 Terra',
+      contextWindow: 1_050_000,
+      isDefault: false,
+      tag: 'balanced',
+    },
+    {
+      id: 'gpt-5.6-luna',
+      displayName: 'GPT-5.6 Luna',
+      contextWindow: 1_050_000,
+      isDefault: false,
+      tag: 'economy',
+    },
     {
       id: 'gpt-4o',
       displayName: 'GPT-4o',
@@ -109,6 +137,34 @@ export const MODEL_CATALOG: Record<string, ModelInfo[]> = {
   ],
 
   anthropic: [
+    {
+      id: 'claude-fable-5',
+      displayName: 'Claude Fable 5',
+      contextWindow: 1_000_000,
+      isDefault: false,
+      tag: 'frontier',
+    },
+    {
+      id: 'claude-opus-5',
+      displayName: 'Claude Opus 5',
+      contextWindow: 1_000_000,
+      isDefault: false,
+      tag: 'flagship',
+    },
+    {
+      id: 'claude-sonnet-5',
+      displayName: 'Claude Sonnet 5',
+      contextWindow: 1_000_000,
+      isDefault: false,
+      tag: 'balanced',
+    },
+    {
+      id: 'claude-haiku-4-5-20251001',
+      displayName: 'Claude Haiku 4.5',
+      contextWindow: 200_000,
+      isDefault: false,
+      tag: 'fast',
+    },
     {
       id: 'claude-3-5-sonnet-20241022',
       displayName: 'Claude 3.5 Sonnet',
@@ -367,6 +423,46 @@ export const MODEL_CATALOG: Record<string, ModelInfo[]> = {
       tag: 'reasoning',
     },
   ],
+
+  kimi: [
+    {
+      id: 'kimi-k3',
+      displayName: 'Kimi K3',
+      contextWindow: 1_048_576,
+      isDefault: true,
+      tag: 'flagship',
+    },
+    {
+      id: 'kimi-k2.7-code',
+      displayName: 'Kimi K2.7 Code',
+      contextWindow: 262_144,
+      isDefault: false,
+      tag: 'code',
+    },
+    {
+      id: 'kimi-k2.7-code-highspeed',
+      displayName: 'Kimi K2.7 Code Highspeed',
+      contextWindow: 262_144,
+      isDefault: false,
+      tag: 'fast',
+    },
+    {
+      id: 'kimi-k2.6',
+      displayName: 'Kimi K2.6',
+      contextWindow: 262_144,
+      isDefault: false,
+    },
+  ],
+
+  deepseek: [
+    {
+      id: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+      displayName: 'DeepSeek V4 Flash 0731 (Unavailable)',
+      contextWindow: 393_216,
+      isDefault: true,
+      tag: 'experimental',
+    },
+  ],
 }
 
 // ---------------------------------------------------------------------------
@@ -394,8 +490,14 @@ export function getDefaultModel(providerId: string): string {
 /**
  * Get all provider IDs that have at least one model in the catalog.
  */
+import { allProviderIds } from '@/src/generated/provider-meta'
+
+/**
+ * Get all provider IDs from the single source of truth (capability matrix).
+ * MODEL_CATALOG still owns rich model metadata (context windows, deprecation flags).
+ */
 export function getAllProviderIds(): string[] {
-  return Object.keys(MODEL_CATALOG)
+  return [...allProviderIds]
 }
 
 /**

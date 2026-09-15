@@ -1,3 +1,4 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthenticatedUser } from '@/lib/api-auth'
@@ -52,7 +53,7 @@ export const GET = withApiMetrics(async (
   _req: Request,
   ctx: MetricsRouteContext
 ) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
   const id = await getGoalIdFromContext(ctx)
@@ -77,12 +78,13 @@ export const PUT = withApiMetrics(async (
   req: Request,
   ctx: MetricsRouteContext
 ) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
   const id = await getGoalIdFromContext(ctx)
 
-  const body = await req.json()
+  const body = await readApiObject(req)
+  if (body instanceof NextResponse) return body
   const validation = updateGoalSchema.safeParse(body)
   if (!validation.success) {
     return NextResponse.json(
@@ -112,7 +114,7 @@ export const DELETE = withApiMetrics(async (
   _req: Request,
   ctx: MetricsRouteContext
 ) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
   const id = await getGoalIdFromContext(ctx)

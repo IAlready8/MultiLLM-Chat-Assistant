@@ -17,6 +17,7 @@
   - `handoff_work/RELEASE_STATUS.md`
   - `handoff_work/RELEASE_MANIFEST.md`
   - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
+  - `handoff_work/BRANCH_SCORECARD_2026-06-09.md`
   - `docs/OPERATOR_RUNBOOK.md`
   - `handoff_work/DEPLOYMENT_EVIDENCE.md`
   - `handoff_work/RESIDUAL_RISKS.md`
@@ -42,6 +43,8 @@
   - non-destructive branch and PR cleanup audit
 - `handoff_work/POST_CLOSEOUT_NEXT_ACTIONS.md`
   - the only authoritative forward plan from the current baseline
+- `handoff_work/BRANCH_SCORECARD_2026-06-09.md`
+  - local branch scorecard, quality gate status, and remaining plan checklist
 - `docs/OPERATOR_RUNBOOK.md`
   - operator execution procedures
 

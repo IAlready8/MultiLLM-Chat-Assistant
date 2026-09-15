@@ -4,7 +4,7 @@ import { render, screen, waitFor } from '@/test/test-utils'
 import AIRoundtablePage from '@/app/ai-roundtable/page'
 
 const mockApiClient = vi.hoisted(() => ({
-  getConversations: vi.fn(),
+  getConversationPage: vi.fn(),
   getConversation: vi.fn(),
   createConversation: vi.fn(),
   addMessages: vi.fn(),
@@ -29,7 +29,7 @@ const createStreamResponse = (text: string) =>
   new Response(
     new ReadableStream({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode(text))
+        controller.enqueue(new TextEncoder().encode(JSON.stringify({ type: 'chunk', content: text }) + '\n' + JSON.stringify({ type: 'done' }) + '\n'))
         controller.close()
       },
     }),
@@ -45,16 +45,7 @@ describe('AIRoundtablePage history behavior', () => {
       json: async () => ({ configuredProviders: ['openai', 'anthropic'] }),
     })
     vi.stubGlobal('fetch', mockFetch)
-    mockApiClient.getConversations.mockResolvedValue([
-      roundtableConversation,
-      {
-        id: 'chat-1',
-        title: 'Regular chat',
-        userId: 'user-1',
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-02T00:00:00.000Z'),
-      },
-    ])
+    mockApiClient.getConversationPage.mockResolvedValue({ items: [roundtableConversation], nextCursor: null })
     mockApiClient.getConversation.mockResolvedValue({
       ...roundtableConversation,
       messages: [
@@ -89,7 +80,7 @@ describe('AIRoundtablePage history behavior', () => {
 
     await screen.findByText('Roundtable: Old test chat')
 
-    expect(mockApiClient.getConversations).toHaveBeenCalledTimes(1)
+    expect(mockApiClient.getConversationPage).toHaveBeenCalledWith('roundtable', undefined)
     expect(mockApiClient.getConversation).not.toHaveBeenCalled()
     expect(
       screen.getByText('Add a goal and start the roundtable to watch agents converse.')
@@ -97,7 +88,24 @@ describe('AIRoundtablePage history behavior', () => {
     expect(screen.queryByText('Old persisted response')).not.toBeInTheDocument()
   })
 
-  it('offers every catalog-backed provider, including local Ollama and Mistral', async () => {
+  it('preserves loaded history when an older page fails and retries the same cursor', async () => {
+    const user = userEvent.setup()
+    mockApiClient.getConversationPage
+      .mockResolvedValueOnce({ items: [roundtableConversation], nextCursor: 'older-page' })
+      .mockRejectedValueOnce(new Error('Temporary read failure'))
+      .mockResolvedValueOnce({ items: [{ ...roundtableConversation, id: 'older', title: 'Roundtable: Older thread' }], nextCursor: null })
+    render(<AIRoundtablePage />)
+    await user.click(await screen.findByRole('button', { name: 'Load more' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load roundtable history')
+    expect(screen.getByText('Roundtable: Old test chat')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(await screen.findByText('Roundtable: Older thread')).toBeVisible()
+    expect(screen.getByText('Roundtable: Old test chat')).toBeVisible()
+    expect(mockApiClient.getConversationPage).toHaveBeenLastCalledWith('roundtable', 'older-page')
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+  })
+
+  it('offers every catalog-backed provider and recent OpenAI/Anthropic models', async () => {
     const user = userEvent.setup()
     render(<AIRoundtablePage />)
 
@@ -105,12 +113,29 @@ describe('AIRoundtablePage history behavior', () => {
       await screen.findByRole('button', { name: /Ollama \(local\)/i })
     ).toBeVisible()
     expect(screen.getByRole('button', { name: /Mistral/i })).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
+    ).toBeVisible()
+    expect(screen.queryByRole('button', { name: /DeepSeek/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Free Community/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'GPT-5.6 Sol' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /Claude \(Anthropic\)/i }))
+    expect(
+      screen.getAllByRole('option', { name: 'Claude Fable 5' }).length,
+    ).toBeGreaterThan(0)
 
     await user.click(screen.getByRole('button', { name: /Mistral/i }))
     expect(screen.getByRole('option', { name: 'Mistral Large' })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: /Ollama \(local\)/i }))
     expect(screen.getByRole('option', { name: 'Llama 3 (8B)' })).toBeVisible()
+
+    await user.click(
+      screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
+    )
+    expect(screen.getByRole('option', { name: 'Kimi K3' })).toBeVisible()
+
   })
 
   it('hydrates a saved Roundtable only after the user clicks a history item', async () => {
@@ -152,7 +177,7 @@ describe('AIRoundtablePage history behavior', () => {
     expect(screen.getByText('Roundtable: Old test chat')).toBeInTheDocument()
   })
 
-  it('archives a completed roundtable and clears the active transcript', async () => {
+  it('persists completed turns on the server and retains the active transcript', async () => {
     const user = userEvent.setup()
     const newConversation = {
       id: 'roundtable-new',
@@ -163,7 +188,7 @@ describe('AIRoundtablePage history behavior', () => {
     }
 
     mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
-      if (String(input).includes('/api/llm/chat')) {
+      if (String(input).includes('/api/llm/stream')) {
         return createStreamResponse('Archived response')
       }
 
@@ -174,9 +199,9 @@ describe('AIRoundtablePage history behavior', () => {
     })
     mockApiClient.createConversation.mockResolvedValue(newConversation)
     mockApiClient.addMessages.mockResolvedValue({})
-    mockApiClient.getConversations
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([newConversation])
+    mockApiClient.getConversationPage
+      .mockResolvedValueOnce({ items: [], nextCursor: null })
+      .mockResolvedValueOnce({ items: [newConversation], nextCursor: null })
 
     render(<AIRoundtablePage />)
 
@@ -190,14 +215,14 @@ describe('AIRoundtablePage history behavior', () => {
     await user.click(screen.getByRole('button', { name: /^start$/i }))
 
     expect(await screen.findByText('Roundtable saved to history.')).toBeInTheDocument()
-    expect(goalInput).toHaveValue('')
-    expect(
-      screen.getByText('Add a goal and start the roundtable to watch agents converse.')
-    ).toBeInTheDocument()
-    expect(screen.queryByText('Archived response')).not.toBeInTheDocument()
+    expect(goalInput).toHaveValue('New archived goal')
+    expect(screen.getAllByText('Archived response')).toHaveLength(2)
+    expect(mockApiClient.addMessages).not.toHaveBeenCalled()
+    const generationRequest = mockFetch.mock.calls.find(call => String(call[0]).includes('/api/llm/stream'))
+    expect(JSON.parse(generationRequest![1].body)).toMatchObject({ conversationId: expect.any(String), turnId: expect.any(String), requestId: expect.any(String) })
     expect(await screen.findByText('Roundtable: New archived goal')).toBeInTheDocument()
     expect(
       screen.getByText('Roundtable: New archived goal').closest('button')?.parentElement?.className
-    ).not.toContain('border-primary')
+    ).toContain('border-primary')
   }, 10_000)
 })

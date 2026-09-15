@@ -6,7 +6,9 @@
  * both endpoints return identical error codes for identical failure modes.
  */
 
+import { LlmRequestError } from '@/lib/llm-request'
 import { NotImplementedError } from '@/lib/error-system'
+import { PROVIDER_ENDPOINT_ERROR_CODE } from '@/lib/provider-endpoint'
 import type { ClassifiedError } from './types'
 
 // ---------------------------------------------------------------------------
@@ -42,6 +44,9 @@ function parseUpstreamStatus(message: string): number | null {
  * 10. Fallback            -> 500 INTERNAL_ERROR
  */
 export function classifyProviderError(error: unknown): ClassifiedError {
+  if (error instanceof LlmRequestError) {
+    return { status: error.status, code: error.code, error: error.message, ...(error.retryAfterSeconds ? { retryAfterSeconds: error.retryAfterSeconds } : {}) }
+  }
   if (error instanceof SyntaxError) {
     return {
       status: 502,
@@ -55,6 +60,41 @@ export function classifyProviderError(error: unknown): ClassifiedError {
       status: 501,
       code: 'FEATURE_NOT_IMPLEMENTED',
       error: error.userMessage || 'This feature is not yet available.',
+    }
+  }
+
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'RATE_001'
+  ) {
+    const retryAfterMs = Number(
+      (error as { context?: { metadata?: { retryAfter?: unknown } } })
+        .context?.metadata?.retryAfter,
+    )
+    const userMessage =
+      'userMessage' in error && typeof error.userMessage === 'string'
+        ? error.userMessage
+        : 'Provider rate limit reached, please retry shortly'
+    return {
+      status: 429,
+      code: 'RATE_LIMITED',
+      error: userMessage,
+      retryAfterSeconds: Number.isFinite(retryAfterMs)
+        ? Math.max(1, Math.ceil(retryAfterMs / 1000))
+        : undefined,
+    }
+  }
+
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    (error as { code?: unknown }).code === PROVIDER_ENDPOINT_ERROR_CODE
+  ) {
+    return {
+      status: 400,
+      code: PROVIDER_ENDPOINT_ERROR_CODE,
+      error: 'Configured provider endpoint is not allowed',
     }
   }
 
@@ -129,13 +169,13 @@ export function classifyProviderError(error: unknown): ClassifiedError {
     return {
       status: 400,
       code: 'PROVIDER_REQUEST_ERROR',
-      error: message,
+      error: 'Provider rejected the request. Check the selected model and parameters.',
     }
   }
 
   return {
     status: 500,
     code: 'INTERNAL_ERROR',
-    error: message,
+    error: 'Unable to complete the provider request',
   }
 }

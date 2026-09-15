@@ -8,26 +8,25 @@ report_failure() {
   failures=1
 }
 
-if [[ -f ".env.local" ]]; then
-  report_failure ".env.local exists"
-fi
-
-if compgen -G ".vercel/.env.*.local" > /dev/null; then
-  for path in .vercel/.env.*.local; do
-    [[ -e "$path" ]] || continue
-    report_failure "$path exists"
-  done
-fi
-
 while IFS= read -r path; do
   case "$path" in
-    ./.env.example) ;;
-    ./.env.local) ;;
-    ./.env|./.env.*)
-      report_failure "${path#./} exists"
+    .env.example) ;;
+    .env|.env.*|.vercel/.env.*.local)
+      report_failure "$path is tracked"
       ;;
   esac
-done < <(find . -maxdepth 1 -name '.env*' -print)
+done < <(git ls-files)
+
+for path in \
+  ".env" \
+  ".env.local" \
+  ".env.production" \
+  ".vercel/.env.preview.local"
+do
+  if ! git check-ignore --no-index -q -- "$path"; then
+    report_failure "$path is not covered by .gitignore"
+  fi
+done
 
 if [[ "$failures" -ne 0 ]]; then
   exit 1

@@ -1,12 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const originalNextAuthSecret = process.env.NEXTAUTH_SECRET
+const originalOwnerEmails = process.env.AUTH_OWNER_EMAILS
 process.env.NEXTAUTH_SECRET = 'test-secret'
 
 const mockCookies = vi.fn()
 const mockDecode = vi.fn()
-const mockPrismaUserFindUnique = vi.hoisted(() => vi.fn())
-const mockPrismaSubscriptionFindUnique = vi.hoisted(() => vi.fn())
+const mockSubscriptionFindUnique = vi.fn()
+const mockUserFindUnique = vi.fn()
 
 vi.mock('next/headers', () => ({
   cookies: () => mockCookies(),
@@ -39,11 +40,11 @@ vi.mock('@next-auth/prisma-adapter', () => ({
 vi.mock('@/lib/prisma', () => ({
   default: {
     user: {
-      findUnique: mockPrismaUserFindUnique,
+      findUnique: (...args: unknown[]) => mockUserFindUnique(...args),
       create: vi.fn(),
     },
     subscription: {
-      findUnique: mockPrismaSubscriptionFindUnique,
+      findUnique: (...args: unknown[]) => mockSubscriptionFindUnique(...args),
     },
   },
 }))
@@ -52,37 +53,44 @@ vi.mock('@/lib/rate-limit', () => ({
   checkAndConsume: vi.fn(async () => ({ allowed: true })),
 }))
 
+vi.mock('@/lib/credentials-auth', () => ({
+  authorizeCredentials: vi.fn(),
+}))
+
 vi.mock('@/lib/startup-validation', () => ({
   validateStartupEnvironment: vi.fn(),
 }))
 
-vi.mock('@/lib/demo-account', () => ({
-  createDemoAuthUser: vi.fn(),
-  getDemoAccountContext: () => ({
-    enabled: false,
-    bypassAuth: false,
-    id: 'demo-user',
-    name: 'Demo User',
-    email: 'demo@example.com',
-    password: 'demo-password',
-  }),
-  isInMemoryAuthFallbackAllowed: () => false,
-  isDemoCredentials: () => false,
-  isDemoEmail: () => false,
-  isStrictAuthRequired: () => true,
-}))
-
-const { auth, authOptions, readSessionTokenFromCookieStore } = await import('@/lib/auth')
+const { auth, authOptions, readSessionTokenFromCookieStore } = await import(
+  '@/lib/auth'
+)
 
 afterAll(() => {
   process.env.NEXTAUTH_SECRET = originalNextAuthSecret
+  if (originalOwnerEmails === undefined) {
+    delete process.env.AUTH_OWNER_EMAILS
+  } else {
+    process.env.AUTH_OWNER_EMAILS = originalOwnerEmails
+  }
 })
 
 describe('auth session token reader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockPrismaUserFindUnique.mockReset()
-    mockPrismaSubscriptionFindUnique.mockReset()
+    mockSubscriptionFindUnique.mockResolvedValue(null)
+    mockUserFindUnique.mockResolvedValue({ role: 'USER', email: 'user@example.com' })
+  })
+
+  it('loads persisted roles into JWT and session callbacks without losing subscription refresh', async () => {
+    mockUserFindUnique.mockResolvedValue({ role: 'ADMIN', email: 'local@example.test' })
+    mockSubscriptionFindUnique.mockResolvedValue({ tier: 'PRO' })
+    const token = await authOptions.callbacks!.jwt!({ token: { sub: 'local-admin' } } as never)
+    expect(token).toMatchObject({ role: 'ADMIN', tier: 'PRO' })
+    const session = await authOptions.callbacks!.session!({ session: { user: {}, expires: '' }, token } as never)
+    expect(session.user).toMatchObject({ id: 'local-admin', role: 'ADMIN', tier: 'PRO' })
+    mockUserFindUnique.mockResolvedValue({ role: 'USER', email: 'local@example.test' })
+    const demoted = await authOptions.callbacks!.jwt!({ token } as never)
+    expect(demoted.role).toBe('MEMBER')
   })
 
   it('reads the secure session cookie directly', () => {
@@ -96,7 +104,7 @@ describe('auth session token reader', () => {
     }
 
     expect(readSessionTokenFromCookieStore(cookieStore as never)).toBe(
-      'secure-token-value'
+      'secure-token-value',
     )
   })
 
@@ -115,7 +123,7 @@ describe('auth session token reader', () => {
     }
 
     expect(readSessionTokenFromCookieStore(cookieStore as never)).toBe(
-      'first-second'
+      'first-second',
     )
   })
 
@@ -132,7 +140,7 @@ describe('auth session token reader', () => {
       sub: 'user-123',
       email: 'user@example.com',
       name: 'Test User',
-      role: 'USER',
+      role: 'MEMBER',
       tier: 'FREE',
       exp: 1_900_000_000,
     })
@@ -143,7 +151,7 @@ describe('auth session token reader', () => {
         id: 'user-123',
         email: 'user@example.com',
         name: 'Test User',
-        role: 'USER',
+        role: 'MEMBER',
         tier: 'FREE',
       },
     })
@@ -154,93 +162,50 @@ describe('auth session token reader', () => {
     })
   })
 
-  it('loads the persisted user role into JWT and session callbacks', async () => {
-    mockPrismaUserFindUnique.mockResolvedValue({
-      role: 'ADMIN',
+  it('refreshes the subscription tier from the database', async () => {
+    mockCookies.mockResolvedValue({
+      getAll: () => [
+        {
+          name: '__Secure-next-auth.session-token',
+          value: 'encoded-token',
+        },
+      ],
     })
-    mockPrismaSubscriptionFindUnique.mockResolvedValue({ tier: 'PRO' })
-
-    const jwt = authOptions.callbacks?.jwt
-    const session = authOptions.callbacks?.session
-    expect(jwt).toBeDefined()
-    expect(session).toBeDefined()
-
-    const token = await jwt!({
-      token: {
-        sub: 'user-123',
-        email: 'admin@example.com',
-        name: 'Admin User',
-      },
-      user: {
-        id: 'user-123',
-        email: 'admin@example.com',
-        name: 'Admin User',
-      },
-      account: null,
-      profile: undefined,
-      trigger: 'signIn',
-      isNewUser: false,
-    } as never)
-
-    expect(mockPrismaUserFindUnique).toHaveBeenCalledWith({
-      where: { id: 'user-123' },
-      select: {
-        role: true,
-      },
+    mockDecode.mockResolvedValue({
+      sub: 'user-123',
+      email: 'user@example.com',
+      role: 'MEMBER',
+      tier: 'FREE',
+      exp: 1_900_000_000,
     })
-    expect(mockPrismaSubscriptionFindUnique).toHaveBeenCalledWith({
+    mockSubscriptionFindUnique.mockResolvedValue({ tier: 'PRO' })
+
+    const session = await auth()
+
+    expect(session?.user.tier).toBe('PRO')
+    expect(mockSubscriptionFindUnique).toHaveBeenCalledWith({
       where: { userId: 'user-123' },
       select: { tier: true },
     })
-    expect(token.role).toBe('ADMIN')
-    expect(token.tier).toBe('PRO')
-
-    const appSession = await session!({
-      session: {
-        expires: new Date(1_900_000_000 * 1000).toISOString(),
-        user: {
-          id: '',
-          email: 'admin@example.com',
-          name: 'Admin User',
-          role: 'USER',
-          tier: 'FREE',
-        },
-      },
-      token,
-      user: undefined,
-      newSession: undefined,
-      trigger: 'update',
-    } as never)
-
-    expect(appSession.user).toMatchObject({
-      id: 'user-123',
-      role: 'ADMIN',
-      tier: 'PRO',
-    })
   })
 
-  it('defaults unknown or missing persisted roles to USER', async () => {
-    mockPrismaUserFindUnique.mockResolvedValue({
-      role: null,
+  it('re-evaluates operator roles from the server-only allowlist', async () => {
+    const jwtCallback = authOptions.callbacks?.jwt
+    expect(jwtCallback).toBeTypeOf('function')
+    const runJwtCallback = jwtCallback as unknown as (input: {
+      token: Record<string, unknown>
+    }) => Promise<Record<string, unknown>>
+    process.env.AUTH_OWNER_EMAILS = 'owner@example.com'
+
+    const ownerToken = await runJwtCallback({
+      token: { email: 'OWNER@example.com', tier: 'FREE' },
     })
-    mockPrismaSubscriptionFindUnique.mockResolvedValue(null)
+    expect(ownerToken.role).toBe('OWNER')
 
-    const jwt = authOptions.callbacks?.jwt
-    expect(jwt).toBeDefined()
-
-    const token = await jwt!({
-      token: {
-        sub: 'user-123',
-        role: 'MEMBER',
-      },
-      user: undefined,
-      account: null,
-      profile: undefined,
-      trigger: undefined,
-      isNewUser: false,
-    } as never)
-
-    expect(token.role).toBe('USER')
-    expect(token.tier).toBe('FREE')
+    delete process.env.AUTH_OWNER_EMAILS
+    const downgradedToken = await runJwtCallback({
+      token: ownerToken,
+    })
+    expect(downgradedToken.role).toBe('MEMBER')
   })
 })

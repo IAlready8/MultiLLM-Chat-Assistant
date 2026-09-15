@@ -52,12 +52,12 @@ export async function callLLMApi(
       case 'anthropic':
         return callClaude(prompt, apiKey, effOptions)
       case 'google':
+      case 'googleai':
       case 'google-ai':
         return callGoogleAI(prompt, apiKey, effOptions)
+      case 'ollama':
       case 'llama':
         return callLlama(prompt, apiKey, effOptions)
-      case 'github':
-        return callGitHubCopilot(prompt, apiKey, effOptions)
       case 'grok':
         return callGrok(prompt, apiKey, effOptions)
       default:
@@ -493,18 +493,7 @@ async function callLlama(
       },
     }
   } catch (error) {
-    // Fallback to simulated response if Ollama not available
-    console.warn('Ollama not available, using simulated response')
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    return {
-      text: `Llama response: ${Array.isArray(prompt) ? prompt[prompt.length - 1] : prompt}`,
-      usage: {
-        promptTokens: 20,
-        completionTokens: 50,
-        totalTokens: 70,
-      },
-    }
+    throw error
   }
 }
 
@@ -547,18 +536,7 @@ async function callGitHubCopilot(
       },
     }
   } catch (error) {
-    // Fallback to simulated response if GitHub Copilot not available
-    console.warn('GitHub Copilot not available, using simulated response')
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    return {
-      text: `GitHub Copilot response: ${Array.isArray(prompt) ? prompt[prompt.length - 1] : prompt}`,
-      usage: {
-        promptTokens: 15,
-        completionTokens: 45,
-        totalTokens: 60,
-      },
-    }
+    throw error
   }
 }
 
@@ -598,17 +576,6 @@ async function callGrok(
       },
     }
   } catch (error) {
-    // Fallback to simulated response if Grok not available
-    console.warn('Grok API not available, using simulated response')
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    return {
-      text: `Grok response: ${Array.isArray(prompt) ? prompt[prompt.length - 1] : prompt}`,
-      usage: {
-        promptTokens: 18,
-        completionTokens: 55,
-        totalTokens: 73,
-      },
-    }
+    throw error
   }
 }

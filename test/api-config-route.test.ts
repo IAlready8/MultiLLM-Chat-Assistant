@@ -8,7 +8,7 @@ const mockDeleteUserProviderConfig = vi.fn()
 const mockRecordAnalyticsEvent = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/api-key-service', () => ({
@@ -61,6 +61,7 @@ describe('/api/config route', () => {
   it('GET returns configuredProviders and disables caching', async () => {
     mockGetUserProviderConfigs.mockResolvedValue([
       { provider: 'openai' },
+      { provider: 'deepseek' },
       { provider: 'anthropic' },
     ])
 
@@ -71,7 +72,7 @@ describe('/api/config route', () => {
       configuredProviders: ['openai', 'anthropic'],
     })
     expect(response.headers.get('Cache-Control')).toBe('no-store')
-    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith({ allowGuest: true })
+    expect(mockGetAuthenticatedUser).toHaveBeenCalledWith()
     expect(mockGetUserProviderConfigs).toHaveBeenCalledWith('user-1')
   })
 
@@ -112,6 +113,13 @@ describe('/api/config route', () => {
     expect(mockStoreUserApiKey).not.toHaveBeenCalled()
   })
 
+  it('rejects malformed keys without deleting existing provider credentials', async () => {
+    for (const apiKey of [undefined, null, {}, 123]) {
+      expect((await POST(makePostRequest({ provider: 'openai', apiKey }))).status).toBe(400)
+    }
+    expect(mockDeleteUserProviderConfig).not.toHaveBeenCalled()
+  })
+
   it('POST clears provider config when apiKey is empty', async () => {
     const response = await POST(
       makePostRequest({ provider: 'OpenAI', apiKey: '   ' })
@@ -139,6 +147,20 @@ describe('/api/config route', () => {
         rateLimits: { requests: 1000, window: 60000 },
       })
     )
+    expect(mockDeleteUserProviderConfig).not.toHaveBeenCalled()
+  })
+
+  it('POST rejects disabled DeepSeek without storing or deleting anything', async () => {
+    const response = await POST(
+      makePostRequest({ provider: 'DeepSeek' })
+    )
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      error: 'DeepSeek is currently unavailable.',
+      code: 'PROVIDER_DISABLED',
+    })
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
     expect(mockDeleteUserProviderConfig).not.toHaveBeenCalled()
   })
 

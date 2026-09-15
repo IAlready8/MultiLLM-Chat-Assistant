@@ -3,12 +3,17 @@ import { getCacheDiagnostics } from '@/lib/cache'
 import prisma from '@/lib/prisma'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 import { getAuthenticatedAdmin } from '@/lib/api-auth'
+import { hasDatabaseUrl } from '@/lib/database-url'
 import {
   getErrorMessage,
   isDatabaseUnavailableError,
 } from '@/lib/db-fallback'
 import { getRateLimitDiagnostics } from '@/lib/rate-limit'
-import { isStrictAuthRequired } from '@/lib/demo-account'
+import {
+  getOAuthConfiguration,
+  isStrictAuthRequired,
+} from '@/lib/auth-policy'
+import { getAuthRoleConfiguration } from '@/lib/auth-roles'
 import {
   isStripeApiConfigured,
   isStripeCheckoutConfigured,
@@ -57,7 +62,7 @@ type SystemStatusResponse = {
       memorySize: number
     }
     rateLimit: {
-      mode: 'redis' | 'memory'
+      mode: 'redis' | 'postgres' | 'memory'
       redisConfigured: boolean
       redisConnected: boolean
       inMemoryKeys: number
@@ -99,9 +104,14 @@ export const GET = withApiMetrics(async () => {
 
   const release = getReleaseMetadata()
   const strictAuth = isStrictAuthRequired()
+  const oauthConfiguration = getOAuthConfiguration()
+  const roleConfiguration = getAuthRoleConfiguration()
   const hasNextAuthSecret = Boolean(process.env.NEXTAUTH_SECRET?.trim())
-  const hasNextAuthUrl = Boolean(process.env.NEXTAUTH_URL?.trim())
-  const hasDatabaseUrl = Boolean(process.env.DATABASE_URL?.trim())
+  const hasNextAuthUrl = Boolean(
+    process.env.NEXTAUTH_URL?.trim() ||
+      (process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL?.trim())
+  )
+  const databaseConfigured = hasDatabaseUrl()
   const hasApiSeed = Boolean(process.env.API_KEY_ENCRYPTION_SEED?.trim())
   const isProduction = process.env.NODE_ENV === 'production'
 
@@ -126,7 +136,7 @@ export const GET = withApiMetrics(async () => {
   } catch (error) {
     databaseStatus = isDatabaseUnavailableError(error) ? 'warning' : 'error'
     databaseMessage = isDatabaseUnavailableError(error)
-      ? 'Database unavailable; running with in-memory fallback'
+      ? 'Database unavailable; persistent account data cannot be accessed'
       : getErrorMessage(error) || 'Database health check failed'
   }
   checks.push(
@@ -142,19 +152,22 @@ export const GET = withApiMetrics(async () => {
 
   const authStart = Date.now()
   let authStatus: CheckStatus = 'ok'
-  let authMessage = strictAuth
-    ? 'Strict authentication mode is enabled and configured'
-    : 'Authentication is operational (guest mode supported)'
+  let authMessage = 'Authentication is required and configured'
 
-  if (strictAuth && !hasNextAuthSecret) {
+  if (!hasNextAuthSecret) {
     authStatus = 'error'
-    authMessage = 'Strict auth is enabled but NEXTAUTH_SECRET is missing'
-  } else if (!hasNextAuthSecret) {
-    authStatus = 'warning'
-    authMessage = 'NEXTAUTH_SECRET is missing; non-strict mode fallback is active'
+    authMessage = 'Authentication is required but NEXTAUTH_SECRET is missing'
   } else if (!hasNextAuthUrl) {
     authStatus = 'warning'
     authMessage = 'NEXTAUTH_URL is missing; callbacks may fail in non-local environments'
+  } else if (!oauthConfiguration.any) {
+    authStatus = 'warning'
+    authMessage =
+      'Authentication is configured, but Google/GitHub account creation is unavailable'
+  } else if (roleConfiguration.ownerCount === 0) {
+    authStatus = 'warning'
+    authMessage =
+      'Authentication is configured, but AUTH_OWNER_EMAILS has no operator account'
   }
 
   checks.push(
@@ -172,9 +185,10 @@ export const GET = withApiMetrics(async () => {
   let storageStatus: CheckStatus = 'ok'
   let storageMessage = 'Persistent storage is configured and available'
 
-  if (!hasDatabaseUrl) {
+  if (!databaseConfigured) {
     storageStatus = 'warning'
-    storageMessage = 'DATABASE_URL is not set; persistence relies on in-memory fallback'
+    storageMessage =
+      'DATABASE_URL and POSTGRES_DATABASE_URL are not set; persistence relies on in-memory fallback'
   } else if (databaseStatus !== 'ok') {
     storageStatus = 'warning'
     storageMessage = 'Database is configured but currently unavailable; using in-memory fallback'
@@ -282,7 +296,7 @@ export const GET = withApiMetrics(async () => {
       environment: process.env.NODE_ENV || 'development',
       nodeVersion: process.version,
       strictAuth,
-      databaseUrlConfigured: hasDatabaseUrl,
+      databaseUrlConfigured: databaseConfigured,
       stripe: {
         apiConfigured: isStripeApiConfigured,
         checkoutConfigured: isStripeCheckoutConfigured,

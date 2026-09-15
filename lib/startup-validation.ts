@@ -1,3 +1,5 @@
+import { hasDatabaseUrl } from '@/lib/database-url'
+
 const isNonEmpty = (value: string | undefined): boolean =>
   Boolean(value && value.trim().length > 0)
 
@@ -30,15 +32,17 @@ export const validateStartupEnvironment = (): void => {
 
   const issues: string[] = []
 
-  if (!isNonEmpty(process.env.DATABASE_URL)) {
-    issues.push('DATABASE_URL is required in production.')
+  if (!hasDatabaseUrl()) {
+    issues.push('DATABASE_URL (or POSTGRES_DATABASE_URL) is required in production.')
   }
 
   if (!isNonEmpty(process.env.NEXTAUTH_SECRET) && !isNonEmpty(process.env.AUTH_SECRET)) {
     issues.push('NEXTAUTH_SECRET (or AUTH_SECRET) is required in production.')
   }
 
-  if (!isNonEmpty(process.env.NEXTAUTH_URL)) {
+  const hasVercelPreviewUrl =
+    process.env.VERCEL_ENV === 'preview' && isNonEmpty(process.env.VERCEL_URL)
+  if (!isNonEmpty(process.env.NEXTAUTH_URL) && !hasVercelPreviewUrl) {
     issues.push('NEXTAUTH_URL is required in production.')
   }
 

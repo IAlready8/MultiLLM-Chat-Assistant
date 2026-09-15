@@ -8,7 +8,7 @@ const mockRecordAnalyticsEvent = vi.fn()
 const mockLogError = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/api-key-service', () => ({
@@ -128,9 +128,52 @@ describe('/api/llm/chat route', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
-      error: 'Messages are required',
+      error: 'Provider and messages are required',
       code: 'VALIDATION_ERROR',
     })
+  })
+
+  it('rejects unsupported reasoning effort values before provider lookup', async () => {
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'deepseek',
+          reasoning_effort: 'extreme',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'reasoning_effort must be one of: off, low, high, max',
+      code: 'VALIDATION_ERROR',
+    })
+    expect(mockGetUserProviderConfigs).not.toHaveBeenCalled()
+  })
+
+  it('rejects disabled DeepSeek before config, key, or network access', async () => {
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'deepseek',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      error: 'DeepSeek is currently unavailable.',
+      code: 'PROVIDER_DISABLED',
+    })
+    expect(mockGetUserProviderConfigs).not.toHaveBeenCalled()
+    expect(mockGetUserApiKey).not.toHaveBeenCalled()
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 
   it('returns unsupported provider error', async () => {
@@ -162,7 +205,7 @@ describe('/api/llm/chat route', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
-      error: 'Provider openai not configured',
+      error: 'Provider openai is not configured',
       code: 'PROVIDER_NOT_CONFIGURED',
     })
   })
@@ -180,9 +223,69 @@ describe('/api/llm/chat route', () => {
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
-      error: 'Provider openai not configured',
+      error: 'Provider openai is not configured',
       code: 'PROVIDER_NOT_CONFIGURED',
     })
+  })
+
+  it('rejects a legacy stored provider endpoint before making an upstream request', async () => {
+    mockGetUserProviderConfigs.mockResolvedValue([
+      {
+        provider: 'openai',
+        settings: { baseUrl: 'http://169.254.169.254/latest/meta-data' },
+      },
+    ])
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'openai',
+          stream: false,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Configured provider endpoint is not allowed',
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+    })
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['private endpoint', 'http://169.254.169.254:11434'],
+    ['public custom endpoint', 'https://ollama.example.com'],
+    ['wrong-port localhost', 'http://localhost:8080'],
+  ])('rejects a legacy Ollama %s before making an upstream request', async (_label, baseUrl) => {
+    mockGetUserProviderConfigs.mockResolvedValue([
+      { provider: 'ollama', settings: { baseUrl } },
+    ])
+
+    for (const stream of [false, true]) {
+      const response = await POST(
+        new NextRequest('http://localhost/api/llm/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: 'ollama',
+            stream,
+            messages: [{ role: 'user', content: 'hi' }],
+          }),
+        }),
+      )
+
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toEqual({
+        error: 'Configured provider endpoint is not allowed',
+        code: 'PROVIDER_ENDPOINT_BLOCKED',
+      })
+    }
+
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 
   it('returns INTERNAL_ERROR when provider config lookup throws', async () => {
@@ -204,7 +307,7 @@ describe('/api/llm/chat route', () => {
 
     expect(response.status).toBe(500)
     await expect(response.json()).resolves.toEqual({
-      error: 'database unavailable during provider lookup',
+      error: 'Unable to complete the provider request',
       code: 'INTERNAL_ERROR',
     })
   })
@@ -281,6 +384,9 @@ describe('/api/llm/chat route', () => {
       }),
     )
     expect(second.status).toBe(429)
+    const retryAfter = Number(second.headers.get('Retry-After'))
+    expect(retryAfter).toBeGreaterThan(0)
+    expect(retryAfter).toBeLessThanOrEqual(60)
     await expect(second.json()).resolves.toEqual({
       error: 'Rate limit exceeded',
       code: 'RATE_LIMITED',

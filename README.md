@@ -14,16 +14,18 @@ Current exact ICP and use case are locked in:
 
 ## Highlights
 - Multi-provider chat endpoints with streaming support
-- Supported providers: OpenAI, Anthropic, Google AI, OpenRouter, Grok
-- Configurable provider keys from app settings
-- Auth modes for demo/guest and strict login
+- Supported providers: OpenAI, Anthropic, Google AI, OpenRouter, Grok,
+  Mistral, Ollama, and Kimi (Moonshot AI)
+- Configurable provider keys from app settings; DeepSeek is temporarily
+  disabled because its previous community endpoint is no longer operational
+- Mandatory account authentication with Google/GitHub OAuth and existing-account password login
 - Optional Python orchestration sidecar (`src/core`)
 - CI workflow for type-check, lint, and build
 
 ## Quickstart
 Requirements:
-- Node.js 20+
-- npm
+- Node.js 22 LTS (`22.22.0`; see `.nvmrc`)
+- npm 11
 - Optional Python 3.10+ (only for Python sidecar / Python tests)
 
 Setup:
@@ -32,26 +34,24 @@ Setup:
 3. Set minimum env for local app usage:
    - `NEXTAUTH_URL`
    - `API_KEY_ENCRYPTION_SEED`
-   - `NEXTAUTH_SECRET` or `AUTH_SECRET` when strict auth is enabled
-   - `AUTH_REQUIRE_LOGIN` / `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN` (optional; defaults to guest-friendly mode)
+   - `NEXTAUTH_SECRET` or `AUTH_SECRET`
+   - `DATABASE_URL`
+   - One OAuth pair (`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`, or GitHub equivalents) when new account creation is required
 4. Start dev server: `npm run dev`
 
 Package manager:
-- Source-of-truth lockfile is `package-lock.json` (npm workflow).
-- `pnpm-lock.yaml` is retained as an archival snapshot and is not used by CI.
+- `package-lock.json` is the only lockfile and source of truth.
+- CI and Vercel both install with `npm ci`.
 
-## Auth Modes
-- Production:
-  - Strict auth is always enforced in production runtime.
-  - `NEXTAUTH_SECRET` (or `AUTH_SECRET`) and `NEXTAUTH_URL` are required.
-- Guest/demo mode (default for local dev):
-  - `AUTH_REQUIRE_LOGIN=false`
-  - `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false`
-  - Allows using the app and saving provider keys without creating an account.
-- Strict auth mode:
-  - `AUTH_REQUIRE_LOGIN=true`
-  - `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=true`
-  - Requires real session auth and explicit `NEXTAUTH_SECRET`.
+## Authentication
+- Every protected page and API requires a real NextAuth session in every environment.
+- Google and GitHub OAuth create and sign in durable Prisma-backed accounts.
+- Email/password is login-only for existing users with a stored password hash; it never creates a user implicitly.
+- Server-only `AUTH_OWNER_EMAILS` and `AUTH_ADMIN_EMAILS` allowlists assign real operator roles.
+- Public password registration is intentionally disabled until verified email ownership and account recovery are implemented.
+- Demo users, guest identities, auth-bypass flags, and guest-to-user migration are not supported.
+
+See `docs/AUTHENTICATION_SETUP.md` for provider registration, callback URLs, environment configuration, and rollout checks.
 
 ## Scripts
 - `npm run dev`: Start Next.js dev server (webpack mode, default)
@@ -65,6 +65,7 @@ Package manager:
 - `npm run type-check`: TypeScript checks
 - `npm run test`: Vitest (watch)
 - `npm run test:run`: Vitest one-shot
+- `npm run coverage`: Vitest coverage with the enforced baseline threshold
 - `npm run test:coverage`: Vitest with coverage
 - `npm run smoke`: End-to-end smoke checks (pages + key APIs)
 - `npm run verify:prod`: Production readiness checks (env, DB, health, optional Stripe/webhook)
@@ -85,8 +86,10 @@ GitHub Actions workflow: `.github/workflows/ci.yml`
 - Runs `npm run type-check`
 - Runs `npm run lint`
 - Runs `npm run test:run`
+- Runs `npm run coverage` as a blocking check
 - Runs `npm run build`
 - Runs smoke tests against a PostgreSQL-backed app instance
+- Blocks high/critical production advisories and critical full-tree advisories
 
 ## Branch Protection (Mandatory CI)
 To make CI checks mandatory on `main`, run:
@@ -106,6 +109,8 @@ npm run protect:main -- IAlready8/MultiLLM-Chat-Assistant
 This enforces required status checks:
 - `Quality Checks`
 - `Smoke Tests`
+- `Coverage`
+- `Security Audit`
 
 Without passing checks, merges to `main` are blocked.
 
@@ -133,6 +138,9 @@ npm run smoke:preview:local
 npm run smoke:preview:local:auth
 ```
 
+The authenticated smoke command requires either `SMOKE_SESSION_COOKIE` or the
+`SMOKE_AUTH_EMAIL` and `SMOKE_AUTH_PASSWORD` of an existing password account.
+
 ## Architecture Snapshot
 - App/UI: Next.js App Router (`app/*`) + reusable components (`components/*`)
 - API layer: route handlers in `app/api/*`
@@ -148,14 +156,23 @@ See full details in `ARCHITECTURE.md` and `PYTHON_INTEGRATION.md`.
 Primary reference: `.env.example`
 
 Key groups:
-- Auth/session: `NEXTAUTH_URL`, `NEXTAUTH_SECRET` (or `AUTH_SECRET`), `AUTH_REQUIRE_LOGIN`, `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
-- Demo/guest behavior: `DEMO_ACCOUNT_*`, `NEXT_PUBLIC_DEMO_ACCOUNT_*`, `GUEST_USER_*`, `NEXT_PUBLIC_GUEST_USER_ID`
+- Auth/session: `NEXTAUTH_URL`, `NEXTAUTH_SECRET` (or `AUTH_SECRET`), `AUTH_OWNER_EMAILS`, optional `AUTH_ADMIN_EMAILS`
+- OAuth account creation: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
 - Provider key encryption: `API_KEY_ENCRYPTION_SEED`
+- Optional Python-sidecar Kimi key: `MOONSHOT_API_KEY`
 - Database: `DATABASE_URL` (required in production)
 - Optional billing: `STRIPE_SECRET_KEY`, `STRIPE_PRO_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
 - Optional sidecar routing: `PYTHON_CORE_URL`
 - Optional app metadata/network tuning: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_URL`, `LLM_FETCH_TIMEOUT_MS`, `LLM_FETCH_RETRIES`
 - Optional client secure-storage override: `NEXT_PUBLIC_SECURE_STORAGE_KEY`
+
+DeepSeek is temporarily unavailable because the previous community endpoint
+is no longer operational. It is not offered in provider selection or Settings,
+does not request an API key, and is not presented as free. Historical adapter,
+model, and stored-configuration compatibility code is retained so a future
+integration can be restored deliberately. Direct requests fail with a
+sanitized `PROVIDER_DISABLED` response rather than contacting the retired
+endpoint.
 
 ## Deployment
 - Operator runbook: `docs/OPERATOR_RUNBOOK.md`
@@ -235,3 +252,5 @@ Operational note:
 
 ## License
 MIT (`LICENSE`)
+
+Production completion work and the migration/test contract are documented in [the September engineering handoff](docs/PRODUCTION_COMPLETION_2026_09_07.md).

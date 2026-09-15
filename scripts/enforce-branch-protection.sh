@@ -47,14 +47,14 @@ cat >"${TMP_JSON}" <<'JSON'
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["Quality Checks", "Smoke Tests"]
+    "contexts": ["Quality Checks", "Smoke Tests", "Coverage", "Security Audit"]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": true,
     "require_code_owner_reviews": false,
     "required_approving_review_count": 0,
-    "require_last_push_approval": true
+    "require_last_push_approval": false
   },
   "required_conversation_resolution": true,
   "restrictions": null
@@ -91,9 +91,11 @@ echo "Branch protection updated successfully."
 echo "Required checks:"
 echo " - Quality Checks"
 echo " - Smoke Tests"
+echo " - Coverage"
+echo " - Security Audit"
 echo "Additional protections:"
 echo " - Admin enforcement: enabled"
 echo " - PR required: enabled (approvals required: 0)"
 echo " - Dismiss stale reviews: enabled"
-echo " - Last push approval: enabled"
+echo " - Last push approval: disabled (enable when an independent reviewer is available)"
 echo " - Conversation resolution: enabled"

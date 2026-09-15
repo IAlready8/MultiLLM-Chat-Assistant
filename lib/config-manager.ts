@@ -13,6 +13,11 @@ import {
   defaultRateLimits,
 } from './config-schemas'
 import { getProviderAdapter, type ProviderAdapterConfig } from './providers'
+import {
+  getProviderDisabledMessage,
+  isProviderDisabled,
+  supportedProviderIds,
+} from './provider-registry'
 import { v4 as uuidv4 } from 'uuid'
 
 type ProviderSettings = Record<string, unknown> & {
@@ -206,6 +211,13 @@ export class ConfigurationManager {
     provider: string,
     config: Partial<ProviderConfig>
   ): Promise<ConfigUpdateResult> {
+    if (isProviderDisabled(provider.trim().toLowerCase())) {
+      throw new ConfigurationError(
+        getProviderDisabledMessage(provider.trim().toLowerCase()),
+        'PROVIDER_DISABLED',
+      )
+    }
+
     try {
       // Validate configuration
       const validation = this.validateProviderConfig(config)
@@ -299,6 +311,11 @@ export class ConfigurationManager {
     const startTime = Date.now()
     
     try {
+      const normalizedProvider = provider.trim().toLowerCase()
+      if (isProviderDisabled(normalizedProvider)) {
+        return { success: false, error: getProviderDisabledMessage(normalizedProvider) }
+      }
+
       const adapter = getProviderAdapter(provider)
       if (!adapter) {
         throw new Error(`Unknown provider: ${provider}`)
@@ -375,7 +392,7 @@ export class ConfigurationManager {
   }
 
   public getAvailableProviders(): string[] {
-    return Object.keys(defaultProviderModels)
+    return supportedProviderIds
   }
 
   public getDefaultModels(provider: string): string[] {

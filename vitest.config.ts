@@ -28,7 +28,13 @@ export default defineConfig({
         'coverage/**',
         '.next/**',
         'prisma/**'
-      ]
+      ],
+      thresholds: {
+        statements: 30,
+        branches: 60,
+        functions: 55,
+        lines: 30,
+      },
     }
   },
   resolve: {

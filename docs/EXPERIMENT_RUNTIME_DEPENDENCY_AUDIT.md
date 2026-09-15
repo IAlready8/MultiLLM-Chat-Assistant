@@ -23,7 +23,7 @@ Scope: direct production dependencies only
 - `npm run lint`
 - `npm run type-check`
 - `npm run test:run`
-- `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<placeholder> API_KEY_ENCRYPTION_SEED=<placeholder> DATABASE_URL=postgresql://<user>:<password>@<host>:5432/<database> AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false npm run build`
+- `NEXTAUTH_URL=http://localhost:3000 NEXTAUTH_SECRET=<placeholder> API_KEY_ENCRYPTION_SEED=<placeholder> DATABASE_URL=postgresql://<user>:<password>@<host>:5432/<database> npm run build`
 
 Result:
 

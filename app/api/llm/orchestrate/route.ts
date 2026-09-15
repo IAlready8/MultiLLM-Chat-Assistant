@@ -1,494 +1,118 @@
-import { NextResponse } from 'next/server';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { reserveLlmQuota } from '@/lib/llm-quota'
+import { beginGeneration, finishGeneration } from '@/services/generation-service'
+import { checkAndConsume } from '@/lib/rate-limit'
+import { validateModelRequest } from '@/lib/model-contract'
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import { getAuthenticatedUser } from '@/lib/api-auth'
+import { executeChat, llmErrorResponse } from '@/lib/llm-runtime'
+import { LlmRequestError, readBoundedJson } from '@/lib/llm-request'
+import { isProviderDisabled, getProviderDisabledMessage, PROVIDER_DISABLED_ERROR_CODE } from '@/lib/provider-registry'
 import { classifyProviderError } from '@/lib/providers'
-import { z } from 'zod';
 
-// Define the URL for the Python service, managed by PM2
-// This MUST be 127.0.0.1 (localhost) because the Next.js server
-// and the Python server are running on the *same machine*.
-const PYTHON_CORE_URL = process.env.PYTHON_CORE_URL || 'http://127.0.0.1:8008';
+export const maxDuration = 60
 
-// Define the schema for the incoming request from the client
-const providerIdSchema = z.enum([
-  'openai',
-  'openrouter',
-  'anthropic',
-  'googleai',
-  'grok',
-  'ollama',
-  'mistral',
-])
+const schema = z.object({
+  prompt: z.string().max(10_000),
+  conversationId: z.string().min(1).max(128).optional(),
+  turnId: z.string().uuid().optional(),
+  requests: z.array(z.object({
+    provider: z.string().trim().min(1).max(64).transform(value => value.toLowerCase()),
+    model: z.string().trim().min(1).max(256),
+    prompt: z.string().max(10_000),
+    requestId: z.string().uuid().optional(),
+  })).min(1).max(8),
+}).refine(value => value.requests.every(item => (item.prompt || value.prompt).trim().length > 0))
 
-const orchestrateRequestSchema = z.object({
-  requests: z.array(
-    z.object({
-      provider: providerIdSchema,
-      model: z.string(),
-      prompt: z.string(),
-    })
-  ),
-  prompt: z.string(),
-});
+const sidecarResultSchema = z.array(z.object({
+  provider: z.string(), model: z.string(), content: z.string().max(1_048_576),
+  prompt_tokens: z.number().int().nonnegative(), completion_tokens: z.number().int().nonnegative(),
+  cost_usd: z.number().finite().nonnegative().nullable(), latency_ms: z.number().finite().nonnegative(),
+  success: z.boolean().optional(),
+  error: z.object({ code: z.string().max(128), message: z.string().max(1024), retryable: z.boolean().optional() }).nullable().optional(),
+})).max(8)
 
-type OrchestrateRequest = z.infer<typeof orchestrateRequestSchema>
-
-type ChatResponsePayload = {
-  content?: string
-  usage?: {
-    prompt_tokens?: number
-    completion_tokens?: number
-    total_tokens?: number
-  }
+const sidecarErrors: Record<string, string> = {
+  PROVIDER_AUTH_ERROR: 'Provider rejected the configured API key',
+  RATE_LIMITED: 'Provider rate limit reached, please retry shortly',
+  PROVIDER_TIMEOUT: 'Provider request timed out',
+  PROVIDER_MALFORMED_RESPONSE: 'Provider returned malformed response',
+  NETWORK_ERROR: 'Failed to reach upstream provider',
+  PROVIDER_UNSUPPORTED: 'Provider is not supported by the Python sidecar',
+  UNKNOWN_PROVIDER_ERROR: 'Unable to complete the provider request',
 }
 
-type ProviderResult = {
-  provider: string
-  model: string
-  success: true
-  content: string
-  prompt_tokens: number
-  completion_tokens: number
-  cost_usd: number
-  latency_ms: number
-  usage: {
-    inputTokens: number
-    outputTokens: number
-    totalTokens: number
-  }
-  latencyMs: number
-}
-
-type ProviderErrorResult = {
-  provider: string
-  model: string
-  success: false
-  error: {
-    code: string
-    message: string
-    retryable: boolean
-  }
-  prompt_tokens: number
-  completion_tokens: number
-  cost_usd: number
-  latency_ms: number
-  usage?: {
-    inputTokens: number
-    outputTokens: number
-    totalTokens: number
-  }
-  latencyMs: number
-}
-
-type OrchestrateResult = ProviderResult | ProviderErrorResult
-
-const COST_PER_1K_TOKENS: Record<string, number> = {
-  openai: 0.03,
-  anthropic: 0.015,
-  googleai: 0.001,
-  openrouter: 0.01,
-  grok: 0.02,
-}
-
-const estimatePromptTokens = (prompt: string): number =>
-  Math.max(1, Math.round(prompt.length / 4))
-
-const estimateCost = (provider: string, totalTokens: number): number => {
-  const rate = COST_PER_1K_TOKENS[provider] ?? 0.01
-  return (totalTokens / 1000) * rate
-}
-
-const isRetryableProviderError = (code: string): boolean =>
-  [
-    'PROVIDER_TIMEOUT',
-    'PROVIDER_UNAVAILABLE',
-    'NETWORK_ERROR',
-    'RATE_LIMITED',
-    'SIDECAR_UNAVAILABLE',
-    'SIDECAR_BAD_RESPONSE',
-  ].includes(code)
-
-const looksLikeErrorContent = (content: string | undefined): boolean => {
-  const normalized = content?.trim().toLowerCase() || ''
-  return (
-    normalized.startsWith('error') ||
-    normalized.startsWith('provider request failed') ||
-    normalized.startsWith('request validation error')
-  )
-}
-
-const toProviderErrorResult = (
-  provider: string,
-  model: string,
-  error: { code: string; message: string; retryable?: boolean },
-  latencyMs: number,
-  prompt: string
-): ProviderErrorResult => ({
-  provider,
-  model,
-  success: false,
-  error: {
-    code: error.code,
-    message: error.message,
-    retryable: error.retryable ?? isRetryableProviderError(error.code),
-  },
-  prompt_tokens: estimatePromptTokens(prompt),
-  completion_tokens: 0,
-  cost_usd: 0,
-  latency_ms: latencyMs,
-  usage: {
-    inputTokens: estimatePromptTokens(prompt),
-    outputTokens: 0,
-    totalTokens: estimatePromptTokens(prompt),
-  },
-  latencyMs,
-})
-
-const toProviderResult = (
-  provider: string,
-  model: string,
-  payload: ChatResponsePayload,
-  latencyMs: number,
-  prompt: string
-): ProviderResult => {
-  const promptTokens =
-    payload.usage?.prompt_tokens ?? estimatePromptTokens(prompt)
-  const completionTokens =
-    payload.usage?.completion_tokens ??
-    Math.max(1, Math.round((payload.content || '').length / 4))
-  const totalTokens =
-    payload.usage?.total_tokens ?? promptTokens + completionTokens
-
-  return {
-    provider,
-    model,
-    success: true,
-    content: payload.content || '',
-    prompt_tokens: promptTokens,
-    completion_tokens: completionTokens,
-    cost_usd: estimateCost(provider, totalTokens),
-    latency_ms: latencyMs,
-    usage: {
-      inputTokens: promptTokens,
-      outputTokens: completionTokens,
-      totalTokens,
-    },
-    latencyMs,
-  }
-}
-
-const normalizePythonResults = (data: unknown): OrchestrateResult[] => {
-  if (!Array.isArray(data)) {
-    throw new Error('Python service returned a non-array orchestration response')
-  }
-
-  return data.map((item: any) => {
-    const provider = typeof item?.provider === 'string' ? item.provider : 'unknown'
-    const model = typeof item?.model === 'string' ? item.model : ''
-    const latencyMs =
-      typeof item?.latency_ms === 'number'
-        ? item.latency_ms
-        : typeof item?.latencyMs === 'number'
-          ? item.latencyMs
-          : 0
-
-    if (item?.success === false || item?.error || looksLikeErrorContent(item?.content)) {
-      const mapped = item?.error
-        ? {
-            code: String(item.error.code || 'UNKNOWN_PROVIDER_ERROR'),
-            message: String(item.error.message || item.error.error || 'Provider request failed'),
-            retryable:
-              typeof item.error.retryable === 'boolean'
-                ? item.error.retryable
-                : undefined,
-          }
-        : classifyProviderError(new Error(String(item?.content || 'Provider request failed')))
-
-      return toProviderErrorResult(
-        provider,
-        model,
-        {
-          code: mapped.code,
-          message: 'error' in mapped ? mapped.error : mapped.message,
-          retryable:
-            'retryable' in mapped && typeof mapped.retryable === 'boolean'
-              ? mapped.retryable
-              : undefined,
-        },
-        latencyMs,
-        ''
-      )
-    }
-
-    const promptTokens =
-      typeof item?.prompt_tokens === 'number'
-        ? item.prompt_tokens
-        : typeof item?.usage?.inputTokens === 'number'
-          ? item.usage.inputTokens
-          : 0
-    const completionTokens =
-      typeof item?.completion_tokens === 'number'
-        ? item.completion_tokens
-        : typeof item?.usage?.outputTokens === 'number'
-          ? item.usage.outputTokens
-          : Math.max(1, Math.round(String(item?.content || '').length / 4))
-    const totalTokens = promptTokens + completionTokens
-
-    return {
-      provider,
-      model,
-      success: true,
-      content: String(item?.content || ''),
-      prompt_tokens: promptTokens,
-      completion_tokens: completionTokens,
-      cost_usd:
-        typeof item?.cost_usd === 'number'
-          ? item.cost_usd
-          : estimateCost(provider, totalTokens),
-      latency_ms: latencyMs,
-      usage: {
-        inputTokens: promptTokens,
-        outputTokens: completionTokens,
-        totalTokens,
-      },
-      latencyMs,
-    }
-  })
-}
-
-const resolveBaseUrl = (req: Request): string => {
-  const host = req.headers.get('host') || 'localhost:3000'
-  const forwardedProto = req.headers.get('x-forwarded-proto')
-  const protocol =
-    forwardedProto ||
-    (host.includes('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https')
-  return `${protocol}://${host}`
-}
-
-const runLocalFallbackOrchestration = async (
-  requestData: OrchestrateRequest,
-  req: Request
-): Promise<OrchestrateResult[]> => {
-  const baseUrl = resolveBaseUrl(req)
-  const cookieHeader = req.headers.get('cookie') || ''
-  const results: OrchestrateResult[] = []
-
-  for (const request of requestData.requests) {
-    const startedAt = Date.now()
-    const chatResponse = await fetch(`${baseUrl}/api/llm/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...(cookieHeader ? { cookie: cookieHeader } : {}),
-      },
-      body: JSON.stringify({
-        provider: request.provider,
-        model: request.model,
-        stream: false,
-        messages: [
-          {
-            role: 'user',
-            content: request.prompt || requestData.prompt,
-          },
-        ],
-      }),
-    })
-
-    const latencyMs = Date.now() - startedAt
-    const fallbackPrompt = request.prompt || requestData.prompt
-
-    if (!chatResponse.ok) {
-      let errorMessage = `HTTP ${chatResponse.status}`
-      try {
-        const errorPayload = await chatResponse.json()
-        errorMessage = errorPayload?.error || errorPayload?.details || errorMessage
-      } catch {
-        // Ignore parsing errors and use status-based message
-      }
-
-      const mapped = classifyProviderError(
-        new Error(`HTTP ${chatResponse.status}: ${errorMessage}`)
-      )
-      results.push(
-        toProviderErrorResult(
-          request.provider,
-          request.model,
-          {
-            code: mapped.code,
-            message: mapped.error,
-          },
-          latencyMs,
-          fallbackPrompt
-        )
-      )
-      continue
-    }
-
-    const payload = (await chatResponse.json()) as ChatResponsePayload
-    results.push(
-      toProviderResult(
-        request.provider,
-        request.model,
-        payload,
-        latencyMs,
-        fallbackPrompt
-      )
-    )
-  }
-
-  return results
-}
-
-/**
- * This API route is the "bridge" to the Python service.
- * It authenticates the user, validates the request,
- * and then proxies the request to the FastAPI backend.
- */
-export async function POST(req: Request) {
-  // 1. Authenticate the user
-  const authCheck = await getAuthenticatedUser({ allowGuest: true });
-  if (authCheck instanceof NextResponse) return authCheck;
-  // const { user } = authCheck // We have the user if we need to log their usage
-
-  let body;
+export async function POST(request: Request) {
+  const auth = await getAuthenticatedUser()
+  if (auth instanceof NextResponse) return auth
   try {
-    body = await req.json();
-  } catch (error) {
-    console.error('Failed to parse JSON body:', error);
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
-  }
+    const parsed = schema.safeParse(await readBoundedJson(request))
+    if (!parsed.success) throw new LlmRequestError('Invalid orchestration input')
+    const input = parsed.data
+    if (input.conversationId && (!input.turnId || input.requests.some(item => !item.requestId))) throw new LlmRequestError('Saved orchestration requires turn and request IDs')
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(45_000)])
+    // Durable work uses the native provider lifecycle and the user's credentials.
+    const sidecar = input.conversationId ? undefined : process.env.PYTHON_CORE_URL?.trim()
+    if (sidecar) {
+      const disabled = input.requests.find(item => isProviderDisabled(item.provider))
+      if (disabled) throw new LlmRequestError(getProviderDisabledMessage(disabled.provider), 503, PROVIDER_DISABLED_ERROR_CODE)
+      for (const item of input.requests) validateModelRequest(item.provider, { model: item.model, messages: [{ role: 'user', content: item.prompt || input.prompt }] })
+      const limit = await checkAndConsume(`orchestration:${auth.user.id}`, { max: 60, windowMs: 60_000 })
+      if (!limit.allowed) throw new LlmRequestError('Rate limit exceeded', 429, 'RATE_LIMITED', Math.max(1, Math.ceil(limit.retryAfterMs / 1000)))
+      await reserveLlmQuota(auth.user.id, input.requests.length)
+      const response = await fetch(`${sidecar.replace(/\/+$/, '')}/api/v1/llm/orchestrate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input), signal, redirect: 'error',
+      })
+      // A failed sidecar call may already have generated billable responses.
+      // Never automatically dispatch the same batch again through another path.
+      if (!response.ok) throw new LlmRequestError('Orchestration service is unavailable', 502, 'ORCHESTRATION_UNAVAILABLE')
+      const payload = await readBoundedJson(response, 8 * 1_048_576).catch(() => { throw new LlmRequestError('Orchestration service returned malformed results', 502, 'PROVIDER_MALFORMED_RESPONSE') })
+      const result = sidecarResultSchema.safeParse(payload)
+      if (!result.success || result.data.length !== input.requests.length || result.data.some((item, index) => item.provider !== input.requests[index].provider || item.model !== input.requests[index].model)) throw new LlmRequestError('Orchestration service returned malformed results', 502, 'PROVIDER_MALFORMED_RESPONSE')
+      const results = result.data.map(item => {
+        if (item.success === false || item.error) {
+          const code = item.error?.code && Object.hasOwn(sidecarErrors, item.error.code) ? item.error.code : 'UNKNOWN_PROVIDER_ERROR'
+          return { ...item, content: '', success: false, status: 'failed', error: sidecarErrors[code], code, retryable: item.error?.retryable ?? false }
+        }
+        return { ...item, success: true, status: 'complete' }
+      })
+      return NextResponse.json(results, { headers: { 'Cache-Control': 'no-store' } })
+    }
 
-  // 2. Validate the request body
-  const validation = orchestrateRequestSchema.safeParse(body);
-  if (!validation.success) {
-    console.error('Request validation failed:', validation.error.flatten());
-    return NextResponse.json(
-      { error: 'Invalid input', details: validation.error.flatten() },
-      { status: 400 }
-    );
-  }
-
-  // 3. Proxy the request to the Python (FastAPI) service
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
-
-    const pythonResponse = await fetch(
-      `${PYTHON_CORE_URL}/api/v1/llm/orchestrate`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(validation.data),
-        signal: controller.signal,
-      }
-    );
-
-    clearTimeout(timeoutId);
-
-    if (!pythonResponse.ok) {
-      // Log the error response from Python service
-      let errorData;
-      try {
-        errorData = await pythonResponse.json();
-      } catch (parseError) {
-        // If response isn't JSON, try to get text
+    const results = new Array(input.requests.length)
+    let next = 0
+    const worker = async () => {
+      while (next < input.requests.length) {
+        const index = next++
+        const item = input.requests[index]
+        const started = Date.now()
+        let generationId: string | undefined
         try {
-          const errorText = await pythonResponse.text();
-          errorData = { detail: errorText };
-        } catch (textError) {
-          errorData = { detail: 'Unable to parse error response from Python service' };
+          signal.throwIfAborted()
+          if (input.conversationId && input.turnId && item.requestId) {
+            const generation = await beginGeneration(auth.user.id, { provider: item.provider, model: item.model, messages: [{ role: 'user', content: item.prompt || input.prompt }], conversationId: input.conversationId, turnId: input.turnId, requestId: item.requestId, position: index })
+            if (generation.replay !== null) {
+              results[index] = { provider: item.provider, model: item.model, content: generation.replay, prompt_tokens: 0, completion_tokens: 0, cost_usd: null, latency_ms: 0, success: true, status: 'complete', replay: true, usage_source: 'unknown' }
+              continue
+            }
+            generationId = generation.id
+          }
+          const result = await executeChat(auth.user.id, { provider: item.provider, model: item.model, messages: [{ role: 'user', content: item.prompt || input.prompt }], stream: false }, AbortSignal.any([signal, AbortSignal.timeout(30_000)]))
+          if (generationId) await finishGeneration(auth.user.id, generationId, result.content, 'complete', result.usage)
+          results[index] = { provider: item.provider, model: item.model, content: result.content, ...result.usage, cost_usd: null, latency_ms: Date.now() - started, success: true, status: 'complete' }
+        } catch (error) {
+          const mapped = classifyProviderError(error)
+          if (generationId) {
+            try { await finishGeneration(auth.user.id, generationId, '', request.signal.aborted ? 'canceled' : 'failed') } catch { console.error('Orchestration generation persistence failed') }
+          }
+          results[index] = { provider: item.provider, model: item.model, content: '', prompt_tokens: 0, completion_tokens: 0, cost_usd: null, latency_ms: Date.now() - started, success: false, status: 'failed', error: mapped.error, code: mapped.code, retryable: ['RATE_LIMITED', 'PROVIDER_TIMEOUT', 'PROVIDER_UNAVAILABLE', 'NETWORK_ERROR'].includes(mapped.code), usage_source: 'unknown' }
         }
       }
-
-      console.error(`Python service returned ${pythonResponse.status}:`, errorData);
-
-      // Map Python service status codes to appropriate HTTP responses
-      let statusCode = pythonResponse.status;
-      if (statusCode === 401) {
-        statusCode = 401; // Unauthorized
-      } else if (statusCode === 429) {
-        statusCode = 429; // Too Many Requests
-      } else if (statusCode >= 500) {
-        statusCode = 502; // Bad Gateway (since it's a service error)
-      } else if (statusCode >= 400) {
-        statusCode = 400; // Bad Request for other client errors
-      }
-
-      // When Python is unavailable or unhealthy, use local fallback orchestration.
-      if (statusCode >= 502 || pythonResponse.status >= 500) {
-        const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
-        return NextResponse.json(fallbackResults, {
-          status: 200,
-          headers: { 'x-orchestration-fallback': 'local' },
-        })
-      }
-
-      if (pythonResponse.status === 422) {
-        const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
-        return NextResponse.json(fallbackResults, {
-          status: 200,
-          headers: { 'x-orchestration-fallback': 'local-validation' },
-        })
-      }
-
-      return NextResponse.json(
-        {
-          error: 'Python service error',
-          details: errorData.detail || 'No details from service',
-          status: pythonResponse.status,
-        },
-        { status: statusCode }
-      )
     }
-
-    let data: unknown
-    try {
-      data = await pythonResponse.json();
-    } catch (error) {
-      console.error('Python service returned an invalid JSON response:', error)
-      const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
-      return NextResponse.json(fallbackResults, {
-        status: 200,
-        headers: { 'x-orchestration-fallback': 'local-bad-response' },
-      })
-    }
-
-    try {
-      return NextResponse.json(normalizePythonResults(data));
-    } catch (error) {
-      console.error('Python service returned an unexpected orchestration shape:', error)
-      const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
-      return NextResponse.json(fallbackResults, {
-        status: 200,
-        headers: { 'x-orchestration-fallback': 'local-bad-response' },
-      })
-    }
-
-  } catch (error: any) {
-    // Handle different types of errors
-    if (error.name === 'AbortError') {
-      console.error('Request to Python service timed out, using local fallback');
-      const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
-      return NextResponse.json(fallbackResults, {
-        status: 200,
-        headers: { 'x-orchestration-fallback': 'local-timeout' },
-      })
-    } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
-      console.error('Network error connecting to Python service, using local fallback:', error.message);
-      const fallbackResults = await runLocalFallbackOrchestration(validation.data, req)
-      return NextResponse.json(fallbackResults, {
-        status: 200,
-        headers: { 'x-orchestration-fallback': 'local-network' },
-      })
-    } else {
-      console.error('Unexpected error connecting to Python service:', error);
-      return NextResponse.json(
-        { error: 'Internal server error in orchestration service' },
-        { status: 500 } // Internal Server Error
-      );
-    }
+    await Promise.all(Array.from({ length: Math.min(3, input.requests.length) }, worker))
+    return NextResponse.json(results, { headers: { 'x-orchestration-fallback': 'native', 'Cache-Control': 'no-store' } })
+  } catch (error) {
+    return llmErrorResponse(error)
   }
 }

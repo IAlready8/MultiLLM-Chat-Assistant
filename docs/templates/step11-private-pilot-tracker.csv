@@ -1,0 +1,11 @@
+prospect_id,name,company,role,icp_fit_reason,service_type_or_deliverable_type,source,contact_path,invite_url,first_contact_date,reply_status,demo_booked_date,demo_completed_date,onboarding_completed,provider_configured,persona_created,comparison_ready_conversation_saved,analytics_reviewed,willing_to_use_on_client_work,top_objection,top_friction_point,next_action,outcome
+P001,,,,,,,,,,,,,false,false,false,false,false,,,,,
+P002,,,,,,,,,,,,,false,false,false,false,false,,,,,
+P003,,,,,,,,,,,,,false,false,false,false,false,,,,,
+P004,,,,,,,,,,,,,false,false,false,false,false,,,,,
+P005,,,,,,,,,,,,,false,false,false,false,false,,,,,
+P006,,,,,,,,,,,,,false,false,false,false,false,,,,,
+P007,,,,,,,,,,,,,false,false,false,false,false,,,,,
+P008,,,,,,,,,,,,,false,false,false,false,false,,,,,
+P009,,,,,,,,,,,,,false,false,false,false,false,,,,,
+P010,,,,,,,,,,,,,false,false,false,false,false,,,,,

@@ -5,7 +5,6 @@ import {
   mergeAttributionFromCookieHeader,
   readAttributionFromCookieHeader,
 } from '@/lib/acquisition-attribution'
-import { createGuestUserRecord, getDemoAccountContext } from '@/lib/demo-account'
 import {
   getParsedAnalyticsEvents,
   getWorkflowMetrics,
@@ -74,6 +73,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   googleai: 'Google AI',
   openrouter: 'OpenRouter',
   grok: 'Grok',
+  kimi: 'Kimi',
 }
 
 const clamp = (value: number, min: number, max: number) =>
@@ -386,19 +386,6 @@ const buildActivationFunnel = (
   },
 ]
 
-const buildEmptyWorkflowMetrics = () => ({
-  configuredProviders: 0,
-  personas: 0,
-  comparisonReadyConversations: 0,
-  weeklySavedBriefComparisons: 0,
-  conversationsCreated: 0,
-  comparisonViews: 0,
-  analyticsViews: 0,
-  billingViews: 0,
-  checkoutSessionsCreated: 0,
-  portalSessionsCreated: 0,
-})
-
 const buildStep11OutboundMetrics = (
   events: ParsedAnalyticsEvent[]
 ): Step11OutboundMetrics => {
@@ -430,7 +417,7 @@ const buildStep11OutboundMetrics = (
 }
 
 export const GET = withApiMetrics(async (request: Request) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) {
     return authCheck
   }
@@ -443,38 +430,6 @@ export const GET = withApiMetrics(async (request: Request) => {
     request.headers.get('cookie')
   )
   const attributionMeta: AttributionMeta = buildAttributionMeta(attribution)
-  const demoAccount = getDemoAccountContext()
-  const guestUser = createGuestUserRecord()
-  const isSharedGuestOrDemoUser =
-    user.id === guestUser.id ||
-    user.id === demoAccount.id ||
-    user.email === guestUser.email ||
-    user.email === demoAccount.email
-
-  if (isSharedGuestOrDemoUser) {
-    const emptyWorkflowMetrics = buildEmptyWorkflowMetrics()
-
-    return NextResponse.json({
-      timeframe,
-      providerData: [],
-      usageTrends: timeframe === '24h' ? buildHourlyTrends([]) : buildDailyTrends([], days),
-      modelComparisonData: [],
-      workflowMetrics: emptyWorkflowMetrics,
-      activationFunnel: buildActivationFunnel(emptyWorkflowMetrics),
-      step11OutboundMetrics: buildStep11OutboundMetrics([]),
-      totalStats: {
-        totalRequests: 0,
-        totalTokens: 0,
-        totalErrors: 0,
-        avgResponseTime: 0,
-      },
-      meta: {
-        source: 'empty',
-        eventCount: 0,
-        attribution: attributionMeta,
-      },
-    })
-  }
 
   try {
     const events = await getParsedAnalyticsEvents(user.id, days)

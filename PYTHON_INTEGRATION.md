@@ -46,6 +46,16 @@ Or run both with PM2 via `ecosystem.config.js`.
 Common vars:
 - `PYTHON_CORE_URL`
 - Provider API keys required by your Python provider implementation
+- `MOONSHOT_API_KEY` when the sidecar should execute Kimi requests
+
+App users configure Kimi from Settings; its encrypted per-user key is used by
+the primary Next.js chat and stream routes. The optional sidecar uses its own
+server-only `MOONSHOT_API_KEY` environment variable.
+
+DeepSeek is temporarily disabled because the previous community endpoint is no
+longer operational. The sidecar does not accept DeepSeek in request schemas or
+register its historical adapter. The adapter code remains in place only to
+make a future, deliberate restoration straightforward.
 
 ## Health and Troubleshooting
 - If `/api/llm/orchestrate` returns `503`, verify sidecar host/port and availability.

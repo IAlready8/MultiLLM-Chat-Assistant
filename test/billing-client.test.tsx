@@ -46,7 +46,6 @@ describe('BillingClient', () => {
         weeklySavedBriefComparisons={3}
         checkoutEnabled={true}
         portalEnabled={true}
-        hasDemoBypassAccess={false}
       />
     )
 
@@ -86,7 +85,6 @@ describe('BillingClient', () => {
         weeklySavedBriefComparisons={1}
         checkoutEnabled={true}
         portalEnabled={true}
-        hasDemoBypassAccess={false}
       />
     )
 
@@ -124,7 +122,6 @@ describe('BillingClient', () => {
         weeklySavedBriefComparisons={5}
         checkoutEnabled={true}
         portalEnabled={true}
-        hasDemoBypassAccess={false}
       />
     )
 

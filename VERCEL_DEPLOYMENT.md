@@ -35,12 +35,13 @@ Set these in Vercel Project Settings -> Environment Variables.
 Required for core runtime:
 - `NEXTAUTH_URL`
 - `NEXTAUTH_SECRET` or `AUTH_SECRET`
+- `AUTH_OWNER_EMAILS`
 - `API_KEY_ENCRYPTION_SEED`
 - `DATABASE_URL`
 
 Common optional:
-- `AUTH_REQUIRE_LOGIN`
-- `NEXT_PUBLIC_AUTH_REQUIRE_LOGIN`
+- `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`
+- `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET`
 - `PYTHON_CORE_URL`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_PRO_PRICE_ID`
@@ -52,6 +53,16 @@ Common optional:
 - `NEXT_PUBLIC_SECURE_STORAGE_KEY`
 
 Use `.env.example` and `handoff_work/ENV_INVENTORY.md` as the env references.
+
+At least one complete OAuth pair is required for self-service account creation.
+The production callback URLs are:
+
+- `https://multi-llm-chat-assistant.vercel.app/api/auth/callback/google`
+- `https://multi-llm-chat-assistant.vercel.app/api/auth/callback/github`
+
+See `docs/AUTHENTICATION_SETUP.md` before adding provider credentials or promoting an auth change.
+`AUTH_OWNER_EMAILS` is a server-only comma-separated allowlist; use an MFA-secured
+operator identity. `AUTH_ADMIN_EMAILS` is optional for additional operators.
 
 ## Preview Deploy Flow (Proven)
 1. Pull branch-scoped preview env:
@@ -145,6 +156,9 @@ npm run verify:preview:local
 npm run smoke:preview:local
 npm run smoke:preview:local:auth
 ```
+
+Set `SMOKE_SESSION_COOKIE`, or `SMOKE_AUTH_EMAIL` and `SMOKE_AUTH_PASSWORD` for
+an existing password account, before running the authenticated smoke command.
 
 ## Operational Notes
 - Preview and production env scopes are separate.

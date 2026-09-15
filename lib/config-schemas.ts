@@ -49,6 +49,15 @@ export const mistralConfigSchema = providerConfigSchema.extend({
   maxTokens: z.number().min(1).max(128000).default(4096),
 }).optional()
 
+export const kimiConfigSchema = providerConfigSchema.extend({
+  maxTokens: z.number().min(1).max(1048576).default(4096),
+}).optional()
+
+export const deepseekConfigSchema = providerConfigSchema.extend({
+  apiKey: z.string().default(''),
+  maxTokens: z.number().min(1).max(393216).default(4096),
+}).optional()
+
 // System Configuration Schemas
 export const featuresConfigSchema = z.object({
   streaming: z.boolean().default(true),
@@ -85,6 +94,8 @@ export const configSchema = z.object({
     grok: grokConfigSchema.optional(),
     ollama: ollamaConfigSchema,
     mistral: mistralConfigSchema,
+    kimi: kimiConfigSchema,
+    deepseek: deepseekConfigSchema,
   }),
   features: featuresConfigSchema,
   security: securityConfigSchema,
@@ -102,6 +113,8 @@ export type OpenRouterConfig = z.infer<typeof openRouterConfigSchema>
 export type GrokConfig = z.infer<typeof grokConfigSchema>
 export type OllamaConfig = z.infer<typeof ollamaConfigSchema>
 export type MistralConfig = z.infer<typeof mistralConfigSchema>
+export type KimiConfig = z.infer<typeof kimiConfigSchema>
+export type DeepSeekConfig = z.infer<typeof deepseekConfigSchema>
 export type FeaturesConfig = z.infer<typeof featuresConfigSchema>
 export type SecurityConfig = z.infer<typeof securityConfigSchema>
 export type DatabaseConfig = z.infer<typeof databaseConfigSchema>
@@ -140,4 +153,6 @@ export const defaultRateLimits = {
   grok: { requests: 60, window: 60000 },
   ollama: { requests: 1000, window: 60000 },
   mistral: { requests: 60, window: 60000 },
+  kimi: { requests: 60, window: 60000 },
+  deepseek: { requests: 12, window: 60000 },
 }

@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { apiClient } from '@/lib/api-client'
+import { estimateCost, getCostRate } from '@/src/generated/costs'
+import { providerRegistry } from '@/lib/provider-registry'
 import type { Conversation, Message } from '@/types/prisma'
 
 type DashboardProviderUsage = {
@@ -51,16 +53,14 @@ type ResponseSample = {
   content: string
 }
 
-const COST_PER_1K_TOKENS: Record<string, number> = {
-  openai: 0.03,
-  anthropic: 0.015,
-  'google ai': 0.001,
-  googleai: 0.001,
-  openrouter: 0.01,
-  grok: 0.02,
-}
-
 const normalizeKey = (value: string) => value.toLowerCase().trim()
+
+const providerLookup = new Map(
+  providerRegistry.flatMap(provider => [
+    [normalizeKey(provider.id), provider.id],
+    [normalizeKey(provider.name), provider.id],
+  ])
+)
 
 const inferProviderFromName = (name: string) => {
   const key = normalizeKey(name)
@@ -69,7 +69,16 @@ const inferProviderFromName = (name: string) => {
   if (key.includes('gemini') || key.includes('google')) return 'Google AI'
   if (key.includes('grok')) return 'Grok'
   if (key.includes('openrouter')) return 'OpenRouter'
+  if (key.includes('kimi')) return 'Kimi'
   return name
+}
+
+const resolveProviderId = (value: string) =>
+  providerLookup.get(normalizeKey(value)) ?? normalizeKey(value)
+
+const costPerThousandTokens = (provider: string) => {
+  const rate = getCostRate(resolveProviderId(provider))
+  return (rate.prompt + rate.completion) / 2
 }
 
 const round = (value: number, precision = 2) => {
@@ -99,11 +108,11 @@ const buildModelRows = (
         : 0
     const tokensPerSecond =
       responseTime > 0 ? Math.round(avgTokens / (responseTime / 1000)) : 0
-    const providerKey = normalizeKey(providerName)
-    const fallbackCost = COST_PER_1K_TOKENS[providerKey] ?? 0
+    const providerId = resolveProviderId(providerName)
+    const fallbackCost = costPerThousandTokens(providerName)
     const inferredCost =
       providerUsage && providerUsage.tokens > 0 && usageCount > 0
-        ? (providerUsage.tokens / 1000) * fallbackCost / usageCount
+        ? estimateCost(providerId, providerUsage.tokens) / usageCount
         : fallbackCost
 
     return {
@@ -131,7 +140,7 @@ const buildModelRows = (
         : 0
     const errorRate = provider.errors / requests
     const accuracy = round(Math.max(60, 100 - errorRate * 100), 1)
-    const cost = COST_PER_1K_TOKENS[normalizeKey(provider.provider)] ?? 0
+    const cost = costPerThousandTokens(provider.provider)
 
     return {
       id: normalizeKey(provider.provider).replace(/\s+/g, '-'),
@@ -198,6 +207,8 @@ export default function ComparisonPage() {
   )
   const [comparisonData, setComparisonData] = useState<ComparisonModel[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null)
+  const [loadingHistory, setLoadingHistory] = useState(false)
   const [selectedConversationId, setSelectedConversationId] = useState<string>('')
   const [selectedPrompt, setSelectedPrompt] = useState('Select a conversation to compare responses.')
   const [responseSamples, setResponseSamples] = useState<ResponseSample[]>([])
@@ -227,23 +238,24 @@ export default function ComparisonPage() {
     }
   }, [])
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (cursor?: string) => {
+    setLoadingHistory(true)
     try {
-      const data = await apiClient.getConversations()
-      setConversations(data)
+      const page = await apiClient.getConversationPage('all', cursor)
+      const data = page.items
+      setConversations(previous => cursor ? Array.from(new Map([...previous, ...data].map(item => [item.id, item])).values()) : data)
+      setHistoryCursor(page.nextCursor)
       if (data.length > 0) {
         setSelectedConversationId((current) => current || data[0].id)
-      } else {
+      } else if (!cursor) {
         setSelectedConversationId('')
         setSelectedPrompt('No conversations available yet.')
         setResponseSamples([])
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load conversations')
-      setConversations([])
-      setSelectedConversationId('')
-      setSelectedPrompt('Unable to load conversations.')
-      setResponseSamples([])
+    } finally {
+      setLoadingHistory(false)
     }
   }, [])
 
@@ -340,7 +352,7 @@ export default function ComparisonPage() {
                   <Progress value={Math.min(100, (model.tokensPerSecond / 200) * 100)} className="h-2" />
 
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Accuracy</span>
+                    <span className="text-sm text-muted-foreground">Heuristic Score</span>
                     <span className="text-sm font-medium">{model.accuracy}%</span>
                   </div>
                   <Progress value={model.accuracy} className="h-2" />
@@ -374,7 +386,7 @@ export default function ComparisonPage() {
                     <th className="text-left py-2">Provider</th>
                     <th className="text-left py-2">Response Time</th>
                     <th className="text-left py-2">Tokens/Sec</th>
-                    <th className="text-left py-2">Accuracy</th>
+	                    <th className="text-left py-2">Heuristic Score</th>
                     <th className="text-left py-2">Cost (1K tokens)</th>
                   </tr>
                 </thead>
@@ -414,6 +426,7 @@ export default function ComparisonPage() {
             <select
               value={selectedConversationId}
               onChange={(event) => setSelectedConversationId(event.target.value)}
+              aria-label="Conversation to compare"
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             >
               {conversations.length === 0 && (
@@ -425,9 +438,10 @@ export default function ComparisonPage() {
                 </option>
               ))}
             </select>
-            <Button variant="outline" onClick={() => void loadConversations()}>
+            <Button variant="outline" disabled={loadingHistory} onClick={() => void loadConversations()}>
               Refresh
             </Button>
+            {historyCursor && <Button variant="outline" disabled={loadingHistory} onClick={() => void loadConversations(historyCursor)}>{loadingHistory ? 'Loading…' : 'Load more'}</Button>}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">

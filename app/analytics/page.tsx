@@ -637,7 +637,7 @@ export default function AnalyticsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Model Comparison</CardTitle>
-          <CardDescription>Performance metrics across different LLMs</CardDescription>
+            <CardDescription>Heuristic telemetry scores inferred from usage, errors, and latency</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-8">
@@ -646,7 +646,7 @@ export default function AnalyticsPage() {
                 <h4 className="font-medium">{model.provider}</h4>
                 <div className="grid grid-cols-5 gap-4">
                   <div>
-                    <div className="text-sm text-muted-foreground">Factual Accuracy</div>
+                    <div className="text-sm text-muted-foreground">Success Signal</div>
                     <div className="text-lg">{model.factualAccuracy}/5</div>
                   </div>
                   <div>
@@ -654,7 +654,7 @@ export default function AnalyticsPage() {
                     <div className="text-lg">{model.creativity}/5</div>
                   </div>
                   <div>
-                    <div className="text-sm text-muted-foreground">Helpfulness</div>
+                    <div className="text-sm text-muted-foreground">Reliability Signal</div>
                     <div className="text-lg">{model.helpfulness}/5</div>
                   </div>
                   <div>

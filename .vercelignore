@@ -13,6 +13,8 @@ coverage/
 .idea/
 *.log
 npm-debug.log*
+__pycache__/
+*.py[cod]
 
 # Documentation
 README.md

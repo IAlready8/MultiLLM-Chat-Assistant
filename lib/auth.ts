@@ -1,45 +1,34 @@
-import NextAuth, {
-  DefaultSession,
-  NextAuthOptions,
-} from 'next-auth'
+import NextAuth, { DefaultSession, NextAuthOptions } from 'next-auth'
 import { decode } from 'next-auth/jwt'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
 import GitHubProvider from 'next-auth/providers/github'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
-import bcrypt from 'bcryptjs'
 import { cookies } from 'next/headers'
+import { authorizeCredentials } from '@/lib/credentials-auth'
+import { resolveAuthTeamRole } from '@/lib/auth-roles'
+import { hasDatabaseUrl } from '@/lib/database-url'
 import prisma from '@/lib/prisma'
-import { checkAndConsume } from '@/lib/rate-limit'
 import { readSessionTokenFromCookies } from '@/lib/session-cookie'
 import { validateStartupEnvironment } from '@/lib/startup-validation'
-import {
-  createDemoAuthUser,
-  getDemoAccountContext,
-  isInMemoryAuthFallbackAllowed,
-  isDemoCredentials,
-  isDemoEmail,
-  isStrictAuthRequired,
-} from '@/lib/demo-account'
+import { sanitizeLogValue } from '@/lib/log-sanitizer'
+import { authLogger } from '@/lib/auth-logger'
 
-const PASSWORD_MIN_LENGTH = 8
-// Define the types for subscription tier and user role as strings
 type SubscriptionTier = 'FREE' | 'PRO' | 'ENTERPRISE'
-type UserRole = 'USER' | 'ADMIN' | 'OWNER'
+type TeamRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
-// Augment the NextAuth session to include our custom properties
 declare module 'next-auth' {
   interface Session {
     user: {
       id: string
-      role: UserRole
+      role: TeamRole
       tier: SubscriptionTier
     } & DefaultSession['user']
   }
 
   interface JWT {
     id?: string
-    role?: UserRole
+    role?: TeamRole
     tier?: SubscriptionTier
   }
 }
@@ -47,223 +36,98 @@ declare module 'next-auth' {
 declare module 'next-auth/jwt' {
   interface JWT {
     id?: string
-    role?: UserRole
+    role?: TeamRole
     tier?: SubscriptionTier
   }
 }
 
-type InMemoryAuthUser = {
-  id: string
-  name: string
-  email: string
-  password: string
-}
-
-const inMemoryAuthUsers = new Map<string, InMemoryAuthUser>()
-
-const normalizeEmail = (email: string) => email.toLowerCase().trim()
-const normalizeUserRole = (role: unknown): UserRole => {
-  if (role === 'OWNER' || role === 'ADMIN') {
-    return role
-  }
-
-  return 'USER'
-}
-
 validateStartupEnvironment()
-const strictAuth = isStrictAuthRequired()
-const allowInMemoryAuthFallback = isInMemoryAuthFallbackAllowed()
 
 const resolveAuthSecret = (): string => {
-  const configuredSecret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
-  const isProduction = process.env.NODE_ENV === 'production'
+  const configuredSecret =
+    process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
 
   if (configuredSecret?.trim()) {
     return configuredSecret.trim()
   }
 
-  if (strictAuth || isProduction) {
-    throw new Error(
-      'NEXTAUTH_SECRET (or AUTH_SECRET) is required in production deployment. Configure it in your deployment environment variables.'
-    )
+  if (process.env.NODE_ENV === 'test') {
+    return 'test-only-nextauth-secret-not-for-runtime-use'
   }
 
-  // Keep a stable local secret so JWT session cookies remain decryptable between reloads.
-  return 'local-dev-nextauth-secret-change-before-production'
+  throw new Error(
+    'NEXTAUTH_SECRET (or AUTH_SECRET) is required. Configure a stable secret before starting the application.',
+  )
 }
 
 const authSecret = resolveAuthSecret()
 
-const authLogger: NonNullable<NextAuthOptions['logger']> = {
-  error(code, metadata) {
-    if (!strictAuth && code === 'JWT_SESSION_ERROR') {
-      return
-    }
-    console.error(`[next-auth][error][${code}]`, metadata ?? '')
-  },
-  warn(code) {
-    if (!strictAuth && (code === 'NEXTAUTH_URL' || code === 'NO_SECRET')) {
-      return
-    }
-    console.warn(`[next-auth][warn][${code}]`)
-  },
-  debug(code, metadata) {
-    if (process.env.NODE_ENV === 'development') {
-      console.debug(`[next-auth][debug][${code}]`, metadata ?? '')
-    }
-  },
+const loadSubscriptionTier = async (
+  userId: string,
+): Promise<SubscriptionTier> => {
+  try {
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+      select: { tier: true },
+    })
+    return (subscription?.tier as SubscriptionTier) || 'FREE'
+  } catch (error) {
+    console.warn('Failed to load subscription tier, defaulting to FREE:', sanitizeLogValue(error))
+    return 'FREE'
+  }
 }
 
-const buildProviders = () => {
-  const providers: NextAuthOptions['providers'] = []
+const loadUserRole = async (userId: string | undefined, email: string | null | undefined): Promise<TeamRole> => {
+  if (!userId) return resolveAuthTeamRole(email)
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, email: true } })
+    return user ? resolveAuthTeamRole(user.email, user.role) : 'MEMBER'
+  } catch {
+    // Protected API routes independently require a current database identity.
+    return 'MEMBER'
+  }
+}
 
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+const buildProviders = (): NextAuthOptions['providers'] => {
+  const providers: NextAuthOptions['providers'] = []
+  const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim()
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim()
+  const githubClientId = process.env.GITHUB_CLIENT_ID?.trim()
+  const githubClientSecret = process.env.GITHUB_CLIENT_SECRET?.trim()
+
+  if (googleClientId && googleClientSecret) {
     providers.push(
       GoogleProvider({
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      })
+        clientId: googleClientId,
+        clientSecret: googleClientSecret,
+      }),
     )
   }
 
-  if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+  if (githubClientId && githubClientSecret) {
     providers.push(
       GitHubProvider({
-        clientId: process.env.GITHUB_CLIENT_ID,
-        clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      })
+        clientId: githubClientId,
+        clientSecret: githubClientSecret,
+      }),
     )
   }
 
   providers.push(
     CredentialsProvider({
-      name: 'Credentials',
+      name: 'Email and password',
       credentials: {
-        name: { label: 'Name', type: 'text' },
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null
-        }
-
-        const email = normalizeEmail(credentials.email)
-        const name = credentials.name?.trim()
-        const password = credentials.password
-
-        if (isDemoCredentials(email, password)) {
-          return createDemoAuthUser()
-        }
-
-        // Rate limit: 10 login attempts per email per 15 minutes
-        const rateKey = `auth:login:${email}`
-        const rateResult = await checkAndConsume(rateKey, {
-          windowMs: 15 * 60 * 1000,
-          max: 10,
-        })
-        if (!rateResult.allowed) {
-          console.warn(`Rate limited login for ${email}`)
-          return null
-        }
-
-        // Enforce minimum password length on signup
-        if (name && password.length < PASSWORD_MIN_LENGTH) {
-          return null
-        }
-
-        try {
-          const user = await prisma.user.findUnique({
-            where: { email },
-          })
-
-          if (!user) {
-            if (!name) {
-              return null
-            }
-
-            const hashedPassword = await bcrypt.hash(password, 10)
-            const created = await prisma.user.create({
-              data: {
-                name,
-                email,
-                password: hashedPassword,
-              },
-            })
-
-            return {
-              id: created.id,
-              name: created.name,
-              email: created.email,
-            }
-          }
-
-          if (!user.password) {
-            return null
-          }
-
-          const isValidPassword = await bcrypt.compare(password, user.password)
-          if (!isValidPassword) {
-            return null
-          }
-
-          return {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-          }
-        } catch (error) {
-          if (!allowInMemoryAuthFallback) {
-            console.error(
-              'Primary auth store unavailable; in-memory auth fallback is disabled in strict/production mode:',
-              error
-            )
-            return null
-          }
-          console.warn(
-            'Primary auth store unavailable, falling back to in-memory auth:',
-            error
-          )
-        }
-
-        const localUser = inMemoryAuthUsers.get(email)
-        if (!localUser) {
-          if (!name) {
-            return null
-          }
-          const hashedPassword = await bcrypt.hash(password, 10)
-          const created: InMemoryAuthUser = {
-            id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            name,
-            email,
-            password: hashedPassword,
-          }
-          inMemoryAuthUsers.set(email, created)
-          return {
-            id: created.id,
-            name: created.name,
-            email: created.email,
-          }
-        }
-
-        const isValidPassword = await bcrypt.compare(password, localUser.password)
-        if (!isValidPassword) {
-          return null
-        }
-
-        return {
-          id: localUser.id,
-          name: localUser.name,
-          email: localUser.email,
-        }
-      },
-    })
+      authorize: authorizeCredentials,
+    }),
   )
 
   return providers
 }
 
-const maybeAdapter = process.env.DATABASE_URL ? PrismaAdapter(prisma as any) : undefined
+const maybeAdapter = hasDatabaseUrl() ? PrismaAdapter(prisma as any) : undefined
 
 export const authOptions: NextAuthOptions = {
   adapter: maybeAdapter,
@@ -275,49 +139,21 @@ export const authOptions: NextAuthOptions = {
     error: '/auth/error',
   },
   callbacks: {
-    async signIn({ user, account }) {
-      // Audit log: record every sign-in attempt
-      const method = account?.provider ?? 'credentials'
-      console.info(
-        `[auth] sign-in: user=${user?.email ?? 'unknown'} method=${method} id=${user?.id ?? 'none'}`
-      )
+    async signIn({ account }) {
+      console.info(`[auth] sign-in method=${account?.provider ?? 'unknown'}`)
       return true
     },
     async jwt({ token, user }) {
-      if (!strictAuth && isDemoEmail(user?.email ?? token.email)) {
-        token.id = user?.id || token.id || token.sub || getDemoAccountContext().id
-        token.role = 'OWNER'
-        token.tier = 'ENTERPRISE'
-        return token
-      }
-
       if (user) {
         token.id = user.id
       }
 
-      const userId = (token.id || token.sub) as string | undefined
+      const userId = (user?.id || token.id || token.sub) as string | undefined
       if (userId) {
-        try {
-          const persistedUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: {
-              role: true,
-            },
-          })
-          const subscription = await prisma.subscription.findUnique({
-            where: { userId },
-            select: { tier: true },
-          })
-          token.role = normalizeUserRole(persistedUser?.role)
-          token.tier = (subscription?.tier as SubscriptionTier) || 'FREE'
-        } catch (error) {
-          console.warn('Failed to load user auth metadata, defaulting to USER/FREE:', error)
-          token.role = 'USER'
-          token.tier = 'FREE'
-        }
+        token.tier = await loadSubscriptionTier(userId)
       }
 
-      token.role = normalizeUserRole(token.role)
+      token.role = await loadUserRole(userId, user?.email ?? token.email)
       token.tier = token.tier || 'FREE'
       return token
     },
@@ -327,7 +163,7 @@ export const authOptions: NextAuthOptions = {
         if (userId) {
           session.user.id = userId
         }
-        session.user.role = normalizeUserRole(token.role)
+        session.user.role = token.role || 'MEMBER'
         session.user.tier = token.tier || 'FREE'
       }
       return session
@@ -335,14 +171,14 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours - reduce session updates
+    maxAge: 30 * 24 * 60 * 60,
+    updateAge: 24 * 60 * 60,
   },
   secret: authSecret,
 }
 
 export const readSessionTokenFromCookieStore = (
-  cookieStore: Awaited<ReturnType<typeof cookies>>
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
 ) => readSessionTokenFromCookies(cookieStore.getAll())
 
 export async function auth() {
@@ -366,18 +202,19 @@ export async function auth() {
     return null
   }
 
+  const tier = await loadSubscriptionTier(userId)
+
   return {
     expires: new Date(Number(token.exp) * 1000).toISOString(),
     user: {
       id: userId,
       name: token.name,
       email: token.email,
-      role: normalizeUserRole(token.role),
-      tier: (token.tier || 'FREE') as SubscriptionTier,
+      role: await loadUserRole(userId, token.email),
+      tier,
     },
   }
 }
 
-// Export for API routes
 const handler = NextAuth(authOptions)
 export default handler

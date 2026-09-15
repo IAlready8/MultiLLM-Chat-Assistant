@@ -5,11 +5,13 @@ import { readSessionTokenFromCookies } from '@/lib/session-cookie'
 
 const PUBLIC_PATHS = new Set([
   '/auth/signin',
+  '/auth/register',
   '/auth/signout',
   '/auth/error',
   '/api/auth',
   '/api/health',
   '/api/webhooks',
+  '/api/cron/generations', // Bearer-authenticated by the route, not a browser session.
 ])
 
 const isPublicPath = (pathname: string): boolean => {
@@ -32,19 +34,15 @@ const isStaticAsset = (pathname: string): boolean =>
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Always allow static assets and public auth routes
-  if (isStaticAsset(pathname) || isPublicPath(pathname)) {
-    return NextResponse.next()
+  if (pathname.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method) && !isPublicPath(pathname)) {
+    const origin = request.headers.get('origin')
+    if ((origin && origin !== request.nextUrl.origin) || request.headers.get('sec-fetch-site') === 'cross-site') {
+      return NextResponse.json({ error: 'Cross-origin request denied' }, { status: 403 })
+    }
   }
 
-  const isProduction = process.env.NODE_ENV === 'production'
-  const strictAuth =
-    isProduction ||
-    process.env.AUTH_REQUIRE_LOGIN === 'true' ||
-    process.env.NEXT_PUBLIC_AUTH_REQUIRE_LOGIN === 'true'
-
-  // In non-strict mode (demo/guest enabled), allow all requests through
-  if (!strictAuth) {
+  // Always allow static assets and public auth routes
+  if (isStaticAsset(pathname) || isPublicPath(pathname)) {
     return NextResponse.next()
   }
 
@@ -53,7 +51,7 @@ export async function proxy(request: NextRequest) {
 
   if (!authSecret) {
     const message =
-      'Authentication misconfigured: set NEXTAUTH_SECRET or AUTH_SECRET when strict auth is enabled.'
+      'Authentication misconfigured: set NEXTAUTH_SECRET or AUTH_SECRET.'
     console.error(message)
 
     if (pathname.startsWith('/api/')) {
@@ -68,7 +66,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(errorUrl)
   }
 
-  // In strict auth mode, verify JWT token exists
+  // Every protected route requires a valid JWT session.
   const sessionToken = readSessionTokenFromCookies(request.cookies.getAll())
   let token = null
   if (sessionToken) {
@@ -89,7 +87,10 @@ export async function proxy(request: NextRequest) {
     }
 
     const signInUrl = new URL('/auth/signin', request.url)
-    signInUrl.searchParams.set('callbackUrl', pathname)
+    signInUrl.searchParams.set(
+      'callbackUrl',
+      `${pathname}${request.nextUrl.search}`,
+    )
     return NextResponse.redirect(signInUrl)
   }
 

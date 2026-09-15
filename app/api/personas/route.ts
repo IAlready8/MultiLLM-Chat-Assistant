@@ -1,3 +1,4 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
@@ -45,7 +46,7 @@ const personaSchema = z.object({
  * Retrieves all personas for the authenticated user.
  */
 export const GET = withApiMetrics(async (_req: Request) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
@@ -66,11 +67,12 @@ export const GET = withApiMetrics(async (_req: Request) => {
  * Creates a new persona for the authenticated user.
  */
 export const POST = withApiMetrics(async (req: Request) => {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const body = await req.json()
+  const body = await readApiObject(req)
+  if (body instanceof NextResponse) return body
   const validation = personaSchema.safeParse(body)
 
   if (!validation.success) {

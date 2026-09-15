@@ -58,8 +58,8 @@ Restored-target verification passed.
 All verification commands below were run with `DATABASE_URL` bound to the
 scratch restore target:
 - `DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_restore_verify_20260325 npx prisma migrate status`
-- `NEXTAUTH_URL=http://127.0.0.1:3000 NEXTAUTH_SECRET=step9-restore-secret-32-characters API_KEY_ENCRYPTION_SEED=step9-restore-seed-32-characters DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_restore_verify_20260325 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false bash scripts/verify-production.sh --apply-migrations`
-- `NEXTAUTH_URL=http://127.0.0.1:3000 NEXTAUTH_SECRET=step9-restore-secret-32-characters API_KEY_ENCRYPTION_SEED=step9-restore-seed-32-characters DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_restore_verify_20260325 AUTH_REQUIRE_LOGIN=false NEXT_PUBLIC_AUTH_REQUIRE_LOGIN=false bash scripts/smoke-test.sh --base-url http://127.0.0.1:3000 --start-server`
+- `NEXTAUTH_URL=http://127.0.0.1:3000 NEXTAUTH_SECRET=step9-restore-secret-32-characters API_KEY_ENCRYPTION_SEED=step9-restore-seed-32-characters DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_restore_verify_20260325 bash scripts/verify-production.sh --apply-migrations`
+- `NEXTAUTH_URL=http://127.0.0.1:3000 NEXTAUTH_SECRET=step9-restore-secret-32-characters API_KEY_ENCRYPTION_SEED=step9-restore-seed-32-characters DATABASE_URL=postgresql://<user>@127.0.0.1:5432/multillm_restore_verify_20260325 bash scripts/smoke-test.sh --base-url http://127.0.0.1:3000 --start-server`
 
 ## Required Procedure
 

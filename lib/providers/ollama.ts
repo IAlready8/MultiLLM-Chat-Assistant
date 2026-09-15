@@ -1,3 +1,6 @@
+import { iterNdjson } from '@/services/ndjson'
+import { LlmRequestError } from '@/lib/llm-request'
+import { providerSignal } from './util'
 /**
  * lib/providers/ollama.ts
  *
@@ -10,8 +13,8 @@
  * path exposes.
  *
  * No API key is required. The apiKey field in ProviderAdapterConfig is
- * accepted but ignored. If your Ollama instance is remote or behind a
- * proxy, pass its full origin as config.baseUrl.
+ * accepted but ignored. Custom remote Ollama endpoints are intentionally not
+ * supported by this adapter.
  *
  * testConnection() calls GET /api/tags, which returns the list of locally
  * pulled models. It throws if Ollama is not running or unreachable. This
@@ -31,8 +34,12 @@ import type {
   ChatCompletion,
 } from './types'
 import { LLMProviderError, createErrorContext } from '@/lib/error-system'
+import {
+  getProviderBaseUrl,
+  providerFetch,
+  ProviderEndpointError,
+} from '@/lib/provider-endpoint'
 
-const DEFAULT_BASE_URL = 'http://localhost:11434'
 const DEFAULT_MODEL = 'llama3'
 const TIMEOUT_MS = 120_000 // Local inference can be slow on CPU
 
@@ -102,15 +109,16 @@ export const ollamaAdapter: ProviderAdapter = {
    * GET /api/tags returns { models: [{name, ...}] } when Ollama is running.
    */
   async testConnection(config: ProviderAdapterConfig): Promise<void> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const baseUrl = getProviderBaseUrl('ollama', config.baseUrl)
     let response: Response
     try {
-      response = await fetch(`${baseUrl}/api/tags`, {
+      response = await providerFetch('ollama', `${baseUrl}/api/tags`, {
         method: 'GET',
         headers: buildHeaders(config),
         signal: AbortSignal.timeout(10_000),
-      })
+      }, { baseUrl })
     } catch (err: unknown) {
+      if (err instanceof ProviderEndpointError) throw err
       const msg = err instanceof Error ? err.message : String(err)
       throw new LLMProviderError(
         'ollama',
@@ -129,18 +137,19 @@ export const ollamaAdapter: ProviderAdapter = {
     request: ProviderRequest,
     config: ProviderAdapterConfig,
   ): Promise<ChatCompletion> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const baseUrl = getProviderBaseUrl('ollama', config.baseUrl)
     const payload = buildChatPayload(request, false)
 
     let response: Response
     try {
-      response = await fetch(`${baseUrl}/api/chat`, {
+      response = await providerFetch('ollama', `${baseUrl}/api/chat`, {
         method: 'POST',
         headers: buildHeaders(config),
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      })
+        signal: providerSignal(request.signal, TIMEOUT_MS),
+      }, { baseUrl })
     } catch (err: unknown) {
+      if (err instanceof ProviderEndpointError) throw err
       const msg = err instanceof Error ? err.message : String(err)
       throw new LLMProviderError(
         'ollama',
@@ -181,18 +190,19 @@ export const ollamaAdapter: ProviderAdapter = {
     request: ProviderRequest,
     config: ProviderAdapterConfig,
   ): AsyncGenerator<string, void, undefined> {
-    const baseUrl = config.baseUrl || DEFAULT_BASE_URL
+    const baseUrl = getProviderBaseUrl('ollama', config.baseUrl)
     const payload = buildChatPayload(request, true)
 
     let response: Response
     try {
-      response = await fetch(`${baseUrl}/api/chat`, {
+      response = await providerFetch('ollama', `${baseUrl}/api/chat`, {
         method: 'POST',
         headers: buildHeaders(config),
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      })
+        signal: providerSignal(request.signal, TIMEOUT_MS),
+      }, { baseUrl })
     } catch (err: unknown) {
+      if (err instanceof ProviderEndpointError) throw err
       const msg = err instanceof Error ? err.message : String(err)
       throw new LLMProviderError(
         'ollama',
@@ -211,46 +221,18 @@ export const ollamaAdapter: ProviderAdapter = {
       )
     }
 
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        // Keep the last incomplete line in the buffer
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed) continue
-          try {
-            const obj = JSON.parse(trimmed)
-            const chunk: string = obj?.message?.content ?? ''
-            if (chunk) yield chunk
-            if (obj?.done === true) return
-          } catch {
-            // Ignore malformed NDJSON lines
-          }
-        }
+    for await (const parsed of iterNdjson(response.body, request.signal)) {
+      if (!parsed || typeof parsed !== 'object') throw new SyntaxError('Malformed Ollama event')
+      const obj = parsed as { error?: unknown; message?: { content?: unknown }; done?: boolean; prompt_eval_count?: number; eval_count?: number }
+      if (obj.error) throw new LlmRequestError('Ollama stream failed', 503, 'PROVIDER_UNAVAILABLE')
+      const chunk = obj.message?.content
+      if (chunk !== undefined && typeof chunk !== 'string') throw new SyntaxError('Malformed Ollama content')
+      if (chunk) yield chunk
+      if (obj.done === true) {
+        if (typeof obj.prompt_eval_count === 'number' && typeof obj.eval_count === 'number') request.onUsage?.({ prompt_tokens: obj.prompt_eval_count, completion_tokens: obj.eval_count, total_tokens: obj.prompt_eval_count + obj.eval_count })
+        return
       }
-
-      // Flush any remaining buffer content
-      if (buffer.trim()) {
-        try {
-          const obj = JSON.parse(buffer.trim())
-          const chunk: string = obj?.message?.content ?? ''
-          if (chunk) yield chunk
-        } catch {
-          // Ignore
-        }
-      }
-    } finally {
-      reader.releaseLock()
     }
+    throw new LlmRequestError('Provider connection ended before completion', 502, 'PROVIDER_STREAM_INTERRUPTED')
   },
 }

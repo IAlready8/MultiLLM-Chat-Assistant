@@ -7,7 +7,7 @@ const mockGetUserApiKey = vi.fn()
 const mockRecordAnalyticsEvent = vi.fn()
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (options: unknown) => mockGetAuthenticatedUser(options),
+  getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
 
 vi.mock('@/lib/api-key-service', () => ({
@@ -110,6 +110,43 @@ describe('/api/llm/stream route', () => {
     })
   })
 
+  it('rejects unsupported reasoning effort values before authentication', async () => {
+    const response = await POST(
+      makeRequest(
+        JSON.stringify({
+          provider: 'deepseek',
+          reasoning_effort: 'extreme',
+          messages: [{ role: 'user', content: 'hi' }],
+        })
+      )
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'reasoning_effort must be one of: off, low, high, max',
+      code: 'VALIDATION_ERROR',
+    })
+    expect(mockGetAuthenticatedUser).not.toHaveBeenCalled()
+  })
+
+  it('rejects disabled DeepSeek before config, key, or network access', async () => {
+    const response = await POST(
+      makeRequest(JSON.stringify({
+        provider: 'deepseek',
+        messages: [{ role: 'user', content: 'hi' }],
+      }))
+    )
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      error: 'DeepSeek is currently unavailable.',
+      code: 'PROVIDER_DISABLED',
+    })
+    expect(mockGetUserProviderConfigs).not.toHaveBeenCalled()
+    expect(mockGetUserApiKey).not.toHaveBeenCalled()
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
   it('returns unsupported provider error', async () => {
     const response = await POST(
       makeRequest(JSON.stringify({ provider: 'unknown', messages: [{ role: 'user', content: 'hi' }] }))
@@ -150,6 +187,58 @@ describe('/api/llm/stream route', () => {
     })
   })
 
+  it('emits a coded error for a legacy stored private provider endpoint', async () => {
+    mockGetUserProviderConfigs.mockResolvedValue([
+      {
+        provider: 'openai',
+        settings: { baseUrl: 'http://[::1]:8080/admin' },
+      },
+    ])
+
+    const response = await POST(
+      makeRequest(
+        JSON.stringify({
+          provider: 'openai',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      ),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Configured provider endpoint is not allowed',
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+    })
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['private endpoint', 'http://169.254.169.254:11434'],
+    ['public custom endpoint', 'https://ollama.example.com'],
+    ['wrong-port localhost', 'http://localhost:8080'],
+  ])('rejects a legacy Ollama %s before opening an NDJSON stream', async (_label, baseUrl) => {
+    mockGetUserProviderConfigs.mockResolvedValue([
+      { provider: 'ollama', settings: { baseUrl } },
+    ])
+
+    const response = await POST(
+      makeRequest(
+        JSON.stringify({
+          provider: 'ollama',
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      ),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Configured provider endpoint is not allowed',
+      code: 'PROVIDER_ENDPOINT_BLOCKED',
+    })
+    expect(response.headers.get('Content-Type')).not.toBe('application/x-ndjson')
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
   it('applies scoped rate limiting per user/provider', async () => {
     mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-rate-limit' } })
     mockGetUserProviderConfigs.mockResolvedValue([
@@ -173,6 +262,9 @@ describe('/api/llm/stream route', () => {
     )
 
     expect(second.status).toBe(429)
+    const retryAfter = Number(second.headers.get('Retry-After'))
+    expect(retryAfter).toBeGreaterThan(0)
+    expect(retryAfter).toBeLessThanOrEqual(60)
     await expect(second.json()).resolves.toEqual({
       error: 'Rate limit exceeded',
       code: 'RATE_LIMITED',

@@ -1,10 +1,16 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { getUserApiKey } from '@/lib/api-key-service'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
-import { isProviderApiKeyRequired } from '@/lib/provider-registry'
+import {
+  getProviderDisabledMessage,
+  isProviderApiKeyRequired,
+  isProviderDisabled,
+  PROVIDER_DISABLED_ERROR_CODE,
+} from '@/lib/provider-registry'
 
-type HealthStatus = 'ok' | 'invalid' | 'unreachable' | 'rate_limited' | 'provider_error' | 'format'
+type HealthStatus = 'ok' | 'invalid' | 'unreachable' | 'rate_limited' | 'provider_error' | 'format' | 'disabled'
 
 interface TestResult {
   valid: boolean
@@ -44,7 +50,14 @@ async function testKey(
     }
 
     if (response.ok) {
-      return buildResult(true, 'API key verified successfully.', 'ok', latencyMs)
+      return buildResult(
+        true,
+        isProviderApiKeyRequired(provider)
+          ? 'API key verified successfully.'
+          : 'Provider endpoint verified successfully.',
+        'ok',
+        latencyMs,
+      )
     }
 
     if (response.status === 401 || response.status === 403) {
@@ -57,9 +70,12 @@ async function testKey(
     }
 
     if (response.status === 429) {
+      const retryAfter = response.headers?.get?.('retry-after') ?? null
       return buildResult(
         false,
-        'Rate limited while verifying key. Try again shortly.',
+        retryAfter
+          ? `Shared endpoint rate limited. Retry after ${retryAfter} seconds.`
+          : 'Shared endpoint rate limited. Try again shortly.',
         'rate_limited',
         latencyMs
       )
@@ -92,12 +108,13 @@ async function testKey(
 }
 
 export async function POST(request: NextRequest) {
-  const authCheck = await getAuthenticatedUser({ allowGuest: true })
+  const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
   try {
-    const body = await request.json()
+    const body = await readApiObject(request)
+  if (body instanceof NextResponse) return body
     const providerRaw = body?.provider
     const testSaved = body?.testSaved === true
 
@@ -109,6 +126,16 @@ export async function POST(request: NextRequest) {
     }
 
     const provider = providerRaw.trim().toLowerCase()
+
+    if (isProviderDisabled(provider)) {
+      return NextResponse.json(
+        {
+          ...buildResult(false, getProviderDisabledMessage(provider), 'disabled'),
+          code: PROVIDER_DISABLED_ERROR_CODE,
+        },
+        { status: 503 },
+      )
+    }
 
     // Mode 1: Test a saved/stored key without re-entry
     if (testSaved) {

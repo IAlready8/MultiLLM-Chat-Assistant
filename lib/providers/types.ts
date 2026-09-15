@@ -15,10 +15,15 @@ export interface ProviderMessage {
 }
 
 export interface ProviderRequest {
+  signal?: AbortSignal
+  /** Normalized usage reported by the provider; never serialized upstream. */
+  onUsage?: (usage: ProviderUsage) => void
   messages: ProviderMessage[]
   model?: string
   temperature?: number
   max_tokens?: number
+  /** Provider-specific reasoning mode. `off` omits the upstream field. */
+  reasoning_effort?: 'off' | 'low' | 'high' | 'max'
   /** Opaque userId propagated for logging / analytics; never sent upstream. */
   userId?: string
 }
@@ -79,17 +84,11 @@ export interface ClassifiedError {
   status: number
   code: string
   error: string
+  retryAfterSeconds?: number
 }
 
 // ---------------------------------------------------------------------------
-// Provider IDs (literal union derived from registry)
+// Provider IDs (literal union derived from capability matrix)
 // ---------------------------------------------------------------------------
 
-export type ProviderId =
-  | 'openai'
-  | 'openrouter'
-  | 'anthropic'
-  | 'googleai'
-  | 'grok'
-  | 'ollama'
-  | 'mistral'
+export type { ProviderId } from '@/src/generated/provider-meta'

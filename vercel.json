@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "node scripts/build-deployment.mjs",
   "installCommand": "npm ci",
   "framework": "nextjs",
   "headers": [
@@ -11,6 +11,12 @@
           "value": "no-store, must-revalidate"
         }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/generations",
+      "schedule": "0 3 * * *"
     }
   ]
 }

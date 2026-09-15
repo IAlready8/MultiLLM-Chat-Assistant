@@ -1,0 +1,118 @@
+version: 1
+
+providers:
+  - id: openai
+    name: OpenAI
+    placeholder: sk-...
+    description: Strong general-purpose reasoning, writing, and coding models.
+    type: llm
+    streaming: true
+    supports_tools: true
+    requires_api_key: true
+    default_model: gpt-4o
+    cost_per_1k: { prompt: 0.005, completion: 0.015 }
+
+  - id: openrouter
+    name: OpenRouter
+    placeholder: sk-or-v1-...
+    description: Unified routing across many hosted model providers.
+    type: llm
+    streaming: true
+    supports_tools: true
+    requires_api_key: true
+    default_model: openai/gpt-4o
+    cost_per_1k: { prompt: 0.003, completion: 0.01 }
+
+  - id: anthropic
+    name: Claude (Anthropic)
+    placeholder: sk-ant-...
+    description: Long-context Claude models for analysis and writing.
+    type: llm
+    streaming: true
+    supports_tools: true
+    requires_api_key: true
+    default_model: claude-3-5-sonnet-20241022
+    cost_per_1k: { prompt: 0.003, completion: 0.015 }
+
+  - id: googleai
+    name: Google AI
+    placeholder: AIza...
+    description: Gemini models for fast multimodal and long-context work.
+    type: llm
+    streaming: true
+    supports_tools: false
+    requires_api_key: true
+    default_model: gemini-1.5-pro
+    cost_per_1k: { prompt: 0.0005, completion: 0.0015 }
+
+  - id: grok
+    name: Grok (xAI)
+    placeholder: xai-...
+    description: xAI models for conversational exploration.
+    type: llm
+    streaming: true
+    supports_tools: true
+    requires_api_key: true
+    default_model: grok-2
+    cost_per_1k: { prompt: 0.005, completion: 0.015 }
+
+  - id: ollama
+    name: Ollama
+    placeholder: Optional bearer token for remote Ollama
+    description: Local models served by Ollama at http://localhost:11434.
+    type: llm
+    streaming: true
+    supports_tools: false
+    requires_api_key: false
+    default_model: llama3.1
+    cost_per_1k: { prompt: 0, completion: 0 }
+
+  - id: mistral
+    name: Mistral
+    placeholder: Mistral API key
+    description: Mistral hosted models and open-weight families.
+    type: llm
+    streaming: true
+    supports_tools: true
+    requires_api_key: true
+    default_model: mistral-large-latest
+    cost_per_1k: { prompt: 0.002, completion: 0.006 }
+
+  - id: kimi
+    name: Kimi (Moonshot AI)
+    placeholder: Kimi API key
+    description: Long-context Kimi models for reasoning, writing, and coding.
+    type: llm
+    streaming: true
+    supports_tools: true
+    requires_api_key: true
+    default_model: kimi-k3
+    cost_per_1k: { prompt: 0.009, completion: 0.009 }
+
+  - id: deepseek
+    name: DeepSeek
+    placeholder: Currently unavailable
+    description: Temporarily disabled because the previous community endpoint is no longer operational.
+    type: llm
+    streaming: false
+    supports_tools: false
+    requires_api_key: false
+    accepts_api_key: false
+    operational: false
+    disabled_reason: DeepSeek is currently unavailable.
+    default_model: unavailable
+    cost_per_1k: { prompt: 0, completion: 0 }
+
+capabilities:
+  routing: capability_based
+  fallback: negotiated
+  telemetry: event_stream
+  cost_tracking: real_time
+  registry: generated
+
+rules:
+  - single_source_of_truth: true
+  - no_manual_provider_duplication: true
+  - TS_and_Python_must_match: true
+  - sidecar_optional: true
+  - streaming_primary_in_ts: true

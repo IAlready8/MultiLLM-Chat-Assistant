@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[SecretStr] = None
     COHERE_API_KEY: Optional[SecretStr] = None
     GOOGLE_AI_API_KEY: Optional[SecretStr] = None
+    MOONSHOT_API_KEY: Optional[SecretStr] = None
     # Add other provider keys as needed
 
 # Load settings once and export
