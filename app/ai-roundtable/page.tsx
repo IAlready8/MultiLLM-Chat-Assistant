@@ -42,6 +42,7 @@ type RoundtableMessage = {
   agentName?: string
   provider?: string
   model?: string
+  generationStatus?: string
 }
 
 type AgentConfig = {
@@ -55,6 +56,11 @@ type AgentConfig = {
 type StatusMessage = {
   type: 'info' | 'error' | 'success'
   text: string
+}
+
+const generationLabels: Record<string, string> = {
+  pending: 'Generating', complete: 'Complete', failed: 'Failed',
+  cancelled: 'Stopped', interrupted: 'Interrupted',
 }
 
 const generateId = () => `rt-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
@@ -322,6 +328,7 @@ export default function AIRoundtablePage() {
           agentName: parsed.agentName,
           provider: message.provider ?? undefined,
           model: message.model ?? undefined,
+          generationStatus: message.generationStatus,
         })
       }
 
@@ -340,7 +347,7 @@ export default function AIRoundtablePage() {
     async (conversationId: string) => {
       try {
         setIsLoadingConversation(true)
-        const conversation = await apiClient.getConversation(conversationId)
+        const conversation = await apiClient.getConversationMessages(conversationId, undefined, 1)
         hydrateRoundtableFromConversation(conversation)
       } catch (error) {
         console.error('Failed to load roundtable conversation:', error)
@@ -436,7 +443,7 @@ export default function AIRoundtablePage() {
 
   const stopRoundtable = () => {
     if (!isRunningRef.current) return
-    setIsRunning(false)
+    // Keep Start disabled until the old request has settled and cleaned up.
     isRunningRef.current = false
     abortControllerRef.current?.abort()
     abortControllerRef.current = null
@@ -590,7 +597,8 @@ export default function AIRoundtablePage() {
           agentId: agent.id,
           agentName: agentLabel,
           provider: agent.provider,
-          model: agent.model
+          model: agent.model,
+          generationStatus: 'pending',
         }
 
         workingMessages = [...workingMessages, placeholder]
@@ -616,22 +624,27 @@ export default function AIRoundtablePage() {
             abortControllerRef.current?.signal
           )
 
-          if (!isRunningRef.current) break
-
           const trimmedContent = fullContent.trim()
           const finalContent = trimmedContent || 'No response returned.'
 
           workingMessages = workingMessages.map(message =>
-            message.id === typingId ? { ...message, content: finalContent } : message
+            message.id === typingId ? { ...message, content: finalContent, generationStatus: 'complete' } : message
           )
           setMessages(workingMessages)
 
           if (trimmedContent) {
             touchConversation(conversationId)
           }
+          if (!isRunningRef.current) {
+            endState = 'stopped'
+            break
+          }
         } catch (error) {
           if ((error as Error)?.name === 'AbortError') {
             endState = 'stopped'
+            workingMessages = workingMessages.map(message => message.id === typingId
+              ? { ...message, content: streamedContent, generationStatus: 'cancelled' } : message)
+            setMessages(workingMessages)
             break
           }
 
@@ -639,7 +652,7 @@ export default function AIRoundtablePage() {
           const errorMessage = (error as Error).message || 'Failed to get a response.'
           endState = 'error'
           workingMessages = workingMessages.map(message =>
-            message.id === typingId ? { ...message, content: `${streamedContent}${streamedContent ? '\n\n' : ''}Error: ${errorMessage}` } : message
+            message.id === typingId ? { ...message, content: `${streamedContent}${streamedContent ? '\n\n' : ''}Error: ${errorMessage}`, generationStatus: 'failed' } : message
           )
           setMessages(workingMessages)
           setStatusMessage({ type: 'error', text: errorMessage })
@@ -655,31 +668,31 @@ export default function AIRoundtablePage() {
         endState = 'completed'
       }
     } finally {
-      setIsRunning(false)
       isRunningRef.current = false
       abortControllerRef.current = null
       await refreshConversationList({ silent: true })
       if (endState === 'completed') {
         setStatusMessage({ type: 'success', text: 'Roundtable saved to history.' })
       } else if (endState === 'stopped') {
-        setStatusMessage({ type: 'info', text: 'Roundtable stopped and saved to history.' })
+        setStatusMessage({ type: 'info', text: 'Roundtable stopped. Reopen history to check saved progress.' })
       }
+      setIsRunning(false)
     }
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] max-w-6xl mx-auto">
+    <div className="flex min-w-0 w-full flex-col min-h-[calc(100vh-120px)] max-w-6xl mx-auto">
       <Card className="mb-4">
         <CardHeader className="pb-3 space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <CardTitle>AI Roundtable</CardTitle>
               <Badge variant="secondary">Beta</Badge>
             </div>
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center space-x-1 flex-wrap gap-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <div className="flex min-w-0 items-center flex-wrap gap-1">
                 {agents.map(agent => (
-                  <Badge key={agent.id} variant="secondary" className="text-xs">
+                  <Badge key={agent.id} variant="secondary" className="max-w-full whitespace-normal break-all text-xs">
                     {resolveAgentName(agent.name)} ({agent.provider}/{agent.model.split('/').pop()})
                   </Badge>
                 ))}
@@ -701,14 +714,14 @@ export default function AIRoundtablePage() {
         </CardHeader>
       </Card>
 
-      <div className="flex-1 flex flex-col md:flex-row gap-4">
-        <div className="flex-1 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col md:flex-row gap-4">
+        <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 mb-4 rounded-md border p-4 bg-muted/20 max-h-[calc(100vh-200px)] overflow-y-auto">
             <div className="space-y-4">
               {messages.map(message => (
                 <div key={message.id} className="flex justify-start">
                   <div className="max-w-[85%] rounded-lg p-4 bg-card border">
-                    <div className="flex items-center mb-1 gap-2">
+                    <div className="flex flex-wrap items-center mb-1 gap-2 break-all">
                       {message.kind === 'goal' ? (
                         <>
                           <Target className="h-4 w-4" />
@@ -726,7 +739,10 @@ export default function AIRoundtablePage() {
                         </>
                       )}
                     </div>
-                    <div className="whitespace-pre-wrap">{message.content}</div>
+                    {message.generationStatus && generationLabels[message.generationStatus] && (
+                      <p className="mb-1 text-xs text-muted-foreground">{generationLabels[message.generationStatus]}</p>
+                    )}
+                    <div className="whitespace-pre-wrap break-words">{message.content}</div>
                   </div>
                 </div>
               ))}
@@ -822,7 +838,7 @@ export default function AIRoundtablePage() {
                     >
                       <button
                         type="button"
-                        className="flex-1 text-left"
+                        className="flex-1 min-w-0 text-left"
                         onClick={() => void loadConversationById(conversation.id)}
                         disabled={isBusy}
                       >
@@ -875,7 +891,7 @@ export default function AIRoundtablePage() {
                     size="sm"
                     onClick={() => addAgent(provider.id)}
                     disabled={isBusy}
-                    className="text-xs"
+                    className="h-auto min-h-8 whitespace-normal text-xs"
                     title={provider.description}
                   >
                     <Plus className="h-3 w-3 mr-1" />

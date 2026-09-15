@@ -154,3 +154,9 @@ integration commit; a successful build alone is not that evidence.
 ## September 15 follow-up
 
 Pipeline saved runs and response comparison now request `messagesLimit=1`, retaining every response in the latest turn while bounding database reads. Comparison ignores results and errors from a previously selected conversation, clears old results while loading, and supports retry after failure. Pipeline protects the prompt while a saved run loads. Component regression tests cover these behaviors; native browser QA also checks the comparison request and its desktop/mobile rendering against persisted history. Roundtable shared-transcript context remains separate work.
+
+## Roundtable continuation — September 15
+
+Roundtable now also requests one complete goal turn for saved runs. Each run creates its own conversation, so this retains all agent replies to the run goal. Saved interrupted, failed, and cancelled status is displayed alongside retained content. Stop keeps Start locked until the in-flight request settles; aborts clear Thinking placeholders and retain partial text without claiming server persistence has already completed.
+
+All current conversation views now use bounded reads. Roundtable generation still uses its shared-agent browser transcript, rather than multi-chat's per-model server context; changing that requires a separate context contract. Component regressions cover cancellation/restart exclusion, partial output, and restored statuses. Native browser QA exercises saved roundtable loads on desktop and mobile with a bounded API request.

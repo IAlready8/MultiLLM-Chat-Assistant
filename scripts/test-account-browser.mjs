@@ -152,8 +152,24 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
     await page.getByLabel('Conversation archive password').fill(archivePassword)
     await page.getByRole('button', { name: 'Restore into my account', exact: true }).click()
     await expect(page.getByText('Restored 0 conversations and 0 messages. Skipped 3 existing copies.', { exact: true })).toBeVisible()
+    for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport)
+      await page.goto(new URL('/ai-roundtable', baseUrl).href)
+      const thread = page.getByRole('button').filter({ hasText: 'Roundtable: Page test' }).first()
+      await expect(thread).toBeEnabled()
+      const boundedRead = page.waitForResponse(response => {
+        const url = new URL(response.url())
+        return url.pathname.startsWith('/api/conversations/') && url.searchParams.get('messagesLimit') === '1'
+      })
+      await thread.click()
+      assert.equal((await boundedRead).status(), 200)
+      await expect(page.getByPlaceholder('Describe the objective for the AI conversation...')).toHaveValue('Pagination fixture')
+      await expect(page.locator('div.whitespace-pre-wrap').filter({ hasText: /^Pagination fixture$/ })).toBeVisible()
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Roundtable must not overflow horizontally')
+      await page.screenshot({ path: path.join(artifacts, `roundtable-${viewport.width}.png`), fullPage: true })
+    }
     assert.deepEqual(errors, [], 'Browser must not report console errors or uncaught exceptions')
-    console.log('Browser QA passed: controlled provider-discovery failure/retry, credential sign-in, persisted profile reload, encrypted archive download/decryption and idempotent restore, desktop and mobile settings; no console errors')
+    console.log('Browser QA passed: controlled provider-discovery failure/retry, credential sign-in, persisted profile reload, encrypted archive download/decryption and idempotent restore, desktop and mobile settings and bounded roundtable reload; no console errors')
   } catch (error) {
     console.error('Browser QA diagnostics', { url: page.url(), errors })
     await page.screenshot({ path: path.join(artifacts, 'failure.png'), fullPage: true }).catch(() => {})
