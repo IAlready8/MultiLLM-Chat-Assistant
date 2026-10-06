@@ -24,6 +24,8 @@ import {
   PROVIDER_ENDPOINT_ERROR_CODE,
   ProviderEndpointError,
 } from '@/lib/provider-endpoint'
+import { recordAnalyticsEvent } from '@/services/analytics-service'
+import { mergeAttributionFromCookieHeader } from '@/lib/acquisition-attribution'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
@@ -196,6 +198,22 @@ export async function POST(request: NextRequest) {
     await storeUserApiKey(user.id, provider, apiKey, settings)
     invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
 
+    try {
+      await recordAnalyticsEvent({
+        event: 'provider_configured',
+        userId: user.id,
+        payload: mergeAttributionFromCookieHeader(
+          { provider },
+          request.headers.get('cookie')
+        ),
+      })
+    } catch (analyticsError) {
+      console.warn(
+        'Failed to record analytics event for provider configuration:',
+        analyticsError
+      )
+    }
+
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
     if (error instanceof ProviderEndpointError) {
@@ -344,6 +362,22 @@ export async function PUT(request: NextRequest) {
     if (connectionTest.success) {
       await storeUserApiKey(user.id, provider, apiKey, settings)
       invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
+
+      try {
+        await recordAnalyticsEvent({
+          event: 'provider_configured',
+          userId: user.id,
+          payload: mergeAttributionFromCookieHeader(
+            { provider },
+            request.headers.get('cookie')
+          ),
+        })
+      } catch (analyticsError) {
+        console.warn(
+          'Failed to record analytics event for provider configuration:',
+          analyticsError
+        )
+      }
     }
 
     return NextResponse.json(
