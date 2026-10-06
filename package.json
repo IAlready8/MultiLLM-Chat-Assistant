@@ -144,6 +144,8 @@
     "vite": "$vite",
     "ws": "8.21.1",
     "mysql2": "^3.22.0",
-    "deepmerge-ts": "^8.0.0"
+    "deepmerge-ts": "^8.0.0",
+    "tinypool": "^2.1.2",
+    "@babel/core": "^7.29.1"
   }
 }
