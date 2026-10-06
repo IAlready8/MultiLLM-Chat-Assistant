@@ -143,6 +143,7 @@
     "uuid": "$uuid",
     "vite": "$vite",
     "ws": "8.21.1",
-    "mysql2": "^3.22.0"
+    "mysql2": "^3.22.0",
+    "deepmerge-ts": "^8.0.0"
   }
 }
