@@ -175,6 +175,14 @@ jobs:
           path: ${{ runner.temp }}/multillm-browser/*.png
           if-no-files-found: ignore
 
+  smoke-tests-gate:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: smoke-tests
+    steps:
+      - name: Smoke tests gate
+        run: echo "All smoke test matrix jobs passed"
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
