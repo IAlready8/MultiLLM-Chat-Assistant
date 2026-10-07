@@ -1,3 +1,4 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { PersonaService } from '@/services/persona-service.db'
@@ -70,7 +71,8 @@ export const PUT = withApiMetrics(async (
   const id = await getPersonaIdFromContext(ctx)
 
   try {
-    const body = await req.json()
+    const body = await readApiObject(req)
+  if (body instanceof NextResponse) return body
     const validation = updatePersonaSchema.safeParse(body)
 
     if (!validation.success) {

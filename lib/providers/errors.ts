@@ -6,6 +6,7 @@
  * both endpoints return identical error codes for identical failure modes.
  */
 
+import { LlmRequestError } from '@/lib/llm-request'
 import { NotImplementedError } from '@/lib/error-system'
 import { PROVIDER_ENDPOINT_ERROR_CODE } from '@/lib/provider-endpoint'
 import type { ClassifiedError } from './types'
@@ -43,6 +44,9 @@ function parseUpstreamStatus(message: string): number | null {
  * 10. Fallback            -> 500 INTERNAL_ERROR
  */
 export function classifyProviderError(error: unknown): ClassifiedError {
+  if (error instanceof LlmRequestError) {
+    return { status: error.status, code: error.code, error: error.message, ...(error.retryAfterSeconds ? { retryAfterSeconds: error.retryAfterSeconds } : {}) }
+  }
   if (error instanceof SyntaxError) {
     return {
       status: 502,
@@ -165,13 +169,13 @@ export function classifyProviderError(error: unknown): ClassifiedError {
     return {
       status: 400,
       code: 'PROVIDER_REQUEST_ERROR',
-      error: message,
+      error: 'Provider rejected the request. Check the selected model and parameters.',
     }
   }
 
   return {
     status: 500,
     code: 'INTERNAL_ERROR',
-    error: message,
+    error: 'Unable to complete the provider request',
   }
 }

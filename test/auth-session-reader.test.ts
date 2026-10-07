@@ -6,6 +6,7 @@ process.env.NEXTAUTH_SECRET = 'test-secret'
 
 const mockCookies = vi.fn()
 const mockDecode = vi.fn()
+const mockSubscriptionFindUnique = vi.fn()
 
 vi.mock('next/headers', () => ({
   cookies: () => mockCookies(),
@@ -42,7 +43,7 @@ vi.mock('@/lib/prisma', () => ({
       create: vi.fn(),
     },
     subscription: {
-      findUnique: vi.fn(),
+      findUnique: (...args: unknown[]) => mockSubscriptionFindUnique(...args),
     },
   },
 }))
@@ -75,6 +76,7 @@ afterAll(() => {
 describe('auth session token reader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockSubscriptionFindUnique.mockResolvedValue(null)
   })
 
   it('reads the secure session cookie directly', () => {
@@ -88,7 +90,7 @@ describe('auth session token reader', () => {
     }
 
     expect(readSessionTokenFromCookieStore(cookieStore as never)).toBe(
-      'secure-token-value'
+      'secure-token-value',
     )
   })
 
@@ -107,7 +109,7 @@ describe('auth session token reader', () => {
     }
 
     expect(readSessionTokenFromCookieStore(cookieStore as never)).toBe(
-      'first-second'
+      'first-second',
     )
   })
 
@@ -143,6 +145,33 @@ describe('auth session token reader', () => {
     expect(mockDecode).toHaveBeenCalledWith({
       token: 'encoded-token',
       secret: 'test-secret',
+    })
+  })
+
+  it('refreshes the subscription tier from the database', async () => {
+    mockCookies.mockResolvedValue({
+      getAll: () => [
+        {
+          name: '__Secure-next-auth.session-token',
+          value: 'encoded-token',
+        },
+      ],
+    })
+    mockDecode.mockResolvedValue({
+      sub: 'user-123',
+      email: 'user@example.com',
+      role: 'MEMBER',
+      tier: 'FREE',
+      exp: 1_900_000_000,
+    })
+    mockSubscriptionFindUnique.mockResolvedValue({ tier: 'PRO' })
+
+    const session = await auth()
+
+    expect(session?.user.tier).toBe('PRO')
+    expect(mockSubscriptionFindUnique).toHaveBeenCalledWith({
+      where: { userId: 'user-123' },
+      select: { tier: true },
     })
   })
 

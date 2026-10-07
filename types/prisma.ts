@@ -19,7 +19,28 @@ export interface Conversation extends BaseModel {
   userId: string
 }
 
+export interface Generation {
+  leaseExpiresAt: Date
+  id: string
+  requestHash: string
+  userId: string
+  conversationId: string
+  messageId: string
+  message?: Message
+  status: string
+  promptTokens: number
+  completionTokens: number
+  usageSource: string
+  createdAt: Date
+  updatedAt: Date
+}
+
 export interface Message {
+  clientId?: string | null
+  instanceId?: string | null
+  turnId?: string | null
+  position?: number | null
+  generationStatus?: string
   id: string
   role: MessageRole
   content: string
@@ -47,14 +68,16 @@ export interface Team extends BaseModel {
   name: string
 }
 
-export interface Subscription extends BaseModel {
+export interface Subscription {
+  id: string
   userId: string
   tier: string
   stripeCustomerId?: string | null
   stripeSubscriptionId?: string | null
-  currentPeriodStart: Date
-  currentPeriodEnd: Date
-  status: string
+  stripePriceId?: string | null
+  stripeCurrentPeriodEnd?: Date | null
+  stripeStatus?: string | null
+  stripeCancelAtPeriodEnd: boolean
 }
 
 export interface Analytics extends BaseModel {
@@ -77,6 +100,10 @@ export type PrismaModelDelegate<T> = {
 }
 
 export interface PrismaClient {
+  rateLimitBucket: PrismaModelDelegate<{ id: string; timestamps: bigint[]; expiresAt: Date }>
+  llmQuotaUsage: PrismaModelDelegate<{ id: string; userId: string; units: number; createdAt: Date }>
+  generation: PrismaModelDelegate<Generation>
+  stripeWebhookEvent: PrismaModelDelegate<{ id: string; createdAt: Date }>
   user: PrismaModelDelegate<User>
   conversation: PrismaModelDelegate<Conversation>
   message: PrismaModelDelegate<Message>
@@ -86,6 +113,6 @@ export interface PrismaClient {
   analytics: PrismaModelDelegate<Analytics>
   providerConfig: PrismaModelDelegate<any>
   team: PrismaModelDelegate<Team>
-  $transaction: <T>(fn: (tx: PrismaClient) => Promise<T>) => Promise<T>
+  $transaction: <T>(fn: (tx: PrismaClient) => Promise<T>, options?: { timeout?: number; maxWait?: number; isolationLevel?: 'RepeatableRead' }) => Promise<T>
   $queryRaw: (...args: any[]) => Promise<unknown>
 }

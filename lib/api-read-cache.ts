@@ -45,6 +45,7 @@ export const apiReadCacheKey = (route: string, userId: string) =>
 
 export const invalidateApiReadCache = (key: string) => {
   cache.delete(key)
+  inFlightLoads.delete(key)
 }
 
 export const invalidateApiReadCaches = (keys: string[]) => {
@@ -91,14 +92,15 @@ export async function cachedJsonResponse<T>(
 
   try {
     const value = await loadPromise
-    cache.set(key, {
-      value,
-      expiresAt: Date.now() + getTtlMs(),
-    })
+    // A write may invalidate this load while it is in flight. Only the
+    // current load may publish a cache entry or clear its pending marker.
+    if (inFlightLoads.get(key) === loadPromise) {
+      cache.set(key, { value, expiresAt: Date.now() + getTtlMs() })
+    }
     const durationMs = Date.now() - startedAt
     recordCacheResult(route, 'miss', durationMs)
     return buildResponse(value, 'miss')
   } finally {
-    inFlightLoads.delete(key)
+    if (inFlightLoads.get(key) === loadPromise) inFlightLoads.delete(key)
   }
 }

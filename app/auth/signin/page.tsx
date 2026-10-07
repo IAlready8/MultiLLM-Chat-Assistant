@@ -31,7 +31,7 @@ export default function SignInPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<SignInErrors>({})
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const { toast } = useToast()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -226,7 +226,7 @@ export default function SignInPage() {
               )}
             </div>
 
-            <Button className="w-full" type="submit" disabled={loading}>
+            <Button className="w-full" type="submit" disabled={loading || status === 'loading'}>
               {loading ? 'Signing in...' : 'Sign in with password'}
             </Button>
           </form>

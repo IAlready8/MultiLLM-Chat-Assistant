@@ -1,3 +1,4 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
@@ -70,7 +71,8 @@ export const POST = withApiMetrics(async (req: Request) => {
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const body = await req.json()
+  const body = await readApiObject(req)
+  if (body instanceof NextResponse) return body
   const validation = personaSchema.safeParse(body)
 
   if (!validation.success) {

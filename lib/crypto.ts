@@ -105,47 +105,30 @@ export function isValidBase64(str: string): boolean {
   }
 }
 
-// Encrypt text with a key
-export async function encrypt(text: string, key: string): Promise<string> {
-  if (isServer) {
-    const { createCipheriv, randomBytes } = await import("crypto");
-    const keyData = Buffer.from(key.padEnd(32, '0').slice(0, 32), 'utf8');
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", keyData, iv);
-    const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
-    const tag = cipher.getAuthTag();
-    const combined = Buffer.concat([iv, encrypted, tag]);
-    return combined.toString("base64");
-  } else {
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(key.padEnd(32, '0').slice(0, 32));
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['encrypt']
-    );
-    
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encodedText = encoder.encode(text);
-    const encryptedData = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      cryptoKey,
-      encodedText
-    );
-    
-    const encryptedArray = new Uint8Array(iv.length + encryptedData.byteLength);
-    encryptedArray.set(iv);
-    encryptedArray.set(new Uint8Array(encryptedData), iv.length);
-    
-    return btoa(String.fromCharCode(...encryptedArray));
-  }
+async function derivePasswordKey(password: string, salt: Uint8Array) {
+  const subtle = isServer ? (await import('crypto')).webcrypto.subtle : crypto.subtle
+  const material = await subtle.importKey('raw', utf8encode(password) as BufferSource, 'PBKDF2', false, ['deriveBits'])
+  return new Uint8Array(await subtle.deriveBits({ name: 'PBKDF2', salt: salt as BufferSource, iterations: 600_000, hash: 'SHA-256' }, material, 256))
+}
+
+// Versioned password encryption. Provider keys at rest use a separate server key.
+export async function encrypt(text: string, password: string): Promise<string> {
+  const salt = randomBytes(16)
+  const key = await derivePasswordKey(password, salt)
+  return `v3:pbkdf2:${b64encode(salt)}:${await aesGcmEncrypt(key, text)}`
 }
 
 // Decrypt text with a key
 export async function decrypt(encryptedText: string, key: string): Promise<string> {
   try {
+    if (encryptedText.startsWith('v3:pbkdf2:')) {
+      const parts = encryptedText.split(':')
+      if (parts.length !== 6 || !isValidBase64(parts[2])) throw new Error('Invalid encrypted data format')
+      const salt = b64decode(parts[2])
+      if (salt.length !== 16) throw new Error('Invalid salt')
+      return await aesGcmDecrypt(await derivePasswordKey(key, salt), parts.slice(3).join(':'))
+    }
+    // Read-only compatibility for previously downloaded legacy exports.
     // Validate base64 format first
     if (!isValidBase64(encryptedText)) {
       throw new Error('Invalid encrypted data format');

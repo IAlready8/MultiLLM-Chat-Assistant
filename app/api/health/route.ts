@@ -4,8 +4,7 @@ import { NextRequest } from 'next/server'
 import { metrics } from '@/lib/api-logger'
 import { getCacheDiagnostics } from '@/lib/cache'
 import prisma from '@/lib/prisma'
-import { getErrorMessage, isDatabaseUnavailableError } from '@/lib/db-fallback'
-import { getRateLimitDiagnostics } from '@/lib/rate-limit'
+import { getRateLimitDiagnostics, probeRateLimitBackend } from '@/lib/rate-limit'
 import { getReleaseMetadata } from '@/lib/release-metadata'
 import { getSidecarDiagnostics } from '@/lib/sidecar-health'
 
@@ -23,14 +22,13 @@ export async function GET(request: NextRequest) {
   let databaseMessage: string | undefined
   try {
     await prisma.$queryRaw`SELECT 1`
-  } catch (error) {
+  } catch {
     databaseStatus = 'degraded'
-    databaseMessage = isDatabaseUnavailableError(error)
-      ? 'Database unavailable; running with in-memory fallback'
-      : getErrorMessage(error) || 'Database health check failed'
+    databaseMessage = 'Database health check failed'
   }
 
   const rateLimitStart = Date.now()
+  await probeRateLimitBackend()
   const rateLimitDiagnostics = getRateLimitDiagnostics()
   const cacheStart = Date.now()
   const cacheDiagnostics = getCacheDiagnostics()
@@ -101,6 +99,7 @@ export async function GET(request: NextRequest) {
         status: rateLimitDiagnostics.status,
         responseTime: rateLimitResponseTimeMs,
         responseTimeMs: rateLimitResponseTimeMs,
+        scope: rateLimitDiagnostics.scope,
         message: rateLimitDiagnostics.message,
         mode: rateLimitDiagnostics.mode,
       },

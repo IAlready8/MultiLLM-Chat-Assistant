@@ -1,3 +1,4 @@
+import { readApiObject } from '@/lib/api-input'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { TeamService } from '@/services/team-service.db'
@@ -44,7 +45,8 @@ export async function POST(req: Request) {
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
-  const body = await req.json()
+  const body = await readApiObject(req)
+  if (body instanceof NextResponse) return body
   const validation = createTeamSchema.safeParse(body)
 
   if (!validation.success) {

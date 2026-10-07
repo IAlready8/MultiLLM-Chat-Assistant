@@ -1,3 +1,5 @@
+import { getProPrice } from '@/lib/billing-price'
+import { withBillingLock } from '@/lib/billing-lock'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
@@ -19,11 +21,22 @@ const getBaseUrl = () => {
     try {
       return new URL(configured)
     } catch {
-      console.warn('Invalid NEXTAUTH_URL; falling back to http://localhost:3000')
+      console.warn(
+        'Invalid NEXTAUTH_URL; falling back to http://localhost:3000',
+      )
     }
   }
   return new URL('http://localhost:3000')
 }
+
+const ongoingSubscriptionStatuses = new Set([
+  'active',
+  'incomplete',
+  'past_due',
+  'paused',
+  'trialing',
+  'unpaid',
+])
 
 /**
  * POST /api/subscriptions
@@ -41,27 +54,67 @@ export async function POST(req: Request) {
 
   try {
     ensureStripeConfigured('checkout')
+    await getProPrice()
 
-    const stripeCustomerId = await getOrCreateStripeCustomer(user.id, user.email)
+    const stripeCustomerId = await getOrCreateStripeCustomer(
+      user.id,
+      user.email,
+    )
 
     const baseUrl = getBaseUrl()
 
-    // Create the Stripe Checkout session
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: 'subscription',
-      customer: stripeCustomerId,
-      line_items: [
-        {
-          price: STRIPE_PRO_PRICE_ID,
-          quantity: 1,
+    const destination = await withBillingLock(`stripe-customer:${stripeCustomerId}`, async () => {
+      const existingSubscriptions = await stripe.subscriptions.list({
+        customer: stripeCustomerId,
+        status: 'all',
+        limit: 100,
+      })
+      const hasOngoingSubscription = existingSubscriptions.data.some(
+        (subscription) => ongoingSubscriptionStatuses.has(subscription.status),
+      )
+
+      if (hasOngoingSubscription) {
+        const portalSession = await stripe.billingPortal.sessions.create({
+          customer: stripeCustomerId,
+          return_url: new URL('/billing', baseUrl).toString(),
+        })
+
+        return { url: portalSession.url, destination: 'portal' }
+      }
+
+      const openSessions = await stripe.checkout.sessions.list({ customer: stripeCustomerId, status: 'open', limit: 100 })
+      const open = openSessions.data.find(item => item.metadata?.app === 'multi-llm-chat-assistant' && item.metadata?.priceId === STRIPE_PRO_PRICE_ID && item.url && item.expires_at > Math.floor(Date.now() / 1000))
+      if (open) return { url: open.url, destination: 'checkout' }
+
+      // Create the Stripe Checkout session
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        customer: stripeCustomerId,
+        client_reference_id: user.id,
+        line_items: [
+          {
+            price: STRIPE_PRO_PRICE_ID,
+            quantity: 1,
+          },
+        ],
+        subscription_data: {
+          billing_mode: { type: 'flexible' },
+          metadata: {
+            app: 'multi-llm-chat-assistant',
+            tier: 'PRO',
+            userId: user.id,
+          },
         },
-      ],
-      success_url: `${baseUrl.href}billing?success=true`,
-      cancel_url: `${baseUrl.href}billing?canceled=true`,
-      metadata: {
-        userId: user.id,
-      },
+        success_url: new URL('/billing?success=true', baseUrl).toString(),
+        cancel_url: new URL('/billing?canceled=true', baseUrl).toString(),
+        metadata: {
+          app: 'multi-llm-chat-assistant',
+          priceId: STRIPE_PRO_PRICE_ID!,
+          tier: 'PRO',
+          userId: user.id,
+        },
+      }, { idempotencyKey: `checkout:${user.id}:${STRIPE_PRO_PRICE_ID}:${existingSubscriptions.data[0]?.id ?? 'new'}:${Math.floor(Date.now() / 1800000)}` })
+      return { url: session.url, destination: 'checkout' }
     })
 
     try {
@@ -79,7 +132,7 @@ export async function POST(req: Request) {
       })
     }
 
-    return NextResponse.json({ url: session.url })
+    return NextResponse.json(destination)
   } catch (error) {
     if (error instanceof StripeConfigurationError) {
       logger.warn('stripe_checkout_unavailable', {
@@ -89,7 +142,7 @@ export async function POST(req: Request) {
       })
       return NextResponse.json(
         { error: getStripeConfigurationUserMessage('checkout') },
-        { status: 503 }
+        { status: 503 },
       )
     }
     logger.error('stripe_checkout_failed', {
@@ -99,7 +152,7 @@ export async function POST(req: Request) {
     })
     return NextResponse.json(
       { error: 'Failed to create subscription session' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

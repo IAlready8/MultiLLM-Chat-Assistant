@@ -1,3 +1,4 @@
+import { providerSignal } from './util'
 /**
  * lib/providers/mistral.ts
  *
@@ -103,7 +104,7 @@ export const mistralAdapter: ProviderAdapter = {
       method: 'POST',
       headers: buildHeaders(config),
       body: JSON.stringify(buildPayload(request, false)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('mistral', response, false)
@@ -141,7 +142,7 @@ export const mistralAdapter: ProviderAdapter = {
       method: 'POST',
       headers: buildHeaders(config),
       body: JSON.stringify(buildPayload(request, true)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: providerSignal(request.signal, TIMEOUT_MS),
     })
 
     if (!response.ok) await throwUpstreamError('mistral', response, true)
@@ -150,6 +151,7 @@ export const mistralAdapter: ProviderAdapter = {
     yield* parseSSEStream(
       body,
       (parsed) => parsed.choices?.[0]?.delta?.content,
+      request.onUsage,
     )
   },
 }

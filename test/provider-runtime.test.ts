@@ -109,7 +109,7 @@ describe('classifyProviderError', () => {
     expect(result).toEqual({
       status: 400,
       code: 'PROVIDER_REQUEST_ERROR',
-      error: 'HTTP 400: Invalid model',
+      error: 'Provider rejected the request. Check the selected model and parameters.',
     })
   })
 
@@ -118,7 +118,7 @@ describe('classifyProviderError', () => {
     expect(result).toEqual({
       status: 500,
       code: 'INTERNAL_ERROR',
-      error: 'Something went wrong',
+      error: 'Unable to complete the provider request',
     })
   })
 

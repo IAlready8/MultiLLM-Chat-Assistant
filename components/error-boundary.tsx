@@ -1,10 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertTriangle, RefreshCw, Home, Bug } from 'lucide-react'
+import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
 import { errorManager, type AppError, createErrorContext } from '@/lib/error-system'
 
 interface Props {
@@ -137,34 +138,6 @@ export class ErrorBoundary extends Component<Props, State> {
     }))
   }
 
-  private handleReportError = async () => {
-    if (this.state.error && this.state.errorId) {
-      try {
-        // Create error report
-        const report = {
-          errorId: this.state.errorId,
-          userAgent: navigator.userAgent,
-          url: window.location.href,
-          timestamp: new Date().toISOString(),
-          userDescription: '', // Could be collected via a form
-        }
-
-        // Send report to your error reporting service
-        console.log('Error report:', report)
-        
-        // Show success message
-        alert('Error report sent successfully. Thank you for helping us improve!')
-      } catch (reportError) {
-        console.error('Failed to send error report:', reportError)
-        alert('Failed to send error report. Please try again later.')
-      }
-    }
-  }
-
-  private navigateHome = () => {
-    window.location.href = '/'
-  }
-
   render() {
     if (this.state.hasError) {
       // Show custom fallback if provided
@@ -226,16 +199,13 @@ export class ErrorBoundary extends Component<Props, State> {
               </Button>
               
               {this.props.level === 'page' && (
-                <Button onClick={this.navigateHome} variant="outline" size="sm">
-                  <Home className="h-4 w-4 mr-2" />
-                  Go Home
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/" onClick={this.handleManualRetry}>
+                    <Home className="h-4 w-4 mr-2" />
+                    Go Home
+                  </Link>
                 </Button>
               )}
-              
-              <Button onClick={this.handleReportError} variant="outline" size="sm">
-                <Bug className="h-4 w-4 mr-2" />
-                Report Error
-              </Button>
             </div>
 
             {this.state.recoveryAttempts > 0 && (

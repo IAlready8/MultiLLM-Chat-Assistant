@@ -42,12 +42,19 @@ describe('mandatory-auth routing', () => {
     '/api/auth/providers',
     '/api/health',
     '/api/webhooks/stripe',
+    '/api/cron/generations',
   ])('keeps %s public', async (path) => {
     const response = await middleware(
       new NextRequest(`http://localhost:3000${path}`),
     )
 
     expect(response.status).toBe(200)
+    expect(mockDecode).not.toHaveBeenCalled()
+  })
+
+  it('rejects cross-origin mutations before session processing', async () => {
+    const response = await middleware(new NextRequest('http://localhost:3000/api/config', { method: 'POST', headers: { origin: 'https://attacker.example' } }))
+    expect(response.status).toBe(403)
     expect(mockDecode).not.toHaveBeenCalled()
   })
 

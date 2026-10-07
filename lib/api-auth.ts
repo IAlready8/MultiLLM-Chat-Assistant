@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { resolveAuthTeamRole } from '@/lib/auth-roles'
+import prisma from '@/lib/prisma'
 import type { User } from '@/types/prisma'
 
 type RoleAwareUser = User & {
@@ -33,8 +35,22 @@ export async function getAuthenticatedUser(): Promise<
   try {
     const session = await auth()
     if (session?.user?.id) {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { id: true, name: true, email: true, image: true },
+      })
+      // JWTs outlive deleted accounts and changes to the admin allowlist.
+      // Every protected operation must use the current account identity.
+      if (!currentUser) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
       sessionErrorLogged = false
-      return { user: session.user as unknown as User }
+      return {
+        user: {
+          ...currentUser,
+          role: resolveAuthTeamRole(currentUser.email),
+        } as unknown as User,
+      }
     }
 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -52,7 +68,7 @@ export async function getAuthenticatedUser(): Promise<
 
     if (!sessionErrorLogged) {
       sessionErrorLogged = true
-      console.error('Failed to read session:', error)
+      console.error('Failed to validate authenticated account')
     }
 
     return NextResponse.json({ error: 'Auth unavailable' }, { status: 503 })

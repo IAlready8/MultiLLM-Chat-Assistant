@@ -58,6 +58,8 @@ describe('export-import-service secret handling', () => {
       ],
       settings: {
         theme: 'light',
+        apiKey_openai: 'must-not-restore',
+        unrecognized: 'must-not-restore',
       },
       apiKeys: {
         apiKey_openai: 'sk-plaintext-legacy-key',
@@ -72,5 +74,12 @@ describe('export-import-service secret handling', () => {
       { messages: [{ role: 'assistant', content: 'hi' }] },
     )
     expect(localStorage.getItem('apiKey_openai') ?? null).toBeNull()
+    expect(localStorage.getItem('unrecognized') ?? null).toBeNull()
+  })
+
+  it('requires a strong export password and rejects oversized imports before processing', async () => {
+    await expect(exportAllData('short')).rejects.toThrow(/12 characters/)
+    await expect(importAllData('x'.repeat(7_000_000), 'password-123')).rejects.toThrow(/import/i)
+    expect(mockSaveConversation).not.toHaveBeenCalled()
   })
 })
