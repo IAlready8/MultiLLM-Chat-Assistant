@@ -146,6 +146,7 @@
     "mysql2": "^3.22.0",
     "deepmerge-ts": "^8.0.0",
     "tinypool": "^2.1.2",
-    "@babel/core": "^7.29.1"
+    "@babel/core": "^7.29.1",
+    "undici": "6.28.0"
   }
 }
