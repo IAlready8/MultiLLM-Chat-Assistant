@@ -1,4 +1,3 @@
-import { readApiObject } from '@/lib/api-input'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
@@ -25,6 +24,8 @@ import {
   PROVIDER_ENDPOINT_ERROR_CODE,
   ProviderEndpointError,
 } from '@/lib/provider-endpoint'
+import { recordAnalyticsEvent } from '@/services/analytics-service'
+import { mergeAttributionFromCookieHeader } from '@/lib/acquisition-attribution'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
@@ -137,8 +138,7 @@ export async function POST(request: NextRequest) {
   const { user } = authCheck
 
   try {
-    const body = await readApiObject(request)
-  if (body instanceof NextResponse) return body
+    const body = await request.json()
     const { provider: providerRaw, config } = body
 
     if (!providerRaw || typeof providerRaw !== 'string') {
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const apiKey = 'apiKey' in config && typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
+    const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
     if (!apiKey && isProviderApiKeyRequired(provider)) {
       return NextResponse.json(
         {
@@ -197,6 +197,22 @@ export async function POST(request: NextRequest) {
 
     await storeUserApiKey(user.id, provider, apiKey, settings)
     invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
+
+    try {
+      await recordAnalyticsEvent({
+        event: 'provider_configured',
+        userId: user.id,
+        payload: mergeAttributionFromCookieHeader(
+          { provider },
+          request.headers.get('cookie')
+        ),
+      })
+    } catch (analyticsError) {
+      console.warn(
+        'Failed to record analytics event for provider configuration:',
+        analyticsError
+      )
+    }
 
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
@@ -224,8 +240,7 @@ export async function PUT(request: NextRequest) {
   const { user } = authCheck
 
   try {
-    const body = await readApiObject(request)
-  if (body instanceof NextResponse) return body
+    const body = await request.json()
     const { provider: providerRaw, config } = body
 
     if (!providerRaw || typeof providerRaw !== 'string') {
@@ -270,7 +285,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Validate API key format if provided
-    const apiKey = 'apiKey' in config && typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
+    const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : ''
     if (
       (!apiKey || apiKey.length < 10) &&
       isProviderApiKeyRequired(provider)
@@ -347,6 +362,22 @@ export async function PUT(request: NextRequest) {
     if (connectionTest.success) {
       await storeUserApiKey(user.id, provider, apiKey, settings)
       invalidateApiReadCache(apiReadCacheKey('/api/provider-configs', user.id))
+
+      try {
+        await recordAnalyticsEvent({
+          event: 'provider_configured',
+          userId: user.id,
+          payload: mergeAttributionFromCookieHeader(
+            { provider },
+            request.headers.get('cookie')
+          ),
+        })
+      } catch (analyticsError) {
+        console.warn(
+          'Failed to record analytics event for provider configuration:',
+          analyticsError
+        )
+      }
     }
 
     return NextResponse.json(
