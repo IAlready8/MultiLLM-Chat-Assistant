@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma'
 import { getRateLimitDiagnostics, probeRateLimitBackend } from '@/lib/rate-limit'
 import { getReleaseMetadata } from '@/lib/release-metadata'
 import { getSidecarDiagnostics } from '@/lib/sidecar-health'
+import { providerRegistry, isProviderOperational } from '@/lib/provider-registry'
 
 // Health check API route — includes request metrics snapshot
 export async function GET(request: NextRequest) {
@@ -35,6 +36,20 @@ export async function GET(request: NextRequest) {
 
   const sidecarStart = Date.now()
   const sidecarDiagnostics = await getSidecarDiagnostics()
+
+  const providerStart = Date.now()
+  const operationalProviders = providerRegistry.filter((p) => isProviderOperational(p.id))
+  const providerDiagnostics = {
+    status: operationalProviders.length > 0 ? 'ok' : 'degraded',
+    responseTime: Date.now() - providerStart,
+    responseTimeMs: Date.now() - providerStart,
+    message: `${operationalProviders.length} of ${providerRegistry.length} providers operational`,
+    providers: operationalProviders.map((p) => ({
+      id: p.id,
+      name: p.name,
+      requiresApiKey: p.requiresApiKey,
+    })),
+  }
   const databaseResponseTimeMs = Date.now() - dbStart
   const cacheResponseTimeMs = Date.now() - cacheStart
   const rateLimitResponseTimeMs = Date.now() - rateLimitStart
@@ -44,7 +59,8 @@ export async function GET(request: NextRequest) {
     databaseStatus === 'connected' &&
     cacheDiagnostics.status !== 'degraded' &&
     rateLimitDiagnostics.status !== 'degraded' &&
-    sidecarDiagnostics.status !== 'degraded'
+    sidecarDiagnostics.status !== 'degraded' &&
+    providerDiagnostics.status !== 'degraded'
       ? 'healthy'
       : 'degraded'
 
@@ -53,7 +69,8 @@ export async function GET(request: NextRequest) {
     cacheDiagnostics.status === 'degraded' ? 'cache' : null,
     rateLimitDiagnostics.status === 'degraded' ? 'rateLimit' : null,
     sidecarDiagnostics.status === 'degraded' ? 'sidecar' : null,
-  ].filter((value): value is 'database' | 'cache' | 'rateLimit' | 'sidecar' =>
+    providerDiagnostics.status === 'degraded' ? 'providers' : null,
+  ].filter((value): value is 'database' | 'cache' | 'rateLimit' | 'sidecar' | 'providers' =>
     value !== null
   )
 
@@ -108,6 +125,13 @@ export async function GET(request: NextRequest) {
         responseTime: sidecarResponseTimeMs,
         responseTimeMs: sidecarResponseTimeMs,
         message: sidecarDiagnostics.message,
+      },
+      providers: {
+        status: providerDiagnostics.status,
+        responseTime: providerDiagnostics.responseTimeMs,
+        responseTimeMs: providerDiagnostics.responseTimeMs,
+        message: providerDiagnostics.message,
+        providers: providerDiagnostics.providers,
       },
       api: {
         status: 'responsive',
