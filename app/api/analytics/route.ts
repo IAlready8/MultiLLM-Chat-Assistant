@@ -12,6 +12,7 @@ import {
   recordAnalyticsEvent,
 } from '@/services/analytics-service'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
+import { estimateCost } from '@/lib/provider-pricing'
 
 type Timeframe = '24h' | '7d' | '30d'
 
@@ -21,6 +22,8 @@ type ProviderUsage = {
   tokens: number
   errors: number
   avgResponseTime: number
+  estimatedCostUsd: number | null
+  estimatedCostBasis: string | null
 }
 
 type UsageTrend = {
@@ -147,7 +150,11 @@ const getSource = (request: Request): AnalyticsSource => {
 const buildProviderUsage = (events: ParsedAnalyticsEvent[]): ProviderUsage[] => {
   const usage = new Map<
     string,
-    ProviderUsage & { responseSamples: number; responseSum: number }
+    ProviderUsage & {
+      responseSamples: number
+      responseSum: number
+      providerId: string
+    }
   >()
 
   for (const event of events) {
@@ -158,10 +165,13 @@ const buildProviderUsage = (events: ParsedAnalyticsEvent[]): ProviderUsage[] => 
     const provider = String(event.payload.provider || 'unknown').toLowerCase()
     const existing = usage.get(provider) || {
       provider: providerLabel(provider),
+      providerId: provider,
       requests: 0,
       tokens: 0,
       errors: 0,
       avgResponseTime: 0,
+      estimatedCostUsd: null,
+      estimatedCostBasis: null,
       responseSamples: 0,
       responseSum: 0,
     }
@@ -182,11 +192,17 @@ const buildProviderUsage = (events: ParsedAnalyticsEvent[]): ProviderUsage[] => 
   }
 
   return Array.from(usage.values())
-    .map(({ responseSamples, responseSum, ...item }) => ({
-      ...item,
-      avgResponseTime:
-        responseSamples > 0 ? Math.round(responseSum / responseSamples) : 0,
-    }))
+    .map(({ responseSamples, responseSum, providerId, ...item }) => {
+      const cost = estimateCost(providerId, item.tokens)
+      return {
+        ...item,
+        avgResponseTime:
+          responseSamples > 0 ? Math.round(responseSum / responseSamples) : 0,
+        estimatedCostUsd: cost !== null ? Math.round(cost * 100) / 100 : null,
+        estimatedCostBasis:
+          cost !== null ? 'Blended estimate, not for billing' : null,
+      }
+    })
     .sort((a, b) => b.requests - a.requests)
 }
 
