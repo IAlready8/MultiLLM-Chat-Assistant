@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma'
 import { z } from 'zod'
 
 const configSchema = z.object({
-  key: z.string().min(1).max(200).optional(),
+  token: z.string().min(1).max(200).optional(),
   enabled: z.boolean(),
 })
 
@@ -66,16 +66,16 @@ export async function PUT(request: Request) {
     )
   }
 
-  const { key: apiKey, enabled } = parsed.data
+  const { token, enabled } = parsed.data
 
   try {
     // Load existing to preserve key if not provided
     const configs = await getUserProviderConfigs(user.id)
     const existing = configs.find((c) => c.provider === 'jev')
 
-    if (apiKey) {
+    if (token) {
       // Store new key with enabled flag
-      await storeUserApiKey(user.id, 'jev', apiKey, {
+      await storeUserApiKey(user.id, 'jev', token, {
         jevJudgingEnabled: enabled,
       })
     } else if (existing) {
