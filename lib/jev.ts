@@ -57,26 +57,34 @@ export async function jevChoose(
 ): Promise<JevChoiceResult> {
   const state = buildState(request)
 
-  const response = await fetch(`${JEV_API_BASE}/systemone`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: JEV_MODEL,
-      state,
-      questions: [
-        {
-          type: 'choice',
-          id: 'best_response',
-          question: request.question,
-          options: request.options.map((o) => o.id),
-        },
-      ],
-    }),
-    signal: AbortSignal.timeout(30_000),
-  })
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 30_000)
+
+  let response: Response
+  try {
+    response = await fetch(`${JEV_API_BASE}/systemone`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: JEV_MODEL,
+        state,
+        questions: [
+          {
+            type: 'choice',
+            id: 'best_response',
+            question: request.question,
+            options: request.options.map((o) => o.id),
+          },
+        ],
+      }),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (!response.ok) {
     const status = response.status
