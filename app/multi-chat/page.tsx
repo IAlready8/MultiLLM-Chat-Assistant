@@ -105,6 +105,10 @@ export default function MultiChatPage() {
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null)
   const [editingConversationTitle, setEditingConversationTitle] = useState('')
+  // Draft term in the input vs the term the current list was fetched with.
+  const [conversationSearch, setConversationSearch] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const appliedSearchRef = useRef('')
   const [isLoadingConversationList, setIsLoadingConversationList] = useState(false)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const [olderMessagesCursor, setOlderMessagesCursor] = useState<string | null>(null)
@@ -170,11 +174,21 @@ export default function MultiChatPage() {
     }
   }, [toast])
 
+  /**
+   * Loads one page of history, honouring any applied search term.
+   *
+   * The applied term is read from a ref rather than from state so this
+   * callback keeps a stable identity. Everything that already refreshed the
+   * list (initial load, save, rename, delete, Load more) therefore keeps
+   * working untouched, and each of those refreshes stays inside the active
+   * filter instead of silently dropping back to the full list.
+   */
   const refreshConversationList = useCallback(
-    async (options?: { silent?: boolean; cursor?: string }) => {
+    async (options?: { silent?: boolean; cursor?: string; search?: string }) => {
+      const search = options?.search !== undefined ? options.search : appliedSearchRef.current
       try {
         setIsLoadingConversationList(true)
-        const page = await apiClient.getConversationPage('all', options?.cursor)
+        const page = await apiClient.getConversationPage('all', options?.cursor, search)
         setConversationList(previous => options?.cursor ? Array.from(new Map([...previous, ...page.items].map(item => [item.id, item])).values()) : page.items)
         setHistoryCursor(page.nextCursor)
         setHistoryError(null)
@@ -196,6 +210,23 @@ export default function MultiChatPage() {
     },
     [toast]
   )
+
+  /** Applies a term and restarts paging from the newest match. */
+  const applyConversationSearch = useCallback(
+    async (term: string) => {
+      const normalized = term.replace(/\s+/g, ' ').trim()
+      appliedSearchRef.current = normalized
+      setAppliedSearch(normalized)
+      setHistoryCursor(null)
+      await refreshConversationList({ search: normalized, silent: true })
+    },
+    [refreshConversationList]
+  )
+
+  const clearConversationSearch = useCallback(async () => {
+    setConversationSearch('')
+    await applyConversationSearch('')
+  }, [applyConversationSearch])
 
   const hydrateConversationMessages = (conversation: {
     id: string
@@ -777,16 +808,68 @@ export default function MultiChatPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">
-                Recent Conversations ({conversationList.length})
+                {appliedSearch
+                  ? `Search Results (${conversationList.length})`
+                  : `Recent Conversations (${conversationList.length})`}
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {/*
+                Search runs server-side across titles and message bodies, so a
+                match beyond the loaded page is still found. Submitting
+                restarts paging from the newest match.
+              */}
+              <form
+                className="mb-3 flex items-center gap-2"
+                onSubmit={event => {
+                  event.preventDefault()
+                  void applyConversationSearch(conversationSearch)
+                }}
+                role="search"
+              >
+                <Input
+                  type="search"
+                  value={conversationSearch}
+                  onChange={event => setConversationSearch(event.target.value)}
+                  placeholder="Search history"
+                  aria-label="Search conversation history"
+                  maxLength={128}
+                  className="h-7 text-xs"
+                  disabled={isLoadingConversationList}
+                />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={isLoadingConversationList}
+                >
+                  Search
+                </Button>
+                {appliedSearch && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => void clearConversationSearch()}
+                    disabled={isLoadingConversationList}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </form>
+
               <div className="space-y-2 max-h-[280px] overflow-y-auto">
                 {isLoadingConversationList && conversationList.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Loading conversations...</p>
+                  <p className="text-xs text-muted-foreground">
+                    {appliedSearch ? 'Searching...' : 'Loading conversations...'}
+                  </p>
                 ) : conversationList.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    No saved conversations yet.
+                    {appliedSearch
+                      ? `No conversations match "${appliedSearch}".`
+                      : 'No saved conversations yet.'}
                   </p>
                 ) : (
                   conversationList.map(conversation => (

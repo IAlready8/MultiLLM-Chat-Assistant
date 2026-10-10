@@ -26,6 +26,14 @@ const fallbackConversations: Map<string, Map<string, ConversationWithMessages>> 
 
 const db = createDbAvailabilityTracker()
 
+/**
+ * Ceiling on conversations resolved through a message-content search.
+ *
+ * Bounds the matched-id set so a broad term on a large history stays a
+ * predictable two-query lookup rather than an unbounded fan-out.
+ */
+export const MAX_SEARCH_MATCH_CONVERSATIONS = 500
+
 const getFallbackUserStore = (userId: string) =>
   getOrCreateUserStore(fallbackConversations, userId)
 
@@ -77,20 +85,74 @@ const countWeeklySavedBriefComparisonFallbackConversations = (
  * replacing the old client-side IndexedDB logic.
  */
 export const ConversationService = {
+  /**
+   * One keyset-paginated page of a user's conversations, newest first.
+   *
+   * With `page.search` set, a conversation matches when the term appears in
+   * its title or in any of its messages. Both arms are case-insensitive
+   * substring matches passed to Prisma as parameters, never interpolated into
+   * SQL. The workspace title prefix and the `updatedAt`/`id` keyset are
+   * applied identically in both modes, so paging through search results is
+   * stable and cannot drift against the unsearched listing.
+   *
+   * The message arm resolves to conversation ids first, under
+   * `MAX_SEARCH_MATCH_CONVERSATIONS`, rather than joining in one query. That
+   * keeps the matched-id set bounded on a large history instead of letting a
+   * broad term fan out across every message a user owns.
+   *
+   * Scaling note: a substring match cannot use a btree index. For histories
+   * well beyond this cap the follow-up is a `pg_trgm` GIN index on
+   * `Message.content`, which needs `CREATE EXTENSION` privileges and is
+   * therefore deliberately not introduced here.
+   */
   async getConversationPage(userId: string, page: ReturnType<typeof parseConversationPage>) {
     const date = page.cursor ? new Date(page.cursor.updatedAt) : undefined
+    const scope = {
+      userId,
+      ...(page.prefix ? { title: { startsWith: page.prefix } } : {}),
+      ...(page.cursor ? { OR: [{ updatedAt: { lt: date } }, { updatedAt: date, id: { lt: page.cursor.id } }] } : {}),
+    }
+
+    let where: Record<string, unknown> = scope
+
+    if (page.search) {
+      const matchedByMessage = (await prisma.message.findMany({
+        where: {
+          content: { contains: page.search, mode: 'insensitive' },
+          conversation: { userId },
+        },
+        distinct: ['conversationId'],
+        select: { conversationId: true },
+        take: MAX_SEARCH_MATCH_CONVERSATIONS,
+      })) as Array<{ conversationId: string }>
+
+      const conversationIds = matchedByMessage.map(row => row.conversationId)
+
+      where = {
+        ...scope,
+        AND: [
+          {
+            OR: [
+              { title: { contains: page.search, mode: 'insensitive' } },
+              ...(conversationIds.length ? [{ id: { in: conversationIds } }] : []),
+            ],
+          },
+        ],
+      }
+    }
+
     const items = await prisma.conversation.findMany({
-      where: {
-        userId,
-        ...(page.prefix ? { title: { startsWith: page.prefix } } : {}),
-        ...(page.cursor ? { OR: [{ updatedAt: { lt: date } }, { updatedAt: date, id: { lt: page.cursor.id } }] } : {}),
-      },
+      where,
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take: page.limit + 1,
     })
     const more = items.length > page.limit
     const visible = items.slice(0, page.limit)
-    return { items: visible, nextCursor: more ? conversationCursor(visible[visible.length - 1]) : null }
+    return {
+      items: visible,
+      nextCursor: more ? conversationCursor(visible[visible.length - 1]) : null,
+      ...(page.search ? { search: page.search } : {}),
+    }
   },
   async getComparisonReadyConversationCountByUserId(
     userId: string
