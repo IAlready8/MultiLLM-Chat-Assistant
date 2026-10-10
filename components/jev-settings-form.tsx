@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { Scale } from 'lucide-react'
@@ -152,10 +151,12 @@ export function JevSettingsForm() {
               Judging is always opt-in per click, never automatic.
             </p>
           </div>
-          <Switch
+          <input
             id="jev-enabled"
+            type="checkbox"
             checked={enabled}
-            onCheckedChange={setEnabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            className="h-5 w-5 rounded border-gray-300"
           />
         </div>
 
