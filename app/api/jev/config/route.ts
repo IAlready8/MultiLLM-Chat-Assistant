@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { storeUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service'
+import prisma from '@/lib/prisma'
 import { z } from 'zod'
 
 const configSchema = z.object({
@@ -77,8 +78,6 @@ export async function PUT(request: Request) {
     const configs = await getUserProviderConfigs(user.id)
     const existing = configs.find((c) => c.provider === 'jev')
 
-    const keyToStore = apiKey ?? (existing?.apiKey ? 'PRESERVE' : null)
-
     if (apiKey) {
       // Store new key with enabled flag
       await storeUserApiKey(user.id, 'jev', apiKey, {
@@ -86,9 +85,6 @@ export async function PUT(request: Request) {
       })
     } else if (existing) {
       // Update only the enabled flag, preserve existing key
-      // We need to re-store with the existing encrypted key
-      // For simplicity, use prisma directly to update settings
-      const { prisma } = await import('@/lib/prisma')
       const settings = existing.settings ? JSON.parse(existing.settings) : {}
       settings.jevJudgingEnabled = enabled
       await prisma.providerConfig.update({
