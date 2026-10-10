@@ -26,13 +26,8 @@ export async function GET() {
       return NextResponse.json({ configured: false, enabled: false })
     }
 
-    let enabled = false
-    try {
-      const settings = jev.settings ? JSON.parse(jev.settings) : {}
-      enabled = settings.jevJudgingEnabled === true
-    } catch {
-      enabled = false
-    }
+    const settings = jev.settings ?? {}
+    const enabled = settings.jevJudgingEnabled === true
 
     return NextResponse.json({
       configured: !!jev.apiKey,
@@ -85,8 +80,7 @@ export async function PUT(request: Request) {
       })
     } else if (existing) {
       // Update only the enabled flag, preserve existing key
-      const settings = existing.settings ? JSON.parse(existing.settings) : {}
-      settings.jevJudgingEnabled = enabled
+      const settings = { ...(existing.settings ?? {}), jevJudgingEnabled: enabled }
       await prisma.providerConfig.update({
         where: { userId_provider: { userId: user.id, provider: 'jev' } },
         data: { settings: JSON.stringify(settings), updatedAt: new Date() },
