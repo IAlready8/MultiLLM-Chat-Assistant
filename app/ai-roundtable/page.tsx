@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Bot, Play, Plus, RotateCcw, Square, Target, Trash2, X } from 'lucide-react'
+import { Bot, Play, Plus, RotateCcw, Scale, Square, Target, Trash2, X } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import { readChatStream } from '@/services/stream-client'
 import { apiClient } from '@/lib/api-client'
@@ -211,7 +211,23 @@ export default function AIRoundtablePage() {
   const [configuredProviders, setConfiguredProviders] = useState<string[]>([])
   const [providersLoaded, setProvidersLoaded] = useState(false)
   const [statusMessage, setStatusMessage] = useState<StatusMessage | null>(null)
+  const [jevEnabled, setJevEnabled] = useState(false)
+  const [isJudging, setIsJudging] = useState(false)
+  const [judgeResult, setJudgeResult] = useState<{
+    winnerLabel: string
+    confidence: number
+    probabilities: Record<string, number>
+  } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    fetch('/api/jev/config')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setJevEnabled(data.enabled === true)
+      })
+      .catch(() => {})
+  }, [])
   const abortControllerRef = useRef<AbortController | null>(null)
   const isRunningRef = useRef(false)
   const isBusy = isRunning || isLoadingConversation
@@ -479,6 +495,59 @@ export default function AIRoundtablePage() {
         variant: 'destructive'
       })
       return null
+    }
+  }
+
+  const judgeWithJev = async () => {
+    const agentMessages = messages.filter((m) => m.kind === 'agent' && m.content.trim())
+    if (agentMessages.length < 2) {
+      setStatusMessage({ type: 'error', text: 'Need at least 2 agent responses to judge.' })
+      return
+    }
+
+    // Get the original goal/prompt (first user message or goal)
+    const goalMessage = messages.find((m) => m.kind === 'goal')
+    const state = goalMessage?.content || 'Roundtable discussion'
+
+    setIsJudging(true)
+    setJudgeResult(null)
+    try {
+      const res = await fetch('/api/jev/judge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          state,
+          question: 'Which agent response is the best?',
+          options: agentMessages.map((m) => ({
+            id: m.id,
+            label: m.agentName || 'Agent',
+            content: m.content,
+          })),
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Judging failed')
+      }
+
+      const result = await res.json()
+      setJudgeResult({
+        winnerLabel: result.winnerLabel,
+        confidence: result.confidence,
+        probabilities: result.probabilities,
+      })
+      setStatusMessage({
+        type: 'success',
+        text: `Jev judged: "${result.winnerLabel}" wins with ${(result.confidence * 100).toFixed(0)}% confidence.`,
+      })
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Jev judging failed',
+      })
+    } finally {
+      setIsJudging(false)
     }
   }
 
@@ -797,7 +866,7 @@ export default function AIRoundtablePage() {
                   {statusMessage.text}
                 </div>
               )}
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button onClick={startRoundtable} disabled={isBusy}>
                   <Play className="h-4 w-4 mr-2" />
                   Start
@@ -806,7 +875,27 @@ export default function AIRoundtablePage() {
                   <Square className="h-4 w-4 mr-2" />
                   Stop
                 </Button>
+                {jevEnabled && (
+                  <Button
+                    variant="secondary"
+                    onClick={judgeWithJev}
+                    disabled={isJudging || isBusy}
+                    title="Use Jev decision model to pick the best response (opt-in)"
+                  >
+                    <Scale className="h-4 w-4 mr-2" />
+                    {isJudging ? 'Judging...' : 'Judge with Jev'}
+                  </Button>
+                )}
               </div>
+              {judgeResult && (
+                <div className="mt-3 p-3 rounded-lg bg-muted text-sm">
+                  <div className="font-medium">Jev Verdict</div>
+                  <div>
+                    Winner: <span className="font-semibold">{judgeResult.winnerLabel}</span>
+                    {' '}({(judgeResult.confidence * 100).toFixed(0)}% confidence)
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
