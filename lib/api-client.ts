@@ -118,9 +118,16 @@ export const apiClient = {
   },
 
   // --- Conversation API Calls ---
-  async getConversationPage(workspace = 'all', cursor?: string): Promise<{ items: Conversation[]; nextCursor: string | null }> {
+  /**
+   * One page of conversation history. `search` matches the title or any
+   * message body server-side; the keyset cursor applies in both modes, so
+   * paging a filtered result set works the same as paging the full list.
+   */
+  async getConversationPage(workspace = 'all', cursor?: string, search?: string): Promise<{ items: Conversation[]; nextCursor: string | null; search?: string }> {
     const query = new URLSearchParams({ limit: '30', workspace })
     if (cursor) query.set('cursor', cursor)
+    const term = search?.trim()
+    if (term) query.set('q', term)
     return handleResponse(await fetch(`/api/conversations?${query}`, { cache: 'no-store' }))
   },
   async getConversations(): Promise<Conversation[]> {

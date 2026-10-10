@@ -1,5 +1,11 @@
 import { lookup as dnsLookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
+import {
+  resolveProviderResilienceConfig,
+  withProviderResilience,
+  type ProviderResilienceConfig,
+  type ResilientFetchHooks,
+} from '@/lib/provider-resilience'
 
 export const PROVIDER_ENDPOINT_ERROR_CODE = 'PROVIDER_ENDPOINT_BLOCKED'
 
@@ -356,6 +362,16 @@ type ProviderFetchOptions = {
   baseUrl?: unknown
   fetchImpl?: typeof fetch
   lookup?: ProviderEndpointLookup
+  /**
+   * Overrides the ambient retry/breaker configuration. Supplied by
+   * `test/provider-resilience.test.ts`; request paths leave it unset so the
+   * environment-derived defaults apply.
+   */
+  resilience?: ProviderResilienceConfig
+  /** Diagnostics and injectable timers for the resilience layer. */
+  resilienceHooks?: ResilientFetchHooks
+  /** Caller cancellation, so a pending backoff wait aborts promptly. */
+  signal?: AbortSignal
 }
 
 function isRedirect(status: number): boolean {
@@ -390,24 +406,39 @@ export async function providerFetch(
   }
 
   const fetchImpl = options.fetchImpl ?? fetch
-  const response = await fetchImpl(target.toString(), {
-    ...init,
-    redirect: 'error',
-  })
 
-  if (isRedirect(response.status)) {
-    const location = response.headers?.get('location')
-    if (location) {
-      let redirectTarget: URL
-      try {
-        redirectTarget = new URL(location, target)
-      } catch {
-        return rejectEndpoint()
+  // One upstream dial plus the redirect guard. The body is never read here,
+  // which is what makes a retry of this unit safe for streaming calls: at
+  // retry time no provider bytes have reached the client. See
+  // `lib/provider-resilience.ts` for the full retry contract.
+  const attempt = async (): Promise<Response> => {
+    const response = await fetchImpl(target.toString(), {
+      ...init,
+      redirect: 'error',
+    })
+
+    if (isRedirect(response.status)) {
+      const location = response.headers?.get('location')
+      if (location) {
+        let redirectTarget: URL
+        try {
+          redirectTarget = new URL(location, target)
+        } catch {
+          return rejectEndpoint()
+        }
+        await validateProviderTarget(provider, redirectTarget, baseUrl, lookup)
       }
-      await validateProviderTarget(provider, redirectTarget, baseUrl, lookup)
+      rejectEndpoint('Provider redirects are not allowed.')
     }
-    rejectEndpoint('Provider redirects are not allowed.')
+
+    return response
   }
 
-  return response
+  return withProviderResilience(
+    provider,
+    attempt,
+    options.resilience ?? resolveProviderResilienceConfig(),
+    options.resilienceHooks ?? {},
+    options.signal ?? (init.signal as AbortSignal | undefined) ?? undefined,
+  )
 }

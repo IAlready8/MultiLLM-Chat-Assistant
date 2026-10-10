@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Provider resilience layer at the single outbound provider chokepoint
+  (`lib/provider-resilience.ts`, wired into `providerFetch`): bounded retry
+  with exponential backoff and full jitter for transient upstream failures
+  only, `Retry-After` honouring, and a per-provider circuit breaker with
+  closed, open and half-open states. Retry classes are restricted to 429,
+  408, 425 and 5xx plus transport faults; auth, validation and endpoint
+  policy rejections are never repeated, and a user credential error cannot
+  trip a breaker shared by other users of that provider. Configured through
+  `LLM_FETCH_RETRIES`, `LLM_FETCH_RETRY_BASE_MS`, `LLM_FETCH_RETRY_MAX_MS`,
+  `PROVIDER_BREAKER_ENABLED`, `PROVIDER_BREAKER_THRESHOLD` and
+  `PROVIDER_BREAKER_OPEN_MS`. Defaults are inert under `NODE_ENV=test`.
+- Per-model cost accounting (`lib/model-pricing.ts`,
+  `services/generation-cost-service.ts`): input and output tokens priced
+  separately per model, aggregated from durable `Generation` rows rather
+  than from best-effort analytics event payloads. Surfaced additively as
+  `costBreakdown` on `/api/analytics` and as a "Recorded Spend by Model"
+  panel on `/analytics`, carrying the provider-reported share of counted
+  tokens so the figure is auditable.
+- Server-side conversation history search: an additive `q` parameter on
+  `GET /api/conversations` matching conversation titles and message bodies,
+  with the existing keyset pagination and workspace filter preserved, plus a
+  search field in the multi-chat history sidebar.
+- `scripts/package-release.sh`: macOS zsh source packager that builds a
+  verified, SHA-256 checksummed archive, never overwrites an existing
+  artifact, and excludes secrets, dependency trees, build output and caches.
+
+### Changed
+
+- `classifyProviderError` maps an open circuit to `503
+  PROVIDER_UNAVAILABLE` with a `Retry-After` hint, so clients treat it like
+  any other upstream outage rather than an internal fault.
+- The analytics "Est. Cost" tile prefers the per-model figure derived from
+  recorded tokens and falls back to the previous blended per-provider
+  estimate when the durable figure is unavailable.
+
+### Release scope
+
+- Verified in this pass: `npm run type-check`, `npm run lint`,
+  `npm run test:run` (92 files, 790 tests, including the 679 pre-existing
+  tests unchanged), `npm run build`, and `npm run check:hygiene`.
+- `lib/provider-pricing.ts` is retained and still backs the existing
+  `providerData[].estimatedCostUsd` field; no field was removed or
+  repurposed.
+- Not verified in this pass: live provider retry behaviour against real
+  upstream outages, and search latency on a history larger than the
+  `MAX_SEARCH_MATCH_CONVERSATIONS` bound.
+
 ## [0.2.0-private-pilot.3] - 2026-08-02
 
 ### Added
