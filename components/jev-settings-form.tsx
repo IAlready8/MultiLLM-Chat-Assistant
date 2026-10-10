@@ -58,7 +58,7 @@ export function JevSettingsForm() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+          ...(apiKey.trim() ? { token: apiKey.trim() } : {}),
           enabled,
         }),
       })
