@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { jevChoose, getJevApiKey, JevError } from '@/lib/jev'
-import { decryptApiKey } from '@/lib/encryption'
+import { getUserApiKey } from '@/lib/api-key-service'
 import prisma from '@/lib/prisma'
 import { z } from 'zod'
 
@@ -83,16 +83,8 @@ export async function POST(request: Request) {
     )
   }
 
-  // Decrypt API key
-  let apiKey: string | null = null
-  try {
-    apiKey = config.apiKey ? decryptApiKey(config.apiKey) : null
-  } catch {
-    return NextResponse.json(
-      { error: 'Failed to decrypt Jev API key. Re-enter it in Settings.' },
-      { status: 500 },
-    )
-  }
+  // Get decrypted API key
+  const apiKey = await getUserApiKey(user.id, 'jev')
 
   const resolvedKey = getJevApiKey(apiKey)
   if (!resolvedKey) {
