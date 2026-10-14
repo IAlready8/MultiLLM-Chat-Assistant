@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { AccountProfileForm } from '@/components/account-profile-form'
+import { ChangePasswordForm } from '@/components/change-password-form'
 import { AccountHistoryExport } from '@/components/account-history-export'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -204,6 +205,15 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <AccountProfileForm />
+          </CardContent>
+        </Card>
+          <Card>
+            <CardHeader>
+            <CardTitle>Change Password</CardTitle>
+            <CardDescription>Update the password you use to sign in</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ChangePasswordForm />
           </CardContent>
         </Card>
       </TabsContent>
