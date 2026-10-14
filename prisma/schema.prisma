@@ -40,6 +40,7 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?   // For credential-based authentication
+  passwordVersion Int     @default(0) // Bumped on password change to revoke sessions
   accounts      Account[]
   sessions      Session[]
   conversations Conversation[]

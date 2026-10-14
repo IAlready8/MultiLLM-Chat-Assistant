@@ -35,6 +35,29 @@ describe('API authentication', () => {
     expect((result as { user: { id: string } }).user.id).toBe('user-123')
   })
 
+  it('returns 401 when the session predates a password change', async () => {
+    mockAuth.mockResolvedValue({ user: { id: 'user-123', pv: 0 } })
+    mockFindUser.mockResolvedValue({ id: 'user-123', passwordVersion: 1 })
+
+    const result = await getAuthenticatedUser()
+
+    expect(result).toBeInstanceOf(NextResponse)
+    expect((result as NextResponse).status).toBe(401)
+    await expect((result as NextResponse).json()).resolves.toEqual({
+      error: 'Unauthorized',
+    })
+  })
+
+  it('accepts a session whose password version matches the account', async () => {
+    mockAuth.mockResolvedValue({ user: { id: 'user-123', pv: 2 } })
+    mockFindUser.mockResolvedValue({ id: 'user-123', passwordVersion: 2 })
+
+    const result = await getAuthenticatedUser()
+
+    expect(result).not.toBeInstanceOf(NextResponse)
+    expect((result as { user: { id: string } }).user.id).toBe('user-123')
+  })
+
   it('returns 401 when no authenticated session exists', async () => {
     mockAuth.mockResolvedValue(null)
 
