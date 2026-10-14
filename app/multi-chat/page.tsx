@@ -717,14 +717,16 @@ export default function MultiChatPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="flex gap-2">
-            <Input
-              value={chatState.input}
-              onChange={handleInputChange}
-              placeholder="Type your message here..."
-              aria-label="Message"
-              disabled={isBusy}
-              className="min-w-0 flex-1"
-            />
+            <div className="input-rainbow-focus min-w-0 flex-1 rounded-md">
+              <Input
+                value={chatState.input}
+                onChange={handleInputChange}
+                placeholder="Type your message here..."
+                aria-label="Message"
+                disabled={isBusy}
+                className="w-full"
+              />
+            </div>
             <Button
               type="submit"
               disabled={isBusy || !chatState.input.trim()}
@@ -877,7 +879,7 @@ export default function MultiChatPage() {
                       key={conversation.id}
                       className={`flex items-start gap-2 rounded-md border p-2 ${
                         activeConversationId === conversation.id
-                          ? 'border-primary bg-primary/10'
+                          ? 'rainbow-active border-primary bg-primary/10'
                           : 'bg-muted/20'
                       }`}
                     >
