@@ -1,9 +1,9 @@
 # Release repair checkpoint — 2026-10-14
 
 Base: origin/main 0cc4c011b9617ff913733c47289052639ef3c431.
-Local branch: codex/release-reconciliation-20261014, based on the existing password-hardening branch dca80cc. Local code fixes are now implemented; no production database writes or main merge performed.
+Local branch: codex/release-reconciliation-20261014, based on the existing password-hardening branch dca80cc. Code fixes are published in draft PR #175. Approved production migration reconciliation is complete; no main merge performed.
 
-## Independently verified
+## Independently verified before repair
 
 - Neon multi-llm-prod: sparkling-tooth-68325073; main branch br-misty-union-airznwzl; database neondb; endpoint ep-wild-morning-aizgqp89.
 - Migration ledger contains only 20260117134259_init (finished).
@@ -28,19 +28,31 @@ Local branch: codex/release-reconciliation-20261014, based on the existing passw
 - Generation, quotas and webhook table gaps remain; passwordVersion migration remains pending too. Existing RateLimitBucket exact columns/types/nullability/defaults and both expected indexes were verified.
 - Production counts at review: 18 users, 1 conversation, 6 messages, 1 subscription. No row data printed or copied.
 
+## Completed migration reconciliation
+
+- User cleared Neon branch capacity. Production copy created: br-dry-dust-aifge58m, verify-release-repair-20261014.
+- Local Prisma migration access was blocked by PostgreSQL hostname DNS (EAI_AGAIN). Used a short-lived, nonpersistent Vercel Node 22 sandbox with the tested published tree; it was stopped after work.
+- Copy: Prisma migrate resolve --applied 20260908181000_postgres_rate_limits recorded the verified existing table; migrate deploy applied the remaining five migrations, including passwordVersion.
+- Copy: Prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code returned No difference detected / exit 0.
+- Production: repeated the rehearsed resolve/deploy procedure under explicit user approval. All migrations have been successfully applied / exit 0. Seven successful migration records now exist.
+- Production: migrate status reported Database schema is up to date / exit 0; schema diff reported No difference detected / exit 0.
+- Existing User, Conversation, Message and Subscription rows were fingerprinted over their original columns. All four fingerprints match before/after and match the rehearsal copy. Counts remain 18 / 1 / 6 / 1.
+- Production health reports healthy, database connected and PostgreSQL limiter connected. App commit remains 0cc4c01; password code is not yet deployed.
+- PR #175 initial head 29a8500ca65c15ca17e51f6e3c232af4056b03a8 passed all six CI jobs: https://github.com/IAlready8/MultiLLM-Chat-Assistant/actions/runs/38620278109. Native PostgreSQL and Redis integration, desktop/mobile account/history browser QA passed; provider fixtures are controlled.
+- Added real password integration checks to the existing isolated-database runner: wrong current password, multibyte rejection, concurrent update exclusion, persisted hash/version, revocation of both sessions and fresh login. Final CI must execute these before merge.
+
 ## Required repair sequence
 
 1. Approval for auth/schema changes and production reconciliation is now obtained. Preserve the separate final main merge gate.
-2. Create a production backup/snapshot; verify which database the running deployment actually uses without disclosing credentials.
-3. Rehearse on an isolated database copy. Compare full RateLimitBucket columns/types/defaults/constraints against the tracked migration before considering Prisma migrate resolve --applied for the already-existing migration. Do not drop/recreate the table.
-4. Use supported Prisma migration tooling to reconcile the existing table and deploy pending migrations; verify schema and preserved data. No migration reset or db push.
-5. Review password branch, repair its failing session contract test without weakening assertions, verify revocation across protected routes and improve reauthentication UX. Complete all validation gates.
-6. Apply approved production schema changes before deploying code that requires passwordVersion. Check health and real authenticated persistence.
+2. Backup, isolated copy, schema reconciliation and production migration are complete. Preserve snapshot snap-polished-shape-ai40jph6; do not drop/recreate existing tables.
+3. Wait for final password-integration CI and inspect exact current candidate/main heads. Do not merge before the explicit main merge gate.
+4. Deploy password code only after approved merge; schema is ready. Verify deployed auth and account behavior.
 7. Review Jev #170 and remaining branches for actual missing improvements; keep separate PRs and verify before main merge.
 8. Verify real Google sign-in, one real model chat, cancellation/reload, Stripe test lifecycle and production cron recovery. Credentials/account configuration and explicit spend approval may be needed.
 
 ## Next command after approval
 
-git diff origin/main...origin/fix/change-password-gaps -- lib/auth.ts lib/api-auth.ts test/auth-session-reader.test.ts
+git fetch origin
+git log --oneline origin/main..origin/codex/release-reconciliation-20261014
 
-Current blocker: Neon branch quota prevents an isolated production-copy rehearsal. Production migration reconciliation must wait for an approved rehearsal target or additional branch capacity. Main merge approval and real external-provider/account verification also remain outstanding. No release-ready claim.
+Remaining gates: final password integration CI, explicit main merge approval, live Google/provider/Stripe verification and email-service policy for account recovery/verified email changes. No release-ready claim.
