@@ -139,6 +139,7 @@ describe('auth session token reader', () => {
         name: 'Test User',
         role: 'MEMBER',
         tier: 'FREE',
+        pv: 0,
       },
     })
 
