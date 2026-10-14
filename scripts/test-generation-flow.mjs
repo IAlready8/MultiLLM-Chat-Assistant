@@ -58,10 +58,10 @@ function client() {
   }
 }
 const json = data => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-async function login(id) {
+async function login(id, loginPassword = password) {
   const request = client()
   const csrf = await (await request('/api/auth/csrf')).json()
-  const response = await request('/api/auth/callback/credentials?json=true', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrfToken: csrf.csrfToken, email: `${id}@example.test`, password, json: 'true', callbackUrl: base.toString() }).toString() })
+  const response = await request('/api/auth/callback/credentials?json=true', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrfToken: csrf.csrfToken, email: `${id}@example.test`, password: loginPassword, json: 'true', callbackUrl: base.toString() }).toString() })
   assert.ok([200, 302].includes(response.status), `Login failed: ${response.status}`)
   const session = await (await request('/api/auth/session')).json()
   assert.equal(session.user?.id, id, 'Credential login must produce a real application session')
@@ -267,6 +267,25 @@ try {
   assert.equal((await db.query('SELECT COUNT(*)::int AS count FROM "Generation" WHERE "userId" = $1', [outsider])).rows[0].count, 0)
   const quotaAfterRestore = await db.query('SELECT * FROM "LlmQuotaUsage" WHERE "userId" = $1 ORDER BY id', [outsider])
   assert.deepEqual(quotaAfterRestore.rows, quotaBeforeRestore.rows, 'Restore must neither add usage nor change existing accounting')
+  const secondOwnerSession = await login(owner)
+  assert.equal((await request('/api/account/change-password', json({ currentPassword: 'wrong-current-password', newPassword: randomUUID() }))).status, 401)
+  assert.equal((await request('/api/account/change-password', json({ currentPassword: password, newPassword: '🔐'.repeat(20) }))).status, 400, 'Passwords over 72 UTF-8 bytes must be rejected')
+  const replacementPassword = randomUUID()
+  const changes = await Promise.all([
+    request('/api/account/change-password', json({ currentPassword: password, newPassword: replacementPassword })),
+    secondOwnerSession('/api/account/change-password', json({ currentPassword: password, newPassword: replacementPassword })),
+  ])
+  assert.equal(changes.filter(response => response.status === 200).length, 1, 'Only one overlapping password change may succeed')
+  assert.ok(changes.every(response => [200, 401, 409].includes(response.status)))
+  const passwordRecord = (await db.query('SELECT password, "passwordVersion" FROM "User" WHERE id = $1', [owner])).rows[0]
+  assert.equal(passwordRecord.passwordVersion, 1, 'Password rotation must increment the version exactly once')
+  assert.equal(await bcrypt.compare(replacementPassword, passwordRecord.password), true)
+  assert.equal(await bcrypt.compare(password, passwordRecord.password), false)
+  assert.equal((await request('/api/account/profile')).status, 401, 'The initiating session must be revoked')
+  assert.equal((await secondOwnerSession('/api/account/profile')).status, 401, 'Other existing sessions must be revoked')
+  const renewedOwnerSession = await login(owner, replacementPassword)
+  assert.equal((await renewedOwnerSession('/api/account/profile')).status, 200, 'The new password must establish a usable session')
+  console.log('Password integration passed: wrong-password denial, UTF-8 byte limit, atomic concurrent rotation, persisted hash/version, both old sessions revoked, new-password login')
   await db.query('DELETE FROM "User" WHERE id = $1', [outsider])
   assert.equal((await other('/api/conversations')).status, 401, 'A deleted account must not retain access through its session token')
   console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'server-assembled model context', 'owned turn-aligned message pagination', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation'], providerCalls }))

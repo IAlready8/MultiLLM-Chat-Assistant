@@ -15,6 +15,7 @@ export function ChangePasswordForm() {
 
   const canSubmit =
     !saving && currentPassword.length > 0 && newPassword.length >= 8 && confirmPassword.length > 0
+  const newPasswordBytes = new TextEncoder().encode(newPassword).length
 
   return (
     <form
@@ -26,6 +27,10 @@ export function ChangePasswordForm() {
         setSaved(false)
         if (newPassword !== confirmPassword) {
           setError('The new passwords do not match.')
+          return
+        }
+        if (newPasswordBytes > 72) {
+          setError('The new password must fit within 72 UTF-8 bytes. Some characters use multiple bytes.')
           return
         }
         setSaving(true)
@@ -84,7 +89,7 @@ export function ChangePasswordForm() {
           }}
         />
         <p id="new-password-help" className="text-sm text-muted-foreground">
-          8–72 characters.
+          At least 8 characters, up to 72 UTF-8 bytes. Some characters use multiple bytes.
         </p>
       </div>
       <div className="space-y-2">
@@ -110,7 +115,8 @@ export function ChangePasswordForm() {
       )}
       {saved && (
         <p role="status" className="text-sm">
-          Your password has been changed. Please sign in again.
+          Your password has been changed.{' '}
+          <a href="/auth/signin" className="underline">Sign in again with your new password.</a>
         </p>
       )}
       <Button type="submit" disabled={!canSubmit}>
