@@ -179,7 +179,7 @@ export default function SettingsPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
-      <Card className="mb-6">
+      <Card className="mb-6 card-rainbow-hover">
         <CardHeader>
           <div className="flex items-center gap-2">
             <CardTitle>Settings</CardTitle>
@@ -198,7 +198,7 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
-          <Card>
+          <Card className="card-rainbow-hover">
             <CardHeader>
             <CardTitle>Account Settings</CardTitle>
             <CardDescription>Manage your account preferences</CardDescription>
@@ -207,7 +207,7 @@ export default function SettingsPage() {
             <AccountProfileForm />
           </CardContent>
         </Card>
-          <Card>
+          <Card className="card-rainbow-hover">
             <CardHeader>
             <CardTitle>Change Password</CardTitle>
             <CardDescription>Update the password you use to sign in</CardDescription>
@@ -219,7 +219,7 @@ export default function SettingsPage() {
       </TabsContent>
 
         <TabsContent value="providers" className="space-y-6">
-          <Card>
+          <Card className="card-rainbow-hover">
             <CardHeader>
               <CardTitle>API Provider Configuration</CardTitle>
               <CardDescription>Configure your LLM provider API keys and settings</CardDescription>
