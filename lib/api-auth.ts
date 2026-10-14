@@ -37,11 +37,17 @@ export async function getAuthenticatedUser(): Promise<
     if (session?.user?.id) {
       const currentUser = await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { id: true, name: true, email: true, image: true },
+        select: { id: true, name: true, email: true, image: true, passwordVersion: true },
       })
       // JWTs outlive deleted accounts and changes to the admin allowlist.
       // Every protected operation must use the current account identity.
       if (!currentUser) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      // Password changes bump passwordVersion; sessions minted before the change are revoked.
+      const sessionPasswordVersion =
+        typeof session.user.pv === 'number' ? session.user.pv : 0
+      if (sessionPasswordVersion !== (currentUser.passwordVersion ?? 0)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
       sessionErrorLogged = false
