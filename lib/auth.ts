@@ -30,6 +30,7 @@ declare module 'next-auth' {
     id?: string
     role?: TeamRole
     tier?: SubscriptionTier
+    pv?: number
   }
 }
 
@@ -38,6 +39,7 @@ declare module 'next-auth/jwt' {
     id?: string
     role?: TeamRole
     tier?: SubscriptionTier
+    pv?: number
   }
 }
 
@@ -135,6 +137,15 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
+        try {
+          const record = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { passwordVersion: true },
+          })
+          token.pv = record?.passwordVersion ?? 0
+        } catch {
+          token.pv = token.pv ?? 0
+        }
       }
 
       const userId = (user?.id || token.id || token.sub) as string | undefined
@@ -201,6 +212,7 @@ export async function auth() {
       email: token.email,
       role: (token.role || 'MEMBER') as TeamRole,
       tier,
+      pv: typeof token.pv === 'number' ? token.pv : 0,
     },
   }
 }
