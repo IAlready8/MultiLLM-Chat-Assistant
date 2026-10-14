@@ -6,10 +6,22 @@ import { readApiObject } from '@/lib/api-input'
 import { checkAndConsume } from '@/lib/rate-limit'
 import prisma from '@/lib/prisma'
 
+// bcrypt only uses the first 72 bytes of a password; longer inputs would be
+// silently truncated, so the length is capped up front.
+const MAX_PASSWORD_BYTES = 72
+
+const newPasswordSchema = z
+  .string()
+  .min(8)
+  .max(MAX_PASSWORD_BYTES)
+  .refine((value) => new TextEncoder().encode(value).length <= MAX_PASSWORD_BYTES, {
+    message: 'Use a new password of 8–72 characters.',
+  })
+
 const schema = z
   .object({
     currentPassword: z.string().min(1).max(128),
-    newPassword: z.string().min(8).max(128),
+    newPassword: newPasswordSchema,
   })
   .strict()
 
@@ -17,10 +29,18 @@ export async function POST(request: Request) {
   const auth = await getAuthenticatedUser()
   if (auth instanceof NextResponse) return auth
 
-  const rate = await checkAndConsume(`auth:change-password:${auth.user.id}`, {
-    windowMs: 15 * 60 * 1000,
-    max: 10,
-  })
+  let rate: { allowed: boolean }
+  try {
+    rate = await checkAndConsume(`auth:change-password:${auth.user.id}`, {
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+    })
+  } catch {
+    return NextResponse.json(
+      { error: 'Request protection is temporarily unavailable. Try again shortly.' },
+      { status: 503 }
+    )
+  }
   if (!rate.allowed) {
     return NextResponse.json(
       { error: 'Too many attempts. Please try again later.' },
@@ -33,7 +53,7 @@ export async function POST(request: Request) {
   const input = schema.safeParse(body)
   if (!input.success) {
     return NextResponse.json(
-      { error: 'Provide your current password and a new password of 8–128 characters.' },
+      { error: 'Provide your current password and a new password of 8–72 characters.' },
       { status: 400 }
     )
   }
@@ -64,7 +84,12 @@ export async function POST(request: Request) {
     }
 
     const hash = await bcrypt.hash(newPassword, 10)
-    await prisma.user.update({ where: { id: auth.user.id }, data: { password: hash } })
+    // Bumping passwordVersion revokes every existing session, including this
+    // one: the user signs in again with the new password.
+    await prisma.user.update({
+      where: { id: auth.user.id },
+      data: { password: hash, passwordVersion: { increment: 1 } },
+    })
     return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } })
   } catch {
     return NextResponse.json(
