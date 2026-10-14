@@ -75,7 +75,7 @@ export function ChangePasswordForm() {
           value={newPassword}
           required
           minLength={8}
-          maxLength={128}
+          maxLength={72}
           disabled={saving}
           aria-describedby="new-password-help"
           onChange={event => {
@@ -84,7 +84,7 @@ export function ChangePasswordForm() {
           }}
         />
         <p id="new-password-help" className="text-sm text-muted-foreground">
-          At least 8 characters.
+          8–72 characters.
         </p>
       </div>
       <div className="space-y-2">
@@ -110,7 +110,7 @@ export function ChangePasswordForm() {
       )}
       {saved && (
         <p role="status" className="text-sm">
-          Your password has been changed.
+          Your password has been changed. Please sign in again.
         </p>
       )}
       <Button type="submit" disabled={!canSubmit}>
