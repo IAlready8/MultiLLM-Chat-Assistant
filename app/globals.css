@@ -382,3 +382,63 @@
     color: hsl(var(--foreground));
   }
 }
+
+/* Rainbow outline for chat input on focus */
+.input-rainbow-focus {
+  position: relative;
+  isolation: isolate;
+}
+.input-rainbow-focus::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--rainbow-cyan)),
+    hsl(var(--rainbow-indigo)),
+    hsl(var(--rainbow-pink)),
+    hsl(var(--rainbow-cyan))
+  );
+  background-size: 300% 300%;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  opacity: 0;
+  transition: opacity 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+.input-rainbow-focus:focus-within::before,
+.input-rainbow-focus:focus::before,
+.input-rainbow-focus:focus-visible::before {
+  opacity: 0.75;
+  animation: gradient-shift 4s ease infinite;
+}
+
+/* Persistent rainbow edge for the active/selected item */
+.rainbow-active {
+  position: relative;
+  isolation: isolate;
+}
+.rainbow-active::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--rainbow-cyan)),
+    hsl(var(--rainbow-indigo)),
+    hsl(var(--rainbow-pink)),
+    hsl(var(--rainbow-cyan))
+  );
+  background-size: 300% 300%;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  opacity: 0.55;
+  animation: gradient-shift 6s ease infinite;
+  pointer-events: none;
+}
