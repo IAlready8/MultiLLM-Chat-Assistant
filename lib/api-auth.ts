@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { authIdentity } from '@/lib/auth'
 import { resolveAuthTeamRole } from '@/lib/auth-roles'
 import prisma from '@/lib/prisma'
 import type { User } from '@/types/prisma'
@@ -33,7 +33,8 @@ export async function getAuthenticatedUser(): Promise<
   { user: User } | NextResponse
 > {
   try {
-    const session = await auth()
+    // Identity only: the account is re-read below and the tier is not needed here.
+    const session = await authIdentity()
     if (session?.user?.id) {
       const currentUser = await prisma.user.findUnique({
         where: { id: session.user.id },

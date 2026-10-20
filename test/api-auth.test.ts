@@ -5,7 +5,7 @@ const mockAuth = vi.fn()
 const mockFindUser = vi.fn()
 
 vi.mock('@/lib/auth', () => ({
-  auth: () => mockAuth(),
+  authIdentity: () => mockAuth(),
 }))
 vi.mock('@/lib/prisma', () => ({
   default: { user: { findUnique: (args: unknown) => mockFindUser(args) } },

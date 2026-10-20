@@ -146,4 +146,35 @@ describe('mandatory-auth routing', () => {
       }),
     )
   })
+
+  it.each([
+    '/api/conversations/abc.png',
+    '/api/personas/x.svg',
+    '/api/goals/favicon.ico',
+  ])('requires a session for API path %s despite an asset-like extension', async (path) => {
+    setEnvVar('NEXTAUTH_SECRET', 'test-secret')
+
+    const response = await middleware(
+      new NextRequest(`http://localhost:3000${path}`),
+    )
+
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
+  })
+
+  it.each([
+    '/apple-touch-icon.png',
+    '/favicon.ico',
+    '/_next/static/chunks/main.js',
+    '/images/logo.svg',
+  ])('still serves static asset %s without a session', async (path) => {
+    setEnvVar('NEXTAUTH_SECRET', 'test-secret')
+
+    const response = await middleware(
+      new NextRequest(`http://localhost:3000${path}`),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockDecode).not.toHaveBeenCalled()
+  })
 })

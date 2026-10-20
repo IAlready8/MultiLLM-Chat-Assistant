@@ -23,13 +23,18 @@ const isPublicPath = (pathname: string): boolean => {
   return false
 }
 
+// API routes are never static assets. Without this guard a request such as
+// /api/conversations/x.png would skip the session check here purely because
+// of its file extension.
 const isStaticAsset = (pathname: string): boolean =>
-  pathname.startsWith('/_next/') ||
+  !pathname.startsWith('/api/') &&
+  pathname !== '/api' &&
+  (pathname.startsWith('/_next/') ||
   pathname.startsWith('/favicon') ||
   pathname.startsWith('/apple-touch-icon') ||
   pathname.endsWith('.png') ||
   pathname.endsWith('.ico') ||
-  pathname.endsWith('.svg')
+  pathname.endsWith('.svg'))
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
