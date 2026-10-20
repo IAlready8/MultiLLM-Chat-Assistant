@@ -7,6 +7,7 @@ process.env.NEXTAUTH_SECRET = 'test-secret'
 const mockCookies = vi.fn()
 const mockDecode = vi.fn()
 const mockSubscriptionFindUnique = vi.fn()
+const mockUserFindUnique = vi.fn()
 
 vi.mock('next/headers', () => ({
   cookies: () => mockCookies(),
@@ -39,7 +40,7 @@ vi.mock('@next-auth/prisma-adapter', () => ({
 vi.mock('@/lib/prisma', () => ({
   default: {
     user: {
-      findUnique: vi.fn(),
+      findUnique: (...args: unknown[]) => mockUserFindUnique(...args),
       create: vi.fn(),
     },
     subscription: {
@@ -60,9 +61,19 @@ vi.mock('@/lib/startup-validation', () => ({
   validateStartupEnvironment: vi.fn(),
 }))
 
-const { auth, authOptions, readSessionTokenFromCookieStore } = await import(
-  '@/lib/auth'
-)
+const { auth, authIdentity, authOptions, readSessionTokenFromCookieStore } =
+  await import('@/lib/auth')
+const { getAuthenticatedUser } = await import('@/lib/api-auth')
+
+const mockSecureSessionCookie = () =>
+  mockCookies.mockResolvedValue({
+    getAll: () => [
+      {
+        name: '__Secure-next-auth.session-token',
+        value: 'encoded-token',
+      },
+    ],
+  })
 
 afterAll(() => {
   process.env.NEXTAUTH_SECRET = originalNextAuthSecret
@@ -77,6 +88,7 @@ describe('auth session token reader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSubscriptionFindUnique.mockResolvedValue(null)
+    mockUserFindUnique.mockResolvedValue(null)
   })
 
   it('reads the secure session cookie directly', () => {
@@ -194,5 +206,86 @@ describe('auth session token reader', () => {
       token: ownerToken,
     })
     expect(downgradedToken.role).toBe('MEMBER')
+  })
+
+  it('decodes identity without querying the subscription tier', async () => {
+    mockSecureSessionCookie()
+    mockDecode.mockResolvedValue({
+      sub: 'user-123',
+      email: 'user@example.com',
+      name: 'Test User',
+      role: 'MEMBER',
+      tier: 'PRO',
+      pv: 3,
+      exp: 1_900_000_000,
+    })
+
+    await expect(authIdentity()).resolves.toEqual({
+      expires: new Date(1_900_000_000 * 1000).toISOString(),
+      user: {
+        id: 'user-123',
+        email: 'user@example.com',
+        name: 'Test User',
+        role: 'MEMBER',
+        pv: 3,
+      },
+    })
+    expect(mockSubscriptionFindUnique).not.toHaveBeenCalled()
+  })
+
+  it('returns null identity when no session cookie or token is present', async () => {
+    mockCookies.mockResolvedValue({ getAll: () => [] })
+    await expect(authIdentity()).resolves.toBeNull()
+
+    mockSecureSessionCookie()
+    mockDecode.mockResolvedValue({ sub: 'user-123' })
+    await expect(authIdentity()).resolves.toBeNull()
+    await expect(auth()).resolves.toBeNull()
+    expect(mockSubscriptionFindUnique).not.toHaveBeenCalled()
+  })
+
+  it('authenticates protected API requests with one account read and no tier query', async () => {
+    mockSecureSessionCookie()
+    mockDecode.mockResolvedValue({
+      sub: 'user-123',
+      email: 'user@example.com',
+      pv: 1,
+      exp: 1_900_000_000,
+    })
+    mockUserFindUnique.mockResolvedValue({
+      id: 'user-123',
+      name: 'Test User',
+      email: 'user@example.com',
+      image: null,
+      passwordVersion: 1,
+    })
+
+    const result = await getAuthenticatedUser()
+
+    expect(result).not.toBeInstanceOf(Response)
+    expect((result as { user: { id: string } }).user.id).toBe('user-123')
+    expect(mockUserFindUnique).toHaveBeenCalledTimes(1)
+    expect(mockSubscriptionFindUnique).not.toHaveBeenCalled()
+  })
+
+  it('still revokes protected API sessions minted before a password change', async () => {
+    mockSecureSessionCookie()
+    mockDecode.mockResolvedValue({
+      sub: 'user-123',
+      pv: 0,
+      exp: 1_900_000_000,
+    })
+    mockUserFindUnique.mockResolvedValue({
+      id: 'user-123',
+      name: null,
+      email: 'user@example.com',
+      image: null,
+      passwordVersion: 1,
+    })
+
+    const result = await getAuthenticatedUser()
+
+    expect(result).toBeInstanceOf(Response)
+    expect((result as Response).status).toBe(401)
   })
 })
