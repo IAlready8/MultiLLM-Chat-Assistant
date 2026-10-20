@@ -15,7 +15,7 @@ const newPasswordSchema = z
   .min(8)
   .max(MAX_PASSWORD_BYTES)
   .refine((value) => new TextEncoder().encode(value).length <= MAX_PASSWORD_BYTES, {
-    message: 'Use a new password of 8–72 characters.',
+    message: 'Use at least 8 characters and at most 72 UTF-8 bytes.',
   })
 
 const schema = z
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   const input = schema.safeParse(body)
   if (!input.success) {
     return NextResponse.json(
-      { error: 'Provide your current password and a new password of 8–72 characters.' },
+      { error: 'Provide your current password and a new password of at least 8 characters and at most 72 UTF-8 bytes.' },
       { status: 400 }
     )
   }
@@ -86,10 +86,18 @@ export async function POST(request: Request) {
     const hash = await bcrypt.hash(newPassword, 10)
     // Bumping passwordVersion revokes every existing session, including this
     // one: the user signs in again with the new password.
-    await prisma.user.update({
-      where: { id: auth.user.id },
+    const changed = await prisma.user.updateMany({
+      // Do not let an overlapping request replace a password changed since
+      // this request verified the old hash.
+      where: { id: auth.user.id, password: user.password },
       data: { password: hash, passwordVersion: { increment: 1 } },
     })
+    if (changed.count !== 1) {
+      return NextResponse.json(
+        { error: 'Your password changed during this request. Sign in again and retry.' },
+        { status: 409 }
+      )
+    }
     return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } })
   } catch {
     return NextResponse.json(

@@ -25,7 +25,7 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     user: {
       findUnique: (...args: unknown[]) => mockFindUnique(...args),
-      update: (...args: unknown[]) => mockUpdate(...args),
+      updateMany: (...args: unknown[]) => mockUpdate(...args),
     },
   },
 }))
@@ -50,7 +50,7 @@ describe('/api/account/change-password route', () => {
     mockFindUnique.mockResolvedValue({ password: 'hashed-old' })
     mockBcryptCompare.mockResolvedValue(true)
     mockBcryptHash.mockResolvedValue('hashed-new')
-    mockUpdate.mockResolvedValue({ id: 'user-1' })
+    mockUpdate.mockResolvedValue({ count: 1 })
   })
 
   it('forwards the auth response when unauthenticated', async () => {
@@ -82,7 +82,7 @@ describe('/api/account/change-password route', () => {
     const response = await POST(request())
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toEqual({
-      error: 'Provide your current password and a new password of 8–72 characters.',
+      error: 'Provide your current password and a new password of at least 8 characters and at most 72 UTF-8 bytes.',
     })
   })
 
@@ -127,9 +127,22 @@ describe('/api/account/change-password route', () => {
     expect(mockBcryptCompare).toHaveBeenCalledWith('old-password-1', 'hashed-old')
     expect(mockBcryptHash).toHaveBeenCalledWith('new-password-2', 10)
     expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
+      where: { id: 'user-1', password: 'hashed-old' },
       data: { password: 'hashed-new', passwordVersion: { increment: 1 } },
     })
     await expect(response.json()).resolves.toEqual({ ok: true })
+  })
+
+  it('rejects a stale password change when an overlapping request already changed the hash', async () => {
+    mockUpdate.mockResolvedValue({ count: 0 })
+    const response = await POST(request())
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Your password changed during this request. Sign in again and retry.',
+    })
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1', password: 'hashed-old' },
+      data: { password: 'hashed-new', passwordVersion: { increment: 1 } },
+    })
   })
 })
