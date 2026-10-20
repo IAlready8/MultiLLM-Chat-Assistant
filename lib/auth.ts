@@ -181,7 +181,14 @@ export const readSessionTokenFromCookieStore = (
   cookieStore: Awaited<ReturnType<typeof cookies>>,
 ) => readSessionTokenFromCookies(cookieStore.getAll())
 
-export async function auth() {
+/**
+ * Decode the session cookie into the caller's identity without any database
+ * access. Protected API routes use this through `getAuthenticatedUser`, which
+ * re-reads the account itself and never consumes the subscription tier, so
+ * loading the tier there would cost a database round-trip per request for a
+ * value that is discarded.
+ */
+export async function authIdentity() {
   const cookieStore = await cookies()
   const sessionToken = readSessionTokenFromCookieStore(cookieStore)
   if (!sessionToken) {
@@ -202,8 +209,6 @@ export async function auth() {
     return null
   }
 
-  const tier = await loadSubscriptionTier(userId)
-
   return {
     expires: new Date(Number(token.exp) * 1000).toISOString(),
     user: {
@@ -211,8 +216,25 @@ export async function auth() {
       name: token.name,
       email: token.email,
       role: (token.role || 'MEMBER') as TeamRole,
-      tier,
       pv: typeof token.pv === 'number' ? token.pv : 0,
+    },
+  }
+}
+
+/** Session for pages that render plan state; refreshes the tier from the database. */
+export async function auth() {
+  const identity = await authIdentity()
+  if (!identity) {
+    return null
+  }
+
+  const tier = await loadSubscriptionTier(identity.user.id)
+
+  return {
+    expires: identity.expires,
+    user: {
+      ...identity.user,
+      tier,
     },
   }
 }
