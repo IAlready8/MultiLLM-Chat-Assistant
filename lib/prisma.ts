@@ -1,6 +1,6 @@
 import { PrismaClient as PrismaClientRuntime } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
-import { getDatabaseUrl } from '@/lib/database-url'
+import { buildPgPoolConfig, getDatabaseUrl } from '@/lib/database-url'
 import { validateStartupEnvironment } from '@/lib/startup-validation'
 import type {
   Analytics,
@@ -86,7 +86,7 @@ const createRuntimeClient = (): PrismaClient => {
     return createStubClient()
   }
 
-  const adapter = new PrismaPg({ connectionString })
+  const adapter = new PrismaPg(buildPgPoolConfig(connectionString))
   const client = new PrismaClientRuntime({ adapter })
 
   if (!isProduction) {
