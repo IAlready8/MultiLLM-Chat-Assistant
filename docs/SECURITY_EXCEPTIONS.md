@@ -10,10 +10,18 @@ The 2026-07-27 validation snapshot contains no production audit findings and
 no critical full-tree findings. Remaining audit entries are limited to the
 development/build-tool paths documented below.
 
+Renewal note (2026-10-20): all three exceptions below passed their
+2026-08-15 expiry. The excepted dependency paths were re-verified against
+`package-lock.json` on 2026-10-20 and are still present and unchanged
+(`vercel@56.5.0 > @vercel/node@5.8.26 > undici@5.28.4`,
+`@vitejs/plugin-react@4.7.0`, and the `minimatch > brace-expansion`
+toolchains). The exceptions are renewed to 2027-02-15. The CI Security Audit
+job remains the enforcement point for the audit gates above.
+
 ## SEC-2026-07-01: Vercel CLI undici pin
 
 - Owner: Repository owner
-- Expires: 2026-08-15
+- Expires: 2027-02-15 (renewed 2026-10-20)
 - Dependency path: `vercel@56.5.0 > @vercel/node@5.8.26 > undici@5.28.4`
 - Advisories: GHSA-c76h-2ccp-4975, GHSA-g9mf-h72j-4rw9,
   GHSA-cxrh-j4jr-qwg3, GHSA-2mjp-6q6p-2qxm, GHSA-vrm6-8vpv-qv8q,
@@ -35,7 +43,7 @@ development/build-tool paths documented below.
 ## SEC-2026-07-02: Babel 7 source-map file read
 
 - Owner: Repository owner
-- Expires: 2026-08-15
+- Expires: 2027-02-15 (renewed 2026-10-20)
 - Dependency path: `@vitejs/plugin-react@4.7.0 > @babel/core@7.28.5`
 - Advisory: GHSA-4x5r-pxfx-6jf8
 - Reachability: Babel runs only during local or CI transforms of repository
@@ -50,7 +58,7 @@ development/build-tool paths documented below.
 ## SEC-2026-07-03: Development-tool brace expansion
 
 - Owner: Repository owner
-- Expires: 2026-08-15
+- Expires: 2027-02-15 (renewed 2026-10-20)
 - Dependency paths: ESLint, TypeScript ESLint, Vitest coverage, and Vercel CLI
   toolchains through `minimatch > brace-expansion`
 - Advisory: GHSA-mh99-v99m-4gvg

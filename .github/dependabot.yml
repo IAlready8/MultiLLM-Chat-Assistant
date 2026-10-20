@@ -1,0 +1,27 @@
+# Dependabot configuration
+# Weekly dependency update PRs. Minor and patch updates are grouped into a
+# single PR to reduce noise; major version bumps arrive as individual PRs so
+# they can be validated separately (see docs/CHANGE_AND_DEPLOY_PROCESS.md).
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'America/Toronto'
+    open-pull-requests-limit: 10
+    groups:
+      minor-and-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'America/Toronto'
+    open-pull-requests-limit: 10
