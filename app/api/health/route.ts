@@ -1,5 +1,3 @@
-'use server'
-
 import { NextRequest } from 'next/server'
 import { metrics } from '@/lib/api-logger'
 import { getCacheDiagnostics } from '@/lib/cache'
@@ -9,40 +7,88 @@ import { getReleaseMetadata } from '@/lib/release-metadata'
 import { getSidecarDiagnostics } from '@/lib/sidecar-health'
 import { providerRegistry, isProviderOperational } from '@/lib/provider-registry'
 
-// Health check API route — includes request metrics snapshot
+// Upper bound for the database probe. A hung connection or query must surface
+// as a degraded check instead of holding the health endpoint open until the
+// platform function timeout. Generous enough for a serverless Postgres cold start.
+// Not exported: Next.js route modules may only export handlers and segment config.
+const DATABASE_PROBE_TIMEOUT_MS = 5_000
+
+class ProbeTimeoutError extends Error {
+  constructor() {
+    super('Health probe timed out')
+    this.name = 'ProbeTimeoutError'
+  }
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new ProbeTimeoutError()), timeoutMs)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+async function timed<T>(run: () => Promise<T> | T): Promise<{ value: T; durationMs: number }> {
+  const startedAt = Date.now()
+  const value = await run()
+  return { value, durationMs: Date.now() - startedAt }
+}
+
+async function probeDatabase(): Promise<{
+  status: 'connected' | 'degraded'
+  message?: string
+}> {
+  try {
+    await withTimeout(Promise.resolve(prisma.$queryRaw`SELECT 1`), DATABASE_PROBE_TIMEOUT_MS)
+    return { status: 'connected' }
+  } catch (error) {
+    return {
+      status: 'degraded',
+      message:
+        error instanceof ProbeTimeoutError
+          ? 'Database health check timed out'
+          : 'Database health check failed',
+    }
+  }
+}
+
+// Health check API route. Each dependency check reports its own duration;
+// the top-level response time covers the whole request.
 export async function GET(request: NextRequest) {
   const startTime = Date.now()
   const release = getReleaseMetadata()
   const generatedAt = new Date().toISOString()
-  const totalResponseTimeMs = Date.now() - startTime
 
   const includeMetrics = request.nextUrl.searchParams.get('metrics') === '1'
 
-  const dbStart = Date.now()
-  let databaseStatus: 'connected' | 'degraded' = 'connected'
-  let databaseMessage: string | undefined
-  try {
-    await prisma.$queryRaw`SELECT 1`
-  } catch {
-    databaseStatus = 'degraded'
-    databaseMessage = 'Database health check failed'
-  }
+  // Independent dependency probes run concurrently so one slow dependency
+  // does not inflate the others' timings or the total response time.
+  const [database, rateLimit, sidecar] = await Promise.all([
+    timed(probeDatabase),
+    timed(async () => {
+      await probeRateLimitBackend()
+      return getRateLimitDiagnostics()
+    }),
+    timed(() => getSidecarDiagnostics()),
+  ])
+  const cache = await timed(() => getCacheDiagnostics())
+  const providers = await timed(() =>
+    providerRegistry.filter((p) => isProviderOperational(p.id)),
+  )
 
-  const rateLimitStart = Date.now()
-  await probeRateLimitBackend()
-  const rateLimitDiagnostics = getRateLimitDiagnostics()
-  const cacheStart = Date.now()
-  const cacheDiagnostics = getCacheDiagnostics()
-
-  const sidecarStart = Date.now()
-  const sidecarDiagnostics = await getSidecarDiagnostics()
-
-  const providerStart = Date.now()
-  const operationalProviders = providerRegistry.filter((p) => isProviderOperational(p.id))
+  const databaseStatus = database.value.status
+  const databaseMessage = database.value.message
+  const rateLimitDiagnostics = rateLimit.value
+  const sidecarDiagnostics = sidecar.value
+  const cacheDiagnostics = cache.value
+  const operationalProviders = providers.value
   const providerDiagnostics = {
     status: operationalProviders.length > 0 ? 'ok' : 'degraded',
-    responseTime: Date.now() - providerStart,
-    responseTimeMs: Date.now() - providerStart,
+    responseTimeMs: providers.durationMs,
     message: `${operationalProviders.length} of ${providerRegistry.length} providers operational`,
     providers: operationalProviders.map((p) => ({
       id: p.id,
@@ -50,10 +96,6 @@ export async function GET(request: NextRequest) {
       requiresApiKey: p.requiresApiKey,
     })),
   }
-  const databaseResponseTimeMs = Date.now() - dbStart
-  const cacheResponseTimeMs = Date.now() - cacheStart
-  const rateLimitResponseTimeMs = Date.now() - rateLimitStart
-  const sidecarResponseTimeMs = Date.now() - sidecarStart
 
   const status =
     databaseStatus === 'connected' &&
@@ -81,6 +123,8 @@ export async function GET(request: NextRequest) {
         ? 'warning'
         : 'none'
 
+  const totalResponseTimeMs = Date.now() - startTime
+
   const healthChecks = {
     source: 'health',
     status,
@@ -101,29 +145,29 @@ export async function GET(request: NextRequest) {
     checks: {
       database: {
         status: databaseStatus,
-        responseTime: databaseResponseTimeMs,
-        responseTimeMs: databaseResponseTimeMs,
+        responseTime: database.durationMs,
+        responseTimeMs: database.durationMs,
         ...(databaseMessage ? { message: databaseMessage } : {}),
       },
       cache: {
         status: cacheDiagnostics.status,
-        responseTime: cacheResponseTimeMs,
-        responseTimeMs: cacheResponseTimeMs,
+        responseTime: cache.durationMs,
+        responseTimeMs: cache.durationMs,
         message: cacheDiagnostics.message,
         mode: cacheDiagnostics.mode,
       },
       rateLimit: {
         status: rateLimitDiagnostics.status,
-        responseTime: rateLimitResponseTimeMs,
-        responseTimeMs: rateLimitResponseTimeMs,
+        responseTime: rateLimit.durationMs,
+        responseTimeMs: rateLimit.durationMs,
         scope: rateLimitDiagnostics.scope,
         message: rateLimitDiagnostics.message,
         mode: rateLimitDiagnostics.mode,
       },
       sidecar: {
         status: sidecarDiagnostics.status,
-        responseTime: sidecarResponseTimeMs,
-        responseTimeMs: sidecarResponseTimeMs,
+        responseTime: sidecar.durationMs,
+        responseTimeMs: sidecar.durationMs,
         message: sidecarDiagnostics.message,
       },
       providers: {
