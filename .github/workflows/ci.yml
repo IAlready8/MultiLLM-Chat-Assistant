@@ -54,7 +54,7 @@ jobs:
 
   smoke-tests:
     name: Smoke Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: quality-checks
     timeout-minutes: 20
     strategy:
