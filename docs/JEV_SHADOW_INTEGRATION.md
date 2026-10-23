@@ -29,3 +29,13 @@ Every operation requires user authentication and opt-in feature configuration. A
 - Evaluation of actual decision quality, price and latency on labeled data.
 - A transactional outcome store and stronger outcome provenance before deploying calibrated policies.
 - Integration into existing execution orchestration only after opt-in and verified acceptance tests.
+
+## Opt-in automatic model dispatch
+
+`POST /api/llm/decisions/execute` supports `mode: "shadow"` (recommend only) and `mode: "execute"` (one chat completion only). Example:
+
+```json
+{"task":"Explain this TypeScript compiler error","routing":{"candidates":[{"provider":"openai","model":"gpt-4o"},{"provider":"anthropic","model":"claude-3-5-sonnet-20241022"}]},"mode":"execute"}
+```
+
+To enable execution explicitly set server-only `JEV_AUTO_ROUTING_ENABLED=true` along with the Jev shadow variables. The selected model must meet the routing policy threshold and the user must already have configured that provider. Dispatch goes through `executeChat`, preserving provider credential, quota, rate limiting and model contract checks. One completion only; no automatic retries, fallback, tools, or streaming. Execution does not alter explicit model requests in existing chat and orchestration APIs. Actual billed costs and model-quality gains remain unverified.
