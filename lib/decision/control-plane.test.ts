@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { eligibleCandidates, estimateCandidateCost, permitted, POLICY_VERSION, routingSchema, contextSchema, agentSchema } from './control-plane'
 
 describe('decision control plane', () => {
