@@ -13,7 +13,6 @@ const schema = z.object({
   task: z.string().trim().min(1).max(10000),
   routing: routingSchema.omit({ task: true, mode: true }),
   mode: z.enum(['shadow', 'execute']).default('shadow'),
-  requestId: z.string().uuid().optional(),
 })
 
 /** Explicit opt-in, one model dispatch at most. Never retries a potentially billable call. */
@@ -58,6 +57,12 @@ export async function POST(request: Request) {
       actualCostUsd: null, // recorded token usage is not an invoice
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
+    if (error instanceof z.ZodError || (error instanceof Error && /eligible models|Duplicate candidates/.test(error.message))) {
+      return NextResponse.json({ error: 'Invalid eligible routing candidates' }, { status: 400 })
+    }
+    if (error instanceof Error && /Jev|decision service|outside the allowed set/.test(error.message)) {
+      return NextResponse.json({ error: 'Decision service unavailable' }, { status: 502 })
+    }
     return llmErrorResponse(error)
   }
 }
