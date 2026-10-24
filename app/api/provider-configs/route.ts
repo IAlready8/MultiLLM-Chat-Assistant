@@ -8,6 +8,11 @@ import {
 import { defaultProviderModels, defaultRateLimits } from '@/lib/config-schemas'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
 import {
+  ProviderSettingsError,
+  publicProviderSettings,
+  validateProviderSettingsInput,
+} from '@/lib/provider-settings'
+import {
   getProviderDisabledMessage,
   isProviderApiKeyRequired,
   isProviderDisabled,
@@ -39,6 +44,7 @@ function buildProviderSettings(
   provider: string,
   config: Record<string, unknown>
 ): Record<string, unknown> {
+  validateProviderSettingsInput(config)
   const models =
     Array.isArray(config.models) && config.models.length > 0
       ? config.models
@@ -101,12 +107,14 @@ export async function GET() {
         for (const config of configs) {
           if (!isProviderOperational(config.provider)) continue
 
+          const settings = publicProviderSettings(config.settings)
+
           const models =
-            config.settings?.models ??
+            settings?.models ??
             defaultProviderModels[config.provider] ??
             []
           const rateLimits =
-            config.settings?.rateLimits ??
+            settings?.rateLimits ??
             defaultRateLimits[config.provider as keyof typeof defaultRateLimits] ??
             { requests: 60, window: 60000 }
 
@@ -116,7 +124,7 @@ export async function GET() {
             apiKey: '',
             models: models as string[],
             rateLimits: rateLimits as { requests: number; window: number },
-            settings: config.settings,
+            settings,
           }
         }
 
@@ -216,6 +224,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true }, { status: 200 })
   } catch (error) {
+    if (error instanceof ProviderSettingsError) {
+      return NextResponse.json(
+        { success: false, code: error.code, errors: [{ path: 'config', message: error.message }] },
+        { status: 400 },
+      )
+    }
     if (error instanceof ProviderEndpointError) {
       return NextResponse.json(
         {
@@ -383,12 +397,18 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json(
       {
         success: connectionTest.success,
-        data: connectionTest.success ? config : undefined,
+        data: connectionTest.success ? { ...settings, apiKey: '', settings } : undefined,
         connectionTest,
       },
       { status: connectionTest.success ? 200 : 400 }
     )
   } catch (error) {
+    if (error instanceof ProviderSettingsError) {
+      return NextResponse.json(
+        { success: false, code: error.code, errors: [{ path: 'config', message: error.message }] },
+        { status: 400 },
+      )
+    }
     if (error instanceof ProviderEndpointError) {
       return NextResponse.json(
         {
