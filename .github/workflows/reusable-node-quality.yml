@@ -1,0 +1,116 @@
+name: Reusable Node Quality and Security
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version (same major version across projects)
+        required: false
+        type: string
+        default: "22"
+      package-manager:
+        description: npm or pnpm
+        required: false
+        type: string
+        default: "npm"
+      working-directory:
+        required: false
+        type: string
+        default: "."
+      lint-script:
+        required: false
+        type: string
+        default: "lint"
+      typecheck-script:
+        required: false
+        type: string
+        default: "typecheck"
+      test-script:
+        required: false
+        type: string
+        default: "test:ci"
+      build-script:
+        required: false
+        type: string
+        default: "build"
+      audit-level:
+        required: false
+        type: string
+        default: "high"
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v4
+      - name: Set up pnpm
+        if: inputs.package-manager == 'pnpm'
+        uses: pnpm/action-setup@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: Check package manager and lockfile
+        env:
+          PKG_MANAGER: ${{ inputs.package-manager }}
+        run: |
+          set -euo pipefail
+          case "$PKG_MANAGER" in
+            npm)
+              test -f package-lock.json || { echo "Missing npm lockfile"; exit 1; }
+              ;;
+            pnpm)
+              test -f pnpm-lock.yaml || { echo "Missing pnpm lockfile"; exit 1; }
+              ;;
+            *)
+              echo "Unsupported package manager: $PKG_MANAGER"
+              exit 1
+              ;;
+          esac
+      - name: Install dependencies from lockfile
+        env:
+          PKG_MANAGER: ${{ inputs.package-manager }}
+        run: |
+          if [ "$PKG_MANAGER" = pnpm ]; then
+            pnpm install --frozen-lockfile
+          else
+            npm ci
+          fi
+      - name: Check lint, TypeScript, tests, and build
+        env:
+          PKG_MANAGER: ${{ inputs.package-manager }}
+          LINT_SCRIPT: ${{ inputs.lint-script }}
+          TYPECHECK_SCRIPT: ${{ inputs.typecheck-script }}
+          TEST_SCRIPT: ${{ inputs.test-script }}
+          BUILD_SCRIPT: ${{ inputs.build-script }}
+          CI: "true"
+        run: |
+          set -euo pipefail
+          for spec in "lint:$LINT_SCRIPT" "typecheck:$TYPECHECK_SCRIPT" "test:$TEST_SCRIPT" "build:$BUILD_SCRIPT"; do
+            task="${spec%%:*}"
+            script="${spec#*:}"
+            if [ -z "$script" ]; then
+              echo "$task deliberately not configured by caller"
+              continue
+            fi
+            SCRIPT_NAME="$script" node -e '
+              const p=require("./package.json");
+              if (!p.scripts || !Object.prototype.hasOwnProperty.call(p.scripts, process.env.SCRIPT_NAME)) {
+                console.error("Required script missing:", process.env.SCRIPT_NAME);
+                process.exit(1);
+              }'
+            "$PKG_MANAGER" run "$script"
+          done
+      - name: Audit dependencies
+        env:
+          PKG_MANAGER: ${{ inputs.package-manager }}
+          AUDIT_LEVEL: ${{ inputs.audit-level }}
+        run: "$PKG_MANAGER audit --audit-level=${AUDIT_LEVEL}"
