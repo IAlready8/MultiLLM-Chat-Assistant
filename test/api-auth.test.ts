@@ -13,6 +13,8 @@ vi.mock('@/lib/prisma', () => ({
 
 import { getAuthenticatedAdmin, getAuthenticatedUser } from '@/lib/api-auth'
 
+type RoleResult = { user: { role: string } }
+
 describe('API authentication', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -153,5 +155,190 @@ describe('API authentication', () => {
 
     expect(result).toBeInstanceOf(NextResponse)
     expect((result as NextResponse).status).toBe(403)
+  })
+
+  describe('persisted role reconciled with password-version revocation', () => {
+    it('reads both the persisted role and the password version in one account query', async () => {
+      mockAuth.mockResolvedValue({ user: { id: 'user-123', pv: 0 } })
+
+      await getAuthenticatedUser()
+
+      expect(mockFindUser).toHaveBeenCalledTimes(1)
+      expect(mockFindUser).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          passwordVersion: true,
+          role: true,
+        },
+      })
+    })
+
+    it.each(['ADMIN', 'OWNER'])(
+      'grants admin routes to a persisted %s who is not allowlisted',
+      async (role) => {
+        mockAuth.mockResolvedValue({ user: { id: 'db-elevated', pv: 4 } })
+        mockFindUser.mockResolvedValue({
+          id: 'db-elevated',
+          email: 'db-elevated@example.com',
+          passwordVersion: 4,
+          role,
+        })
+
+        const result = await getAuthenticatedAdmin()
+
+        expect(result).not.toBeInstanceOf(NextResponse)
+        expect((result as RoleResult).user.role).toBe(role)
+      },
+    )
+
+    it.each(['ADMIN', 'OWNER'])(
+      'revokes a persisted %s session minted before a password change',
+      async (role) => {
+        mockAuth.mockResolvedValue({ user: { id: 'db-elevated', pv: 2 } })
+        mockFindUser.mockResolvedValue({
+          id: 'db-elevated',
+          email: 'db-elevated@example.com',
+          passwordVersion: 3,
+          role,
+        })
+
+        const result = await getAuthenticatedAdmin()
+
+        expect(result).toBeInstanceOf(NextResponse)
+        expect((result as NextResponse).status).toBe(401)
+        await expect((result as NextResponse).json()).resolves.toEqual({
+          error: 'Unauthorized',
+        })
+      },
+    )
+
+    it('revokes an allowlisted owner session minted before a password change', async () => {
+      vi.stubEnv('AUTH_OWNER_EMAILS', 'owner@example.com')
+      mockAuth.mockResolvedValue({ user: { id: 'owner-1', pv: 0 } })
+      mockFindUser.mockResolvedValue({
+        id: 'owner-1',
+        email: 'owner@example.com',
+        passwordVersion: 1,
+        role: 'OWNER',
+      })
+
+      expect((await getAuthenticatedAdmin() as NextResponse).status).toBe(401)
+    })
+
+    it('does not let a persisted MEMBER demote an allowlisted owner (P2 floor)', async () => {
+      vi.stubEnv('AUTH_OWNER_EMAILS', 'owner@example.com')
+      mockAuth.mockResolvedValue({ user: { id: 'owner-1', pv: 0 } })
+      mockFindUser.mockResolvedValue({
+        id: 'owner-1',
+        email: 'owner@example.com',
+        passwordVersion: 0,
+        role: 'MEMBER',
+      })
+
+      const result = await getAuthenticatedAdmin()
+
+      expect(result).not.toBeInstanceOf(NextResponse)
+      expect((result as RoleResult).user.role).toBe('OWNER')
+    })
+
+    it.each(['USER', 'SUPERUSER', 'admin-ish', '', ' admin ', 'admin', 'Owner', 'ADMIN '])(
+      'ignores the non-exact persisted role %j and denies admin routes (P1)',
+      async (role) => {
+        mockAuth.mockResolvedValue({ user: { id: 'odd-1', pv: 0 } })
+        mockFindUser.mockResolvedValue({
+          id: 'odd-1',
+          email: 'odd@example.com',
+          passwordVersion: 0,
+          role,
+        })
+
+        const result = await getAuthenticatedAdmin()
+
+        expect(result).toBeInstanceOf(NextResponse)
+        expect((result as NextResponse).status).toBe(403)
+      },
+    )
+
+    it('ignores an elevated role claim in the token when the account is a MEMBER (P3)', async () => {
+      mockAuth.mockResolvedValue({
+        user: { id: 'member-9', pv: 0, role: 'OWNER', email: 'member9@example.com' },
+      })
+      mockFindUser.mockResolvedValue({
+        id: 'member-9',
+        email: 'member9@example.com',
+        passwordVersion: 0,
+        role: 'MEMBER',
+      })
+
+      expect((await getAuthenticatedAdmin() as NextResponse).status).toBe(403)
+    })
+
+    it('ignores a MEMBER role claim in the token when the account is a persisted ADMIN (P3)', async () => {
+      mockAuth.mockResolvedValue({
+        user: { id: 'db-admin', pv: 0, role: 'MEMBER', email: 'db-admin@example.com' },
+      })
+      mockFindUser.mockResolvedValue({
+        id: 'db-admin',
+        email: 'db-admin@example.com',
+        passwordVersion: 0,
+        role: 'ADMIN',
+      })
+
+      const result = await getAuthenticatedAdmin()
+
+      expect(result).not.toBeInstanceOf(NextResponse)
+      expect((result as RoleResult).user.role).toBe('ADMIN')
+    })
+
+    it('treats a missing persisted role as MEMBER for non-allowlisted accounts', async () => {
+      mockAuth.mockResolvedValue({ user: { id: 'legacy-1', pv: 0 } })
+      mockFindUser.mockResolvedValue({
+        id: 'legacy-1',
+        email: 'legacy@example.com',
+        passwordVersion: 0,
+        role: null,
+      })
+
+      const userResult = await getAuthenticatedUser()
+      expect(userResult).not.toBeInstanceOf(NextResponse)
+      expect((userResult as unknown as RoleResult).user.role).toBe('MEMBER')
+
+      const adminResult = await getAuthenticatedAdmin()
+      expect(adminResult).toBeInstanceOf(NextResponse)
+      expect((adminResult as NextResponse).status).toBe(403)
+    })
+
+    // P2 preservation: right after the migration every row holds the column
+    // default MEMBER, so the admin decision must match main's allowlist-only
+    // behavior for every allowlist placement.
+    it.each([
+      { owner: 'a@example.com', admin: '', expected: 200 },
+      { owner: '', admin: 'a@example.com', expected: 200 },
+      { owner: 'a@example.com', admin: 'a@example.com', expected: 200 },
+      { owner: 'other@example.com', admin: 'other2@example.com', expected: 403 },
+      { owner: '', admin: '', expected: 403 },
+    ])(
+      'with a default MEMBER row, owner=$owner admin=$admin gives $expected like main',
+      async ({ owner, admin, expected }) => {
+        vi.stubEnv('AUTH_OWNER_EMAILS', owner)
+        vi.stubEnv('AUTH_ADMIN_EMAILS', admin)
+        mockAuth.mockResolvedValue({ user: { id: 'u-a', pv: 0 } })
+        mockFindUser.mockResolvedValue({
+          id: 'u-a',
+          email: 'a@example.com',
+          passwordVersion: 0,
+          role: 'MEMBER',
+        })
+
+        const result = await getAuthenticatedAdmin()
+        const status = result instanceof NextResponse ? result.status : 200
+
+        expect(status).toBe(expected)
+      },
+    )
   })
 })

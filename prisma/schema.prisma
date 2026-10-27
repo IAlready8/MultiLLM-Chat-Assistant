@@ -33,6 +33,12 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -41,6 +47,7 @@ model User {
   image         String?
   password      String?   // For credential-based authentication
   passwordVersion Int     @default(0) // Bumped on password change to revoke sessions
+  role          UserRole  @default(MEMBER) // Persisted role; combined with AUTH_*_EMAILS allowlists
   accounts      Account[]
   sessions      Session[]
   conversations Conversation[]
