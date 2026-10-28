@@ -50,7 +50,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Checkout caller repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up pnpm
         if: inputs.package-manager == 'pnpm'
         uses: pnpm/action-setup@v4
