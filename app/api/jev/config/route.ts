@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
-import { storeUserApiKey, getUserProviderConfigs } from '@/lib/api-key-service'
+import {
+  storeUserApiKey,
+  getUserProviderConfigs,
+  hasValidApiKey,
+} from '@/lib/api-key-service'
 import prisma from '@/lib/prisma'
 
 // Manual validation (zod schema triggers false-positive redaction in tooling)
@@ -35,11 +39,14 @@ export async function GET() {
 
     const settings = jev.settings ?? {}
     const enabled = settings.jevJudgingEnabled === true
+    // ProviderConfig no longer exposes the key (credential boundary, #199):
+    // check credential presence server-side instead of reading a field.
+    const hasKey = await hasValidApiKey(user.id, 'jev')
 
     return NextResponse.json({
-      configured: !!jev.apiKey,
+      configured: hasKey,
       enabled: enabled && jev.isActive,
-      hasKey: !!jev.apiKey,
+      hasKey,
     })
   } catch {
     return NextResponse.json(
