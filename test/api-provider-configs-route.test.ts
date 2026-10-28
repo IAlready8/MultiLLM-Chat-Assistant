@@ -7,6 +7,11 @@ const mockGetUserProviderConfigs = vi.fn()
 const mockDeleteUserProviderConfig = vi.fn()
 const mockTestProviderKey = vi.fn()
 const mockValidateApiKeyFormat = vi.fn()
+const mockRecordAnalyticsEvent = vi.fn()
+
+vi.mock('@/services/analytics-service', () => ({
+  recordAnalyticsEvent: (event: unknown) => mockRecordAnalyticsEvent(event),
+}))
 
 vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: () => mockGetAuthenticatedUser(),
@@ -63,6 +68,7 @@ describe('/api/provider-configs route', () => {
       user: { id: 'user-1' },
     })
     mockValidateApiKeyFormat.mockReturnValue(null)
+    mockRecordAnalyticsEvent.mockResolvedValue(undefined)
   })
 
   it('GET returns stored provider configs with redacted apiKey field', async () => {
@@ -535,4 +541,151 @@ describe('/api/provider-configs route', () => {
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
   })
+  it.each(['POST', 'PUT'] as const)('%s preserves provider-configured analytics without credentials', async (method) => {
+    mockTestProviderKey.mockResolvedValue({ ok: true, status: 200 })
+    const invoke = method === 'POST' ? POST : PUT
+    const response = await invoke(makeRequest({
+      provider: 'openai', config: { apiKey: 'synthetic-primary-credential', models: ['gpt-4'] },
+    }, method))
+
+    expect(response.status).toBe(200)
+    expect(mockRecordAnalyticsEvent).toHaveBeenCalledExactlyOnceWith({
+      event: 'provider_configured', userId: 'user-1', payload: { provider: 'openai' },
+    })
+  })
+
+  it.each(['POST', 'PUT'] as const)('%s still saves when optional analytics fails', async (method) => {
+    mockTestProviderKey.mockResolvedValue({ ok: true, status: 200 })
+    mockRecordAnalyticsEvent.mockRejectedValueOnce(new Error('analytics unavailable'))
+    const invoke = method === 'POST' ? POST : PUT
+    const response = await invoke(makeRequest({
+      provider: 'openai', config: { apiKey: 'synthetic-primary-credential', models: ['gpt-4'] },
+    }, method))
+
+    expect(response.status).toBe(200)
+    expect(mockStoreUserApiKey).toHaveBeenCalledOnce()
+    await expect(response.json()).resolves.toMatchObject({ success: true })
+  })
+
+  it('PUT returns validated public settings without echoing the submitted credential', async () => {
+    mockTestProviderKey.mockResolvedValue({ ok: true, status: 200 })
+    const credential = 'synthetic-submitted-provider-credential'
+    const response = await PUT(makeRequest({
+      provider: 'openai',
+      config: {
+        apiKey: credential,
+        baseUrl: 'https://api.openai.com/v1',
+        organization: 'org-public-setting',
+        models: ['gpt-4'],
+        settings: { maxTokens: 2048 },
+      },
+    }, 'PUT'))
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body).toMatchObject({
+      success: true,
+      data: {
+        apiKey: '', organization: 'org-public-setting', models: ['gpt-4'],
+        settings: { baseUrl: 'https://api.openai.com/v1', maxTokens: 2048 },
+      },
+      connectionTest: { success: true },
+    })
+    expect(JSON.stringify(body)).not.toContain(credential)
+    expect(body.data.settings).not.toHaveProperty('apiKey')
+    expect(mockStoreUserApiKey).toHaveBeenCalledWith('user-1', 'openai', credential,
+      expect.objectContaining({ maxTokens: 2048 }))
+  })
+
+  describe.each(['POST', 'PUT'] as const)('%s settings boundary', (method) => {
+    it.each([
+      { settings: { apiKey: 'synthetic-nested-credential' } },
+      { settings: { 'API_KEY': 'synthetic-nested-credential' } },
+      { authorization: 'synthetic-nested-credential' },
+      { settings: { headers: [{ 'X-API-Key': 'synthetic-nested-credential' }] } },
+      { settings: { safetySettings: [{ category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE', credentials: { password: 'synthetic-nested-credential' } }] } },
+      { rateLimits: { requests: 10, window: 60000, token: 'synthetic-nested-credential' } },
+      { models: [{ accessToken: 'synthetic-nested-credential' }] },
+    ])('rejects credentials anywhere in settings before testing or saving %#', async (extra) => {
+      mockTestProviderKey.mockResolvedValue({ ok: true, status: 200 })
+      const invoke = method === 'POST' ? POST : PUT
+      const response = await invoke(makeRequest({
+        provider: 'openai', config: { apiKey: 'synthetic-primary-credential', ...extra },
+      }, method))
+
+      expect(response.status).toBe(400)
+      const body = await response.json()
+      expect(body).toMatchObject({ success: false, code: 'PROVIDER_SETTINGS_INVALID' })
+      expect(JSON.stringify(body)).not.toContain('synthetic-nested-credential')
+      expect(mockTestProviderKey).not.toHaveBeenCalled()
+      expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+      expect(mockRecordAnalyticsEvent).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      { unsupportedExtension: 'not silently discarded' },
+      { settings: { unsupportedExtension: 'not silently discarded' } },
+      { settings: [] },
+      { models: ['gpt-4', 42] },
+      { rateLimits: { requests: 0, window: 60000 } },
+    ])('rejects unsupported or malformed settings %#', async (extra) => {
+      mockTestProviderKey.mockResolvedValue({ ok: true, status: 200 })
+      const invoke = method === 'POST' ? POST : PUT
+      const response = await invoke(makeRequest({
+        provider: 'openai', config: { apiKey: 'synthetic-primary-credential', ...extra },
+      }, method))
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toMatchObject({ code: 'PROVIDER_SETTINGS_INVALID' })
+      expect(mockTestProviderKey).not.toHaveBeenCalled()
+      expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+    })
+
+    it('preserves supported settings, token limits and top-level precedence', async () => {
+      mockTestProviderKey.mockResolvedValue({ ok: true, status: 200 })
+      const settings = {
+        baseUrl: 'https://api.openai.com/v1', organization: 'org-safe', maxTokens: 2048,
+        version: '2023-06-01', httpReferer: 'https://example.test', xTitle: 'Example',
+        safetySettings: [{ category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' }],
+        isActive: true,
+      }
+      const invoke = method === 'POST' ? POST : PUT
+      const response = await invoke(makeRequest({
+        provider: 'openai', config: { apiKey: 'synthetic-primary-credential', settings,
+          maxTokens: 4096, models: ['gpt-4'], rateLimits: { requests: 10, window: 60000 } },
+      }, method))
+      expect(response.status).toBe(200)
+      expect(mockStoreUserApiKey).toHaveBeenCalledWith('user-1', 'openai',
+        'synthetic-primary-credential', { ...settings, maxTokens: 4096,
+          models: ['gpt-4'], rateLimits: { requests: 10, window: 60000 } })
+    })
+  })
+
+  it('GET recursively removes legacy credential fields without changing stored shapes or cache safety', async () => {
+    process.env.ENABLE_API_READ_CACHE = 'true'
+    const legacy = {
+      models: ['gpt-4'], rateLimits: { requests: 10, window: 60000 }, maxTokens: 4096,
+      api_key: 'synthetic-legacy-credential',
+      metadata: { label: 'preserved extension', entries: [{ region: 'local',
+        Authorization: 'synthetic-legacy-credential', 'X-API-Key': 'synthetic-legacy-credential',
+        deeper: { refresh_token: 'synthetic-legacy-credential', enabled: true } }] },
+    }
+    const original = JSON.parse(JSON.stringify(legacy))
+    mockGetUserProviderConfigs.mockResolvedValue([{ provider: 'openai', isActive: true, settings: legacy }])
+    for (const source of ['miss', 'hit']) {
+      const response = await GET()
+      expect(response.status).toBe(200)
+      expect(response.headers.get('X-Read-Cache')).toBe(source)
+      const body = await response.json()
+      expect(JSON.stringify(body)).not.toContain('synthetic-legacy-credential')
+      expect(body.configs.openai.settings).toEqual({
+        models: ['gpt-4'], rateLimits: { requests: 10, window: 60000 }, maxTokens: 4096,
+        metadata: { label: 'preserved extension', entries: [{ region: 'local', deeper: { enabled: true } }] },
+      })
+    }
+    expect(legacy).toEqual(original)
+    expect(mockGetUserProviderConfigs).toHaveBeenCalledTimes(1)
+    expect(mockGetUserProviderConfigs).toHaveBeenCalledWith('user-1')
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
 })
