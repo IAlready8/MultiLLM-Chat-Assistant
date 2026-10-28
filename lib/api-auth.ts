@@ -28,6 +28,23 @@ const isJwtDecryptionError = (error: unknown): boolean => {
 /**
  * Resolve the current authenticated user for a protected API route.
  * Guest and demo identities are intentionally unsupported.
+ *
+ * Order of checks (each one fails closed):
+ *   1. Decode the session cookie without a database round-trip (authIdentity).
+ *   2. Re-read the account; a deleted account is rejected.
+ *   3. Compare the token's password version with the account's; a session
+ *      minted before a password change is rejected.
+ *   4. Derive the role from this fresh read only: the persisted User.role
+ *      column combined with the environment allowlists.
+ *
+ * Authorization policy (P3): this fresh database read is the only source of
+ * authorization. The role and email claims inside the JWT are never trusted.
+ * Known display gap: lib/auth.ts still derives session.user.role from the
+ * allowlists alone, so a session can display MEMBER for an account whose
+ * persisted role is ADMIN or OWNER. The current source review found no
+ * authorization consumer of session.user.role. The session-role-consumers
+ * test is a heuristic regression guard; future authorization changes require
+ * explicit review. Role-based UI must call an API using this function.
  */
 export async function getAuthenticatedUser(): Promise<
   { user: User } | NextResponse
@@ -38,7 +55,14 @@ export async function getAuthenticatedUser(): Promise<
     if (session?.user?.id) {
       const currentUser = await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { id: true, name: true, email: true, image: true, passwordVersion: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          passwordVersion: true,
+          role: true,
+        },
       })
       // JWTs outlive deleted accounts and changes to the admin allowlist.
       // Every protected operation must use the current account identity.
@@ -55,7 +79,7 @@ export async function getAuthenticatedUser(): Promise<
       return {
         user: {
           ...currentUser,
-          role: resolveAuthTeamRole(currentUser.email),
+          role: resolveAuthTeamRole(currentUser.email, currentUser.role),
         } as unknown as User,
       }
     }

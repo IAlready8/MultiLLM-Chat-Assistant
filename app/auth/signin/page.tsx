@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { Lock, Mail } from 'lucide-react'
 import { signIn, signOut, useSession } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { OAuthProviderButtons } from '@/components/oauth-provider-buttons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { resolveAuthCallbackUrl } from '@/lib/auth-redirect'
+import { navigateToAuthCallback, resolveAuthCallbackUrl } from '@/lib/auth-redirect'
 
 type SignInErrors = {
   email?: string
@@ -33,7 +33,6 @@ export default function SignInPage() {
   const [fieldErrors, setFieldErrors] = useState<SignInErrors>({})
   const { data: session, status } = useSession()
   const { toast } = useToast()
-  const router = useRouter()
   const searchParams = useSearchParams()
 
   const callbackUrl = useMemo(
@@ -89,8 +88,7 @@ export default function SignInPage() {
         return
       }
 
-      router.push(result.url ?? callbackUrl)
-      router.refresh()
+      navigateToAuthCallback(callbackUrl)
     } catch (error) {
       console.error('Credential sign-in failed:', error)
       toast({
@@ -117,7 +115,7 @@ export default function SignInPage() {
             </CardDescription>
           </CardHeader>
           <CardFooter className="flex flex-col gap-2">
-            <Button className="w-full" onClick={() => router.push(callbackUrl)}>
+            <Button className="w-full" onClick={() => navigateToAuthCallback(callbackUrl)}>
               Continue to workspace
             </Button>
             <Button
