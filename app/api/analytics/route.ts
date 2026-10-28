@@ -13,6 +13,7 @@ import {
 } from '@/services/analytics-service'
 import { withApiMetrics } from '@/lib/api-metrics-wrapper'
 import { estimateCost } from '@/lib/provider-pricing'
+import { getGenerationCostSummary } from '@/services/generation-cost-service'
 
 type Timeframe = '24h' | '7d' | '30d'
 
@@ -450,6 +451,10 @@ export const GET = withApiMetrics(async (request: Request) => {
   try {
     const events = await getParsedAnalyticsEvents(user.id, days)
     const workflowMetrics = await getWorkflowMetrics(user.id, days, events)
+    // Spend is read from durable Generation rows rather than from the event
+    // payloads above; see services/generation-cost-service.ts for why. This
+    // never throws, so it cannot take the dashboard down.
+    const costBreakdown = await getGenerationCostSummary(user.id, days)
     const providerData = buildProviderUsage(events)
     const usageTrends =
       timeframe === '24h' ? buildHourlyTrends(events) : buildDailyTrends(events, days)
@@ -510,6 +515,9 @@ export const GET = withApiMetrics(async (request: Request) => {
       workflowMetrics: workflowMetricsWithCurrentView,
       activationFunnel: buildActivationFunnel(workflowMetricsWithCurrentView),
       step11OutboundMetrics: buildStep11OutboundMetrics(events),
+      // Additive: `providerData[].estimatedCostUsd` above keeps its previous
+      // blended meaning so existing consumers are unaffected.
+      costBreakdown,
       totalStats,
       meta: {
         source: events.length > 0 ? 'live' : 'empty',

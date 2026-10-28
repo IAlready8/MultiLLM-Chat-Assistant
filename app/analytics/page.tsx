@@ -49,6 +49,35 @@ type WorkflowMetrics = {
   portalSessionsCreated: number
 }
 
+type ModelCostRow = {
+  provider: string
+  model: string
+  generations: number
+  promptTokens: number
+  completionTokens: number
+  inputUsd: number
+  outputUsd: number
+  totalUsd: number
+  precision: 'model' | 'provider-fallback'
+  providerReportedShare: number
+}
+
+type CostBreakdown = {
+  windowDays: number
+  generations: number
+  promptTokens: number
+  completionTokens: number
+  inputUsd: number
+  outputUsd: number
+  totalUsd: number
+  rows: ModelCostRow[]
+  truncated: boolean
+  providerReportedShare: number
+  empty: boolean
+  degraded: boolean
+  basis: string
+}
+
 type Step11OutboundMetrics = {
   attributedEvents: number
   uniqueCohorts: number
@@ -86,6 +115,7 @@ type AnalyticsApiResponse = {
   workflowMetrics: WorkflowMetrics
   activationFunnel: ActivationStep[]
   step11OutboundMetrics: Step11OutboundMetrics
+  costBreakdown?: CostBreakdown
   meta?: {
     source?: 'live' | 'empty'
     eventCount?: number
@@ -142,6 +172,7 @@ export default function AnalyticsPage() {
       comparisonViews: 0,
       comparisonReadyConversations: 0,
     })
+  const [costBreakdown, setCostBreakdown] = useState<CostBreakdown | null>(null)
   const [isTelemetryEmpty, setIsTelemetryEmpty] = useState(false)
   const [sourceLabel, setSourceLabel] = useState<'Live data' | 'No telemetry yet'>('Live data')
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -190,6 +221,7 @@ export default function AnalyticsPage() {
           portalSessionsCreated: 0,
         }
       )
+      setCostBreakdown(data.costBreakdown ?? null)
       setActivationFunnel(data.activationFunnel || [])
       setStep11OutboundMetrics(
         data.step11OutboundMetrics || {
@@ -392,10 +424,24 @@ export default function AnalyticsPage() {
             <Bot className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
+            {/*
+              Prefers the per-model figure derived from recorded generation
+              token counts. Falls back to the older blended per-provider
+              estimate only when the durable figure is unavailable, so the
+              card never goes blank on a degraded read.
+            */}
             <div className="text-2xl font-bold">
-              ${providerData.reduce((sum, p) => sum + (p.estimatedCostUsd ?? 0), 0).toFixed(2)}
+              $
+              {(costBreakdown && !costBreakdown.degraded
+                ? costBreakdown.totalUsd
+                : providerData.reduce((sum, p) => sum + (p.estimatedCostUsd ?? 0), 0)
+              ).toFixed(2)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Blended estimate, not for billing</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {costBreakdown && !costBreakdown.degraded
+                ? 'Per-model estimate from recorded tokens, not an invoice'
+                : 'Blended estimate, not for billing'}
+            </p>
           </CardContent>
         </Card>
         
@@ -573,6 +619,122 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Recorded spend, per model, from durable generation rows */}
+      {costBreakdown && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recorded Spend by Model</CardTitle>
+            <CardDescription>
+              Input and output tokens priced separately from saved generation
+              records over the selected period.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {costBreakdown.degraded ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                Spend records could not be read for this period. This is not a
+                zero-spend result.
+              </p>
+            ) : costBreakdown.empty || costBreakdown.rows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No saved generations in this period yet. Run a comparison to
+                start recording spend.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total</p>
+                    <p className="text-lg font-semibold">
+                      ${costBreakdown.totalUsd.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Input</p>
+                    <p className="text-lg font-semibold">
+                      ${costBreakdown.inputUsd.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Output</p>
+                    <p className="text-lg font-semibold">
+                      ${costBreakdown.outputUsd.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Generations</p>
+                    <p className="text-lg font-semibold">
+                      {costBreakdown.generations.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <caption className="sr-only">
+                      Recorded spend per provider and model
+                    </caption>
+                    <thead>
+                      <tr className="border-b text-xs text-muted-foreground">
+                        <th scope="col" className="py-2 pr-3 font-medium">Model</th>
+                        <th scope="col" className="py-2 pr-3 font-medium">Runs</th>
+                        <th scope="col" className="py-2 pr-3 font-medium">In / Out tokens</th>
+                        <th scope="col" className="py-2 pr-3 font-medium">Input</th>
+                        <th scope="col" className="py-2 pr-3 font-medium">Output</th>
+                        <th scope="col" className="py-2 font-medium">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {costBreakdown.rows.map(row => (
+                        <tr
+                          key={`${row.provider}:${row.model}`}
+                          className="border-b last:border-0"
+                        >
+                          <td className="py-2 pr-3">
+                            <span className="font-medium">{row.model}</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {row.provider}
+                              {row.precision === 'provider-fallback' && (
+                                <span title="No published rate for this exact model; a provider average was used.">
+                                  {' '}&middot; provider-rate estimate
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-3">{row.generations.toLocaleString()}</td>
+                          <td className="py-2 pr-3 text-xs">
+                            {row.promptTokens.toLocaleString()} /{' '}
+                            {row.completionTokens.toLocaleString()}
+                          </td>
+                          <td className="py-2 pr-3">${row.inputUsd.toFixed(2)}</td>
+                          <td className="py-2 pr-3">${row.outputUsd.toFixed(2)}</td>
+                          <td className="py-2 font-medium">${row.totalUsd.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <p>{costBreakdown.basis}</p>
+                  <p>
+                    {Math.round(costBreakdown.providerReportedShare * 100)}% of
+                    counted tokens were reported by the provider; the remainder
+                    are character-length estimates.
+                  </p>
+                  {costBreakdown.truncated && (
+                    <p role="status">
+                      Only the most recent saved generations were counted, so
+                      this total is a partial view of the period.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Usage Trends */}
       <Card>

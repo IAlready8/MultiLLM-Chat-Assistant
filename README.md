@@ -7,6 +7,8 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js&logoColor=white)](https://nextjs.org)
 
+**Live:** [https://multi-llm-chat-assistant.vercel.app](https://multi-llm-chat-assistant.vercel.app)
+
 Multi-provider LLM workspace built for repeatable multi-model work, saved workflow history, and operator visibility across providers.
 
 Current exact ICP and use case are locked in:

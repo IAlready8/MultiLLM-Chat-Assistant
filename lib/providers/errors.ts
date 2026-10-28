@@ -9,6 +9,7 @@
 import { LlmRequestError } from '@/lib/llm-request'
 import { NotImplementedError } from '@/lib/error-system'
 import { PROVIDER_ENDPOINT_ERROR_CODE } from '@/lib/provider-endpoint'
+import { ProviderCircuitOpenError } from '@/lib/provider-resilience'
 import type { ClassifiedError } from './types'
 
 // ---------------------------------------------------------------------------
@@ -60,6 +61,18 @@ export function classifyProviderError(error: unknown): ClassifiedError {
       status: 501,
       code: 'FEATURE_NOT_IMPLEMENTED',
       error: error.userMessage || 'This feature is not yet available.',
+    }
+  }
+
+  // Breaker rejections are reported as a plain upstream outage with a wait
+  // hint, so the client retry path treats them exactly like a 503 from the
+  // provider itself rather than as an internal fault.
+  if (error instanceof ProviderCircuitOpenError) {
+    return {
+      status: 503,
+      code: 'PROVIDER_UNAVAILABLE',
+      error: 'Provider is currently unavailable',
+      retryAfterSeconds: error.retryAfterSeconds,
     }
   }
 

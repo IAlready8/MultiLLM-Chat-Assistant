@@ -43,7 +43,9 @@ export const GET = withApiMetrics(async (_req: Request) => {
 
   try {
     const params = new URL(_req.url).searchParams
-    if (['limit', 'cursor', 'workspace'].some(key => params.has(key))) {
+    // `q` joins the paginated branch: a search result set is never served from
+    // the cached full-list response, which has no notion of a search term.
+    if (['limit', 'cursor', 'workspace', 'q'].some(key => params.has(key))) {
       return NextResponse.json(await ConversationService.getConversationPage(user.id, parseConversationPage(params)), { headers: { 'Cache-Control': 'no-store' } })
     }
     return await cachedJsonResponse(

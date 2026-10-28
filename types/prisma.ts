@@ -10,6 +10,8 @@ export interface User extends BaseModel {
   emailVerified?: Date | null
   image?: string | null
   password?: string | null
+  passwordVersion?: number
+  role?: 'OWNER' | 'ADMIN' | 'MEMBER' | null
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system'

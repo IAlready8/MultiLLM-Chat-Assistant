@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { AccountProfileForm } from '@/components/account-profile-form'
+import { ChangePasswordForm } from '@/components/change-password-form'
 import { AccountHistoryExport } from '@/components/account-history-export'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -179,7 +180,7 @@ export default function SettingsPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
-      <Card className="mb-6">
+      <Card className="mb-6 card-rainbow-hover">
         <CardHeader>
           <div className="flex items-center gap-2">
             <CardTitle>Settings</CardTitle>
@@ -199,7 +200,7 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
-          <Card>
+          <Card className="card-rainbow-hover">
             <CardHeader>
             <CardTitle>Account Settings</CardTitle>
             <CardDescription>Manage your account preferences</CardDescription>
@@ -208,10 +209,19 @@ export default function SettingsPage() {
             <AccountProfileForm />
           </CardContent>
         </Card>
+          <Card className="card-rainbow-hover">
+            <CardHeader>
+            <CardTitle>Change Password</CardTitle>
+            <CardDescription>Update the password you use to sign in</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ChangePasswordForm />
+          </CardContent>
+        </Card>
       </TabsContent>
 
         <TabsContent value="providers" className="space-y-6">
-          <Card>
+          <Card className="card-rainbow-hover">
             <CardHeader>
               <CardTitle>API Provider Configuration</CardTitle>
               <CardDescription>Configure your LLM provider API keys and settings</CardDescription>

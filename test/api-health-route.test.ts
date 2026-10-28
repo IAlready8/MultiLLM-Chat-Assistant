@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const mockQueryRaw = vi.fn()
@@ -6,6 +8,7 @@ const mockMetricsSnapshot = vi.fn()
 const mockGetCacheDiagnostics = vi.fn()
 const mockGetRateLimitDiagnostics = vi.fn()
 const mockFetch = vi.fn()
+const mockProbeRateLimitBackend = vi.fn()
 
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -24,7 +27,7 @@ vi.mock('@/lib/cache', () => ({
 }))
 
 vi.mock('@/lib/rate-limit', () => ({
-  probeRateLimitBackend: vi.fn().mockResolvedValue(undefined),
+  probeRateLimitBackend: () => mockProbeRateLimitBackend(),
   getRateLimitDiagnostics: () => mockGetRateLimitDiagnostics(),
 }))
 
@@ -41,6 +44,7 @@ describe('/api/health route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockQueryRaw.mockResolvedValue([{ ok: 1 }])
+    mockProbeRateLimitBackend.mockResolvedValue(undefined)
     mockMetricsSnapshot.mockReturnValue({
       startedAt: '2026-01-01T00:00:00.000Z',
       routes: {},
@@ -72,6 +76,7 @@ describe('/api/health route', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     global.fetch = originalFetch
     if (originalPythonCoreUrl === undefined) {
       delete process.env.PYTHON_CORE_URL
@@ -320,5 +325,65 @@ describe('/api/health route', () => {
       branch: 'main',
     })
     expect(payload.source).toBe('health')
+  })
+
+  it('reports a hung database probe as degraded after the probe timeout', async () => {
+    vi.useFakeTimers()
+    mockQueryRaw.mockReturnValue(new Promise(() => {}))
+
+    const pending = GET(new NextRequest('http://localhost/api/health'))
+    await vi.advanceTimersByTimeAsync(4_999)
+    let settled = false
+    void pending.then(() => { settled = true })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    const response = await pending
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload.status).toBe('degraded')
+    expect(payload.checks.database).toMatchObject({
+      status: 'degraded',
+      message: 'Database health check timed out',
+    })
+    expect(payload.checks.database.responseTimeMs).toBeGreaterThanOrEqual(5_000)
+    expect(payload.summary).toEqual({
+      coreAvailability: 'degraded',
+      degradedChecks: ['database'],
+      alertLevel: 'critical',
+      shouldPage: true,
+    })
+  })
+
+  it('times each dependency check independently and reports the full request time', async () => {
+    vi.useFakeTimers()
+    mockQueryRaw.mockResolvedValue([{ ok: 1 }])
+    mockProbeRateLimitBackend.mockImplementation(
+      () => new Promise<void>((resolve) => setTimeout(resolve, 400)),
+    )
+
+    const pending = GET(new NextRequest('http://localhost/api/health'))
+    await vi.advanceTimersByTimeAsync(400)
+    const payload = await (await pending).json()
+
+    expect(payload.status).toBe('healthy')
+    // A slow rate-limit probe must not be attributed to the database check.
+    expect(payload.checks.database.responseTimeMs).toBeLessThan(400)
+    expect(payload.checks.rateLimit.responseTimeMs).toBeGreaterThanOrEqual(400)
+    expect(payload.checks.cache.responseTimeMs).toBeLessThan(400)
+    expect(payload.checks.sidecar.responseTimeMs).toBeLessThan(400)
+    // The total covers the whole request instead of the setup before any check ran.
+    expect(payload.responseTimeMs).toBeGreaterThanOrEqual(400)
+    expect(payload.checks.api.responseTimeMs).toBe(payload.responseTimeMs)
+  })
+
+  it('is a route handler module, not a server-actions module', () => {
+    const source = readFileSync(
+      path.resolve(__dirname, '../app/api/health/route.ts'),
+      'utf8',
+    )
+    expect(source).not.toMatch(/^\s*['"]use server['"]/m)
   })
 })
