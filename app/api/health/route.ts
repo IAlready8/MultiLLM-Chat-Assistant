@@ -38,21 +38,50 @@ async function timed<T>(run: () => Promise<T> | T): Promise<{ value: T; duration
   return { value, durationMs: Date.now() - startedAt }
 }
 
+type SchemaState = 'current' | 'behind' | 'unchecked'
+
+// Postgres SQLSTATE codes for a missing column (42703) or table (42P01).
+const MISSING_SCHEMA_PATTERN = /\b(42703|42P01)\b|does not exist/i
+
+function isMissingSchemaError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { code?: unknown; message?: unknown; meta?: { code?: unknown; message?: unknown } }
+  return [candidate.code, candidate.message, candidate.meta?.code, candidate.meta?.message]
+    .some((value) => typeof value === 'string' && MISSING_SCHEMA_PATTERN.test(value))
+}
+
 async function probeDatabase(): Promise<{
   status: 'connected' | 'degraded'
+  schema: SchemaState
   message?: string
 }> {
+  const progress: { stage: 'connect' | 'schema' } = { stage: 'connect' }
   try {
-    await withTimeout(Promise.resolve(prisma.$queryRaw`SELECT 1`), DATABASE_PROBE_TIMEOUT_MS)
-    return { status: 'connected' }
+    await withTimeout(
+      (async () => {
+        await prisma.$queryRaw`SELECT 1`
+        progress.stage = 'schema'
+        // Zero-row read of columns that every authenticated request depends on.
+        // It fails only when a required migration has not been applied.
+        await prisma.$queryRaw`SELECT "role", "passwordVersion" FROM "User" LIMIT 0`
+      })(),
+      DATABASE_PROBE_TIMEOUT_MS,
+    )
+    return { status: 'connected', schema: 'current' }
   } catch (error) {
-    return {
-      status: 'degraded',
-      message:
-        error instanceof ProbeTimeoutError
-          ? 'Database health check timed out'
-          : 'Database health check failed',
+    if (error instanceof ProbeTimeoutError) {
+      return { status: 'degraded', schema: 'unchecked', message: 'Database health check timed out' }
     }
+    if (progress.stage === 'schema') {
+      return isMissingSchemaError(error)
+        ? {
+            status: 'degraded',
+            schema: 'behind',
+            message: 'Database schema is behind this release; apply pending migrations',
+          }
+        : { status: 'degraded', schema: 'unchecked', message: 'Database schema check failed' }
+    }
+    return { status: 'degraded', schema: 'unchecked', message: 'Database health check failed' }
   }
 }
 
@@ -81,6 +110,7 @@ export async function GET(request: NextRequest) {
   )
 
   const databaseStatus = database.value.status
+  const databaseSchema = database.value.schema
   const databaseMessage = database.value.message
   const rateLimitDiagnostics = rateLimit.value
   const sidecarDiagnostics = sidecar.value
@@ -145,6 +175,7 @@ export async function GET(request: NextRequest) {
     checks: {
       database: {
         status: databaseStatus,
+        schema: databaseSchema,
         responseTime: database.durationMs,
         responseTimeMs: database.durationMs,
         ...(databaseMessage ? { message: databaseMessage } : {}),
