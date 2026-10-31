@@ -43,6 +43,7 @@ const originalGithubRefName = process.env.GITHUB_REF_NAME
 describe('/api/health route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockQueryRaw.mockReset()
     mockQueryRaw.mockResolvedValue([{ ok: 1 }])
     mockProbeRateLimitBackend.mockResolvedValue(undefined)
     mockMetricsSnapshot.mockReturnValue({
@@ -183,6 +184,59 @@ describe('/api/health route', () => {
       alertLevel: 'critical',
       shouldPage: true,
     })
+  })
+
+  it('confirms the schema columns every authenticated request depends on', async () => {
+    const response = await GET(new NextRequest('http://localhost/api/health'))
+    const payload = await response.json()
+
+    expect(payload.checks.database.schema).toBe('current')
+    const queries = mockQueryRaw.mock.calls.map((call) => (call[0] as TemplateStringsArray).join('?'))
+    expect(queries).toEqual(['SELECT 1', 'SELECT "role", "passwordVersion" FROM "User" LIMIT 0'])
+  })
+
+  it.each([
+    ['missing column', Object.assign(new Error('column "role" does not exist'), { code: 'P2010', meta: { code: '42703' } })],
+    ['missing table', Object.assign(new Error('relation "User" does not exist'), { code: '42P01' })],
+  ])('reports a %s as a critical schema-behind database state', async (_label, schemaError) => {
+    mockQueryRaw.mockResolvedValueOnce([{ ok: 1 }]).mockRejectedValueOnce(schemaError)
+
+    const payload = await (await GET(new NextRequest('http://localhost/api/health'))).json()
+
+    expect(payload.status).toBe('degraded')
+    expect(payload.checks.database).toMatchObject({
+      status: 'degraded',
+      schema: 'behind',
+      message: 'Database schema is behind this release; apply pending migrations',
+    })
+    expect(payload.summary).toEqual({
+      coreAvailability: 'degraded',
+      degradedChecks: ['database'],
+      alertLevel: 'critical',
+      shouldPage: true,
+    })
+    expect(JSON.stringify(payload)).not.toContain('passwordVersion')
+  })
+
+  it('does not blame the schema for an unrelated failure of the schema query', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ ok: 1 }]).mockRejectedValueOnce(new Error('Connection terminated unexpectedly'))
+
+    const payload = await (await GET(new NextRequest('http://localhost/api/health'))).json()
+
+    expect(payload.checks.database).toMatchObject({
+      status: 'degraded',
+      schema: 'unchecked',
+      message: 'Database schema check failed',
+    })
+  })
+
+  it('skips the schema query when the database is unreachable', async () => {
+    mockQueryRaw.mockRejectedValue(new Error('connect ECONNREFUSED'))
+
+    const payload = await (await GET(new NextRequest('http://localhost/api/health'))).json()
+
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1)
+    expect(payload.checks.database).toMatchObject({ status: 'degraded', schema: 'unchecked' })
   })
 
   it('does not expose connection credentials in public health errors', async () => {

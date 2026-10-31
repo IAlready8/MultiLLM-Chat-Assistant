@@ -159,6 +159,23 @@ async def _store_cached_chat_response(
         log.warning("Chat cache write failed", error=str(exc))
 
 
+# --- Client-facing error details ---
+INTERNAL_ERROR_DETAIL = "Internal server error"
+
+
+def _client_error_detail(error: BaseException) -> str:
+    """Scrubbed message for errors whose type is ours (key, rate limit, connection)."""
+    return scrub_sensitive_info(str(error))
+
+
+def _task_error_summary(error: BaseException) -> str:
+    """Per-task orchestration error text: known error types keep a scrubbed message,
+    anything unexpected is reduced to a generic summary."""
+    if isinstance(error, (InvalidAPIKeyError, RateLimitError, APIConnectionError)):
+        return _client_error_detail(error)
+    return "unexpected provider error"
+
+
 # --- Security Middleware and Exception Handlers ---
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
@@ -243,23 +260,24 @@ async def post_chat(request: ProviderRequest):
         await _store_cached_chat_response(request, response)
         return response
     except InvalidAPIKeyError as e:
-        log.error(f"Invalid API key error: {str(e)}")
-        raise HTTPException(status_code=401, detail=str(e))
+        log.error(f"Invalid API key error: {_client_error_detail(e)}")
+        raise HTTPException(status_code=401, detail=_client_error_detail(e))
     except RateLimitError as e:
-        log.warning(f"Rate limit error: {str(e)}")
+        log.warning(f"Rate limit error: {_client_error_detail(e)}")
         headers = (
             {"Retry-After": str(e.retry_after_seconds)}
             if e.retry_after_seconds
             else None
         )
-        raise HTTPException(status_code=429, detail=str(e), headers=headers)
+        raise HTTPException(status_code=429, detail=_client_error_detail(e), headers=headers)
     except APIConnectionError as e:
-        log.error(f"API connection error: {str(e)}")
-        raise HTTPException(status_code=502, detail=str(e))
+        log.error(f"API connection error: {_client_error_detail(e)}")
+        raise HTTPException(status_code=502, detail=_client_error_detail(e))
     except Exception as e:
-        log.error(f"Unexpected error in chat endpoint: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        # Unexpected errors can carry provider payloads, URLs or keys: log the
+        # scrubbed message server-side and return only a generic detail.
+        log.error(f"Unexpected error in chat endpoint: {_client_error_detail(e)}")
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
 
 @app.post("/api/v1/llm/orchestrate", response_model=List[ProviderResponse])
@@ -278,12 +296,12 @@ async def post_orchestrate(request: MultiProviderRequest):
         processed_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                log.error(f"Error in orchestration task {i}: {str(result)}")
+                log.error(f"Error in orchestration task {i}: {_client_error_detail(result)}")
                 # Create an error response
                 processed_results.append(ProviderResponse(
                     provider=getattr(request.requests[i], 'provider', 'unknown'),
                     model=getattr(request.requests[i], 'model', ''),
-                    content=f"Error processing request: {str(result)}",
+                    content=f"Error processing request: {_task_error_summary(result)}",
                     prompt_tokens=0,
                     completion_tokens=0,
                     cost_usd=0.0,
@@ -294,18 +312,17 @@ async def post_orchestrate(request: MultiProviderRequest):
 
         return processed_results
     except InvalidAPIKeyError as e:
-        log.error(f"Invalid API key error in orchestration: {str(e)}")
-        raise HTTPException(status_code=401, detail=str(e))
+        log.error(f"Invalid API key error in orchestration: {_client_error_detail(e)}")
+        raise HTTPException(status_code=401, detail=_client_error_detail(e))
     except RateLimitError as e:
-        log.warning(f"Rate limit error in orchestration: {str(e)}")
-        raise HTTPException(status_code=429, detail=str(e))
+        log.warning(f"Rate limit error in orchestration: {_client_error_detail(e)}")
+        raise HTTPException(status_code=429, detail=_client_error_detail(e))
     except APIConnectionError as e:
-        log.error(f"API connection error in orchestration: {str(e)}")
-        raise HTTPException(status_code=502, detail=str(e))
+        log.error(f"API connection error in orchestration: {_client_error_detail(e)}")
+        raise HTTPException(status_code=502, detail=_client_error_detail(e))
     except Exception as e:
-        log.error(f"Unexpected error in orchestration endpoint: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        log.error(f"Unexpected error in orchestration endpoint: {_client_error_detail(e)}")
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
 
 @app.post("/api/v1/llm/stream")
