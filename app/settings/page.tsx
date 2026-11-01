@@ -19,6 +19,8 @@ import { supportedProviderIds } from '@/lib/provider-registry'
 
 const PROFILE_STORAGE_KEY = 'settings.profile'
 const FONT_SIZE_STORAGE_KEY = 'settings.fontSize'
+// Legacy key from a removed no-op toggle. Kept in the reset list so a reset
+// clears any value an older build left in this browser.
 const ANALYTICS_STORAGE_KEY = 'settings.analyticsEnabled'
 const LOCAL_PREFERENCE_KEYS = [
   'modelSettings',
@@ -57,17 +59,8 @@ const readFontSizeFromStorage = (): FontSizeOption => {
   return value && isFontSizeOption(value) ? value : 'normal'
 }
 
-const readAnalyticsToggle = (): boolean => {
-  if (typeof window === 'undefined') {
-    return true
-  }
-  const value = window.localStorage.getItem(ANALYTICS_STORAGE_KEY)
-  return value === null ? true : value === 'true'
-}
-
 export default function SettingsPage() {
   const [fontSize, setFontSize] = useState<FontSizeOption>('normal')
-  const [analyticsEnabled, setAnalyticsEnabled] = useState(true)
   const [isResetting, setIsResetting] = useState(false)
   const { toast } = useToast()
 
@@ -75,10 +68,8 @@ export default function SettingsPage() {
 
   const hydrateFromStorage = useCallback(() => {
     const savedFontSize = readFontSizeFromStorage()
-    const savedAnalyticsEnabled = readAnalyticsToggle()
 
     setFontSize(savedFontSize)
-    setAnalyticsEnabled(savedAnalyticsEnabled)
     applyFontScale(savedFontSize)
   }, [])
 
@@ -93,17 +84,6 @@ export default function SettingsPage() {
     toast({
       title: 'Appearance updated',
       description: `${FONT_OPTIONS[option].label} font size applied.`,
-    })
-  }
-
-  const setAnalyticsPreference = (enabled: boolean) => {
-    setAnalyticsEnabled(enabled)
-    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, String(enabled))
-    toast({
-      title: enabled ? 'Analytics enabled' : 'Analytics disabled',
-      description: enabled
-        ? 'Anonymous usage tracking is now enabled.'
-        : 'Anonymous usage tracking is now disabled.',
     })
   }
 
@@ -158,7 +138,6 @@ export default function SettingsPage() {
 
       setTheme('system')
       setFontSize('normal')
-      setAnalyticsEnabled(true)
       applyFontScale('normal')
 
       toast({
@@ -300,18 +279,13 @@ export default function SettingsPage() {
               <CardDescription>Configure advanced application settings</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Enable Analytics</Label>
-                  <p className="text-sm text-muted-foreground">Send anonymous usage data to improve the platform</p>
-                </div>
-                <Button
-                  variant={analyticsEnabled ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setAnalyticsPreference(!analyticsEnabled)}
-                >
-                  {analyticsEnabled ? 'Enabled' : 'Disabled'}
-                </Button>
+              <div data-testid="usage-analytics-disclosure">
+                <Label>Usage analytics</Label>
+                <p className="text-sm text-muted-foreground">
+                  Usage events are stored with your account to power your Analytics page: provider, model, token counts,
+                  response time, and which features you use. Prompt and response text is not part of these events.
+                  This recording is always on and is not anonymous.
+                </p>
               </div>
               <div className="flex items-center justify-between">
                 <div>
