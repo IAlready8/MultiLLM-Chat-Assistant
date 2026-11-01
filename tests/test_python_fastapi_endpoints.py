@@ -508,7 +508,73 @@ class TestOrchestrateEndpoint:
             data = response.json()
             assert data[0]["provider"] == "openai"
             assert "Error processing request" in data[0]["content"]
-            assert "General error" in data[0]["content"]
+            # Unexpected errors are summarized, never echoed to the client.
+            assert "General error" not in data[0]["content"]
+            assert "unexpected provider error" in data[0]["content"]
+
+
+class TestErrorDetailScrubbing:
+    """Client-facing errors must not carry raw exception text, keys or URLs."""
+
+    SECRET_KEY = "sk-" + "a" * 40
+    SECRET_URL = "https://user:hunter2@internal.example/v1"
+
+    def _chat(self, client):
+        return client.post("/api/v1/llm/chat", json={
+            "provider": "openai",
+            "model": "gpt-3.5-turbo",
+            "prompt": "Test prompt",
+            "max_tokens": 100,
+            "temperature": 0.7,
+        })
+
+    def _orchestrate(self, client):
+        return client.post("/api/v1/llm/orchestrate", json={
+            "requests": [{
+                "provider": "openai",
+                "model": "gpt-3.5-turbo",
+                "prompt": "Test prompt",
+                "max_tokens": 100,
+                "temperature": 0.7,
+            }],
+            "prompt": "Test prompt",
+        })
+
+    def test_chat_unexpected_error_returns_generic_detail(self, client):
+        with patch('src.core.main._get_cached_chat_response', new_callable=AsyncMock, return_value=None), \
+             patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
+            mock_execute.side_effect = Exception(f"boom key={self.SECRET_KEY} url={self.SECRET_URL}")
+
+            response = self._chat(client)
+
+            assert response.status_code == 500
+            assert response.json()["detail"] == "Internal server error"
+            assert self.SECRET_KEY not in response.text
+            assert "hunter2" not in response.text
+            assert "boom" not in response.text
+
+    def test_chat_known_error_detail_is_scrubbed(self, client):
+        with patch('src.core.main._get_cached_chat_response', new_callable=AsyncMock, return_value=None), \
+             patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
+            mock_execute.side_effect = InvalidAPIKeyError(f"Rejected key {self.SECRET_KEY} at {self.SECRET_URL}")
+
+            response = self._chat(client)
+
+            assert response.status_code == 401
+            assert "Rejected key" in response.json()["detail"]
+            assert self.SECRET_KEY not in response.text
+            assert "hunter2" not in response.text
+
+    def test_orchestrate_task_error_is_scrubbed(self, client):
+        with patch('src.core.main.execute_llm_request', new_callable=AsyncMock) as mock_execute:
+            mock_execute.side_effect = RateLimitError(f"Slow down {self.SECRET_URL}")
+
+            response = self._orchestrate(client)
+
+            assert response.status_code == 200
+            content = response.json()[0]["content"]
+            assert "Slow down" in content
+            assert "hunter2" not in content
 
 
 class TestStreamEndpoint:

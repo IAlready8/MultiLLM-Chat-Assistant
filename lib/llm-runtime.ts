@@ -36,8 +36,14 @@ export async function prepareProviderCall(userId: string, input: LlmInput, signa
   if (!rateLimit.allowed) {
     throw new LlmRequestError('Rate limit exceeded', 429, 'RATE_LIMITED', Math.max(1, Math.ceil(rateLimit.retryAfterMs / 1000)))
   }
-  const models = settings.models as string[] | undefined
-  const model = input.model || models?.[0] || defaultProviderModels[provider as keyof typeof defaultProviderModels]?.[0]
+  const configuredModels = Array.isArray(settings.models) ? settings.models : []
+  const configuredModel = configuredModels.find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+  const model = input.model?.trim() || configuredModel?.trim() || defaultProviderModels[provider as keyof typeof defaultProviderModels]?.[0]
+  // Never send a request without a model: adapters would otherwise forward an
+  // empty or undefined model and surface an opaque upstream error.
+  if (!model) {
+    throw new LlmRequestError(`No model is selected or configured for provider ${provider}`, 400, 'MODEL_REQUIRED')
+  }
   const extraHeaders: Record<string, string> = {}
   if (provider === 'openrouter') {
     if (settings.httpReferer) extraHeaders['HTTP-Referer'] = settings.httpReferer
