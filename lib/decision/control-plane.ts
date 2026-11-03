@@ -109,27 +109,48 @@ export async function chooseAgentAction(userId: string, raw: z.input<typeof agen
   return { decisionId, action: r.choice, confidence: r.confidence, approved, requiresExternalAuthorization: true,
     executed: false, policyVersion: POLICY_VERSION }
 }
+// Each Jev call has a 5 s timeout. Up to 24 items at 4 at a time is at most
+// 6 rounds (about 30 s), inside the control route's 60 s function limit.
+export const CONTEXT_CONCURRENCY = 4
+
 export async function selectContext(userId: string, raw: z.input<typeof contextSchema>, signal?: AbortSignal) {
   const input = contextSchema.parse(raw)
   if (!unique(input.items, a => a.id)) throw new Error('Duplicate context IDs')
+  // Items longer than the whole budget can never be admitted, so they are not scored.
+  const scorable = input.items.map(item => item.text.length <= input.maxCharacters)
+  const verdicts: boolean[] = input.items.map(() => false)
+  const stop = new AbortController()
+  const combined = signal ? AbortSignal.any([signal, stop.signal]) : stop.signal
+  let next = 0
+  let failure: unknown
+  const worker = async () => {
+    while (failure === undefined && next < input.items.length) {
+      const index = next++
+      if (!scorable[index]) continue
+      const item = input.items[index]
+      try {
+        // Two explicit typed options. Preserve original text exactly if chosen and admitted.
+        const r = await evaluateJevChoice({
+          state: input.goal + '\nCandidate: ' + item.text.slice(0, 7000),
+          question: 'Is this item relevant to the goal and worth retaining?',
+          candidates: [{ id: 'keep', description: 'Relevant evidence needed for goal' }, { id: 'drop', description: 'Irrelevant to goal' }],
+        }, combined)
+        verdicts[index] = r.choice === 'keep' && permitted('context', r.confidence)
+      } catch (error) {
+        if (failure === undefined) failure = error
+        stop.abort()
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONTEXT_CONCURRENCY, input.items.length) }, worker))
+  if (failure !== undefined) throw failure
+  // Admit in the caller's original order within the character budget; never rewrite surviving text.
   const kept = []
   let remaining = input.maxCharacters
-  // Score in chunks with bounded candidate arrays; never rewrite surviving source text.
-  for (let offset = 0; offset < input.items.length; offset += 12) {
-    const chunk = input.items.slice(offset, offset + 12)
-    for (const item of chunk) {
-      if (remaining <= 0) break
-      // Two explicit typed options. Preserve original text exactly if chosen and admitted.
-      const r = await evaluateJevChoice({
-        state: input.goal + '\nCandidate: ' + item.text.slice(0, 7000),
-        question: 'Is this item relevant to the goal and worth retaining?',
-        candidates: [{ id: 'keep', description: 'Relevant evidence needed for goal' }, { id: 'drop', description: 'Irrelevant to goal' }],
-      }, signal)
-      const keep = r.choice === 'keep' && permitted('context', r.confidence)
-      if (keep && item.text.length <= remaining) {
-        kept.push(item)
-        remaining -= item.text.length
-      }
+  for (const [index, item] of input.items.entries()) {
+    if (verdicts[index] && item.text.length <= remaining) {
+      kept.push(item)
+      remaining -= item.text.length
     }
   }
   const decisionId = await recordDecision(userId, 'context', 'selection', 1, {

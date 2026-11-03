@@ -14,20 +14,94 @@ export const decisionInputSchema = z.object({
 
 export type DecisionInput = z.infer<typeof decisionInputSchema>
 
-const answerSchema = z.object({
-  answers: z.object({
-    route: z.object({
-      choice: z.string(),
-      confidence: z.number().finite().min(0).max(1),
-    }).passthrough(),
-  }).passthrough(),
+export const JEV_ENDPOINT = 'https://api.typesafe.ai/v1/systemone'
+const MAX_JEV_RESPONSE_CHARS = 100_000
+
+const choiceAnswerSchema = z.object({
+  choice: z.string(),
+  confidence: z.number().finite().min(0).max(1),
+  probabilities: z.record(z.string(), z.number().finite()).optional(),
+}).passthrough()
+
+const responseSchema = z.object({
+  answers: z.record(z.string(), z.unknown()),
   model: z.string().optional(),
 }).passthrough()
 
 export class JevUnavailableError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly upstreamStatus?: number) {
     super(message)
     this.name = 'JevUnavailableError'
+  }
+}
+
+export interface JevChoiceRequest {
+  apiKey: string
+  model: string
+  state: string
+  /** Name of the single choice question; the answer is read back from `answers[questionName]`. */
+  questionName: string
+  instructions: string
+  /** Allowed choices mapped to their descriptions. Jev may only return one of these keys. */
+  criteria: Record<string, string>
+  timeoutMs: number
+  signal?: AbortSignal
+}
+
+export interface JevChoiceAnswer {
+  choice: string
+  confidence: number
+  probabilities: Record<string, number>
+  model: string
+  latencyMs: number
+}
+
+/**
+ * The one HTTP client for TypeSafe's `POST /v1/systemone` choice questions.
+ * Request shape follows the documented contract: `questions` is an object keyed by
+ * question name, and a choice question carries `type`, `instructions` and a
+ * `criteria` map of allowed choices. Fixed host, no redirects, bounded response.
+ */
+export async function requestJevChoice(request: JevChoiceRequest): Promise<JevChoiceAnswer> {
+  const startedAt = Date.now()
+  const timeout = AbortSignal.timeout(request.timeoutMs)
+  const response = await fetch(JEV_ENDPOINT, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${request.apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: request.model,
+      state: request.state,
+      questions: {
+        [request.questionName]: {
+          type: 'choice',
+          instructions: request.instructions,
+          criteria: request.criteria,
+        },
+      },
+    }),
+    signal: request.signal ? AbortSignal.any([request.signal, timeout]) : timeout,
+    redirect: 'error',
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new JevUnavailableError(`Jev returned HTTP ${response.status}`, response.status)
+  const body = await response.text()
+  if (body.length > MAX_JEV_RESPONSE_CHARS) throw new JevUnavailableError('Jev response exceeded size limit')
+  let parsed: unknown
+  try { parsed = JSON.parse(body) } catch { throw new JevUnavailableError('Invalid Jev response') }
+  const envelope = responseSchema.safeParse(parsed)
+  if (!envelope.success) throw new JevUnavailableError('Malformed Jev decision response')
+  const answer = choiceAnswerSchema.safeParse(envelope.data.answers[request.questionName])
+  if (!answer.success) throw new JevUnavailableError('Malformed Jev decision response')
+  const { choice, confidence, probabilities } = answer.data
+  if (!Object.prototype.hasOwnProperty.call(request.criteria, choice)) {
+    throw new JevUnavailableError('Jev returned a candidate outside the allowed set')
+  }
+  return {
+    choice,
+    confidence,
+    probabilities: probabilities ?? {},
+    model: envelope.data.model || request.model,
+    latencyMs: Date.now() - startedAt,
   }
 }
 
@@ -37,37 +111,15 @@ export async function evaluateJevChoice(input: DecisionInput, signal?: AbortSign
   if (process.env.JEV_SHADOW_ENABLED !== 'true') {
     throw new JevUnavailableError('Jev shadow evaluation is disabled')
   }
-  const model = process.env.JEV_MODEL?.trim() || 'jev-latest'
-  const startedAt = Date.now()
-  const timeout = AbortSignal.timeout(5000)
-  const response = await fetch('https://api.typesafe.ai/v1/systemone', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      state: input.state,
-      questions: {
-        route: {
-          type: 'choice',
-          instructions: input.question,
-          criteria: Object.fromEntries(input.candidates.map(candidate => [candidate.id, candidate.description])),
-        },
-      },
-    }),
-    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-    redirect: 'error',
-    cache: 'no-store',
+  const result = await requestJevChoice({
+    apiKey: key,
+    model: process.env.JEV_MODEL?.trim() || 'jev-latest',
+    state: input.state,
+    questionName: 'route',
+    instructions: input.question,
+    criteria: Object.fromEntries(input.candidates.map(candidate => [candidate.id, candidate.description])),
+    timeoutMs: 5000,
+    signal,
   })
-  if (!response.ok) throw new JevUnavailableError(`Jev returned HTTP ${response.status}`)
-  const body = await response.text()
-  if (body.length > 100_000) throw new JevUnavailableError('Jev response exceeded size limit')
-  let parsed: unknown
-  try { parsed = JSON.parse(body) } catch { throw new JevUnavailableError('Invalid Jev response') }
-  const result = answerSchema.safeParse(parsed)
-  if (!result.success) throw new JevUnavailableError('Malformed Jev decision response')
-  const { choice, confidence } = result.data.answers.route
-  if (!input.candidates.some(candidate => candidate.id === choice)) {
-    throw new JevUnavailableError('Jev returned a candidate outside the allowed set')
-  }
-  return { choice, confidence, model: result.data.model || model, latencyMs: Date.now() - startedAt }
+  return { choice: result.choice, confidence: result.confidence, model: result.model, latencyMs: result.latencyMs }
 }
