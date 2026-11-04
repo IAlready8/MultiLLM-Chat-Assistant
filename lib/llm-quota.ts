@@ -3,13 +3,20 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { LlmRequestError } from '@/lib/llm-request'
 import type { PrismaClient, Subscription } from '@/types/prisma'
+import { RELEASE_OFFER } from '@/lib/release-offer'
+import { MAX_COMPARISON_MODELS } from '@/lib/release-scope'
 
 const limitsSchema = z.object({ FREE: z.number().int().min(0).max(1_000_000_000).nullable(), PRO: z.number().int().min(0).max(1_000_000_000).nullable(), ENTERPRISE: z.number().int().min(0).max(1_000_000_000).nullable() }).strict()
 
 export function readQuotaLimits() {
   const raw = process.env.LLM_MONTHLY_REQUEST_LIMITS?.trim()
-  if (!raw) return null
-  try { return limitsSchema.parse(JSON.parse(raw)) } catch {
+  if (!raw && process.env.NODE_ENV !== 'production') return null
+  try {
+    const limits = limitsSchema.parse(JSON.parse(raw ?? ''))
+    if (process.env.NODE_ENV === 'production' && Object.values(limits).some(limit => limit === null)) throw new Error('Explicit caps required')
+    if (process.env.NODE_ENV === 'production' && (limits.FREE !== RELEASE_OFFER.limits.FREE || limits.PRO !== RELEASE_OFFER.limits.PRO)) throw new Error('Limits must match the published offer')
+    return limits
+  } catch {
     throw new LlmRequestError('Plan limits are temporarily unavailable', 503, 'QUOTA_CONFIGURATION_INVALID')
   }
 }
@@ -46,7 +53,7 @@ export async function getLlmQuota(userId: string) {
 export async function reserveLlmQuota(userId: string, units = 1) {
   const limits = readQuotaLimits()
   if (!limits) return
-  if (!Number.isInteger(units) || units < 1 || units > 8) throw new LlmRequestError('Invalid generation count')
+  if (!Number.isInteger(units) || units < 1 || units > MAX_COMPARISON_MODELS) throw new LlmRequestError('Invalid generation count')
   await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${'llm-quota:' + userId}, 0))`
     const now = new Date()

@@ -1,5 +1,6 @@
 'use client'
 
+import { BYOK_COPY, GENERATION_ALLOWANCE_COPY, RELEASE_OFFER } from '@/lib/release-offer'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,8 +18,6 @@ interface BillingClientProps {
   proPriceLabel?: string
   periodEnd: string | null
   plans: BillingPlan[]
-  freePlanWeeklySavedBriefGuidance: number
-  weeklySavedBriefComparisons: number
   checkoutEnabled: boolean
   portalEnabled: boolean
 }
@@ -45,8 +44,6 @@ export function BillingClient({
   periodEnd,
   status, cancelAtPeriodEnd, hasBillingAccount, quota, proPriceLabel,
   plans,
-  freePlanWeeklySavedBriefGuidance,
-  weeklySavedBriefComparisons,
   checkoutEnabled,
   portalEnabled,
 }: BillingClientProps) {
@@ -55,9 +52,6 @@ export function BillingClient({
   const hasTrackedBillingView = useRef(false)
 
   const formattedPeriodEnd = useMemo(() => formatPeriodEnd(periodEnd), [periodEnd])
-  const shouldRecommendUpgrade =
-    tier === 'FREE' &&
-    weeklySavedBriefComparisons >= freePlanWeeklySavedBriefGuidance
 
   useEffect(() => {
     if (hasTrackedBillingView.current) {
@@ -140,6 +134,8 @@ export function BillingClient({
 
   return (
     <div className="space-y-6">
+      <p className="text-sm">{BYOK_COPY}</p>
+      <p className="text-sm">{GENERATION_ALLOWANCE_COPY}</p>
       <Card>
         <CardHeader>
           <CardTitle>Current plan</CardTitle>
@@ -152,19 +148,9 @@ export function BillingClient({
                 {cancelAtPeriodEnd ? 'Access ends on' : 'Renews on'} {formattedPeriodEnd}
               </p>
             ) : null}
-            {tier === 'FREE' ? (
-              <p className="text-sm text-muted-foreground">
-                {weeklySavedBriefComparisons} weekly saved brief comparisons tracked.
-              </p>
-            ) : null}
           </div>
           {status && ['past_due', 'unpaid', 'incomplete', 'paused'].includes(status) ? <p role="status" className="text-sm text-destructive">Payment needs attention. Update your payment details in the billing portal.</p> : null}
-          {quota ? <p className="text-sm">{quota.used} of {quota.limit ?? 'unlimited'} monthly generations used. Resets {formatPeriodEnd(quota.resetsAt)}. Failed and stopped attempts count toward this allowance.</p> : null}
-          {shouldRecommendUpgrade ? (
-            <p className="text-sm font-medium text-amber-600">
-              Upgrade recommended: the free-plan guidance threshold has been reached for this week.
-            </p>
-          ) : null}
+          {quota ? <p className="text-sm">{quota.used} of {quota.limit ?? 'unlimited'} monthly generations used. Resets {new Date(quota.resetsAt).toISOString()} (UTC). Failed and stopped attempts count toward this allowance.</p> : null}
           {actionError ? (
             <p className="text-sm text-destructive" role="alert">
               {actionError}
@@ -213,13 +199,12 @@ export function BillingClient({
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-muted-foreground">
-                {plan.id === 'PRO' && proPriceLabel ? <p className="font-medium text-foreground">{proPriceLabel}</p> : null}
+                {plan.id === 'PRO' ? <p className="font-medium text-foreground">{proPriceLabel ?? RELEASE_OFFER.priceLabel}</p> : null}
                 <p>{plan.summary}</p>
-                <p>{plan.weeklySavedBriefComparisonGuidance}</p>
+                <p>{plan.allowanceDescription}</p>
                 <p>Analytics: {plan.analyticsAccess}</p>
                 <p>Personas: {plan.personaAccess}</p>
                 <p>Comparison: {plan.comparisonAccess}</p>
-                <p>Subscription model: {plan.subscriptionModel}</p>
               </CardContent>
             </Card>
           )

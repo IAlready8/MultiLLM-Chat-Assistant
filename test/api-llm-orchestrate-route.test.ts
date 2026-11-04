@@ -35,7 +35,7 @@ describe('native orchestration and explicit sidecar', () => {
   it('rejects invalid JSON', async () => {
     expect((await POST(new Request('http://localhost', { method: 'POST', body: '{' }))).status).toBe(400)
   })
-  it.each([null, {}, { ...input, requests: [] }, { ...input, requests: Array(9).fill(input.requests[0]) }, { ...input, prompt: 1 }, { ...input, requests: [{ provider: 'openai' }] }, { prompt: '', requests: [{ ...input.requests[0], prompt: '' }] }])('rejects invalid batch %# before dispatch', async value => {
+  it.each([null, {}, { ...input, requests: [] }, { ...input, requests: Array(5).fill(input.requests[0]) }, { ...input, prompt: 1 }, { ...input, requests: [{ provider: 'openai' }] }, { prompt: '', requests: [{ ...input.requests[0], prompt: '' }] }])('rejects invalid batch %# before dispatch', async value => {
     expect((await POST(request(value))).status).toBe(400)
     expect(mocks.chat).not.toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
@@ -54,6 +54,13 @@ describe('native orchestration and explicit sidecar', () => {
     expect(mocks.chat.mock.calls[0][0]).toBe('user-1')
     expect(fetch).not.toHaveBeenCalled()
   })
+  it('uses only native user-key dispatch in production even with a sidecar configured', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('PYTHON_CORE_URL', 'https://sidecar.example')
+    expect((await POST(request())).status).toBe(200)
+    expect(mocks.chat).toHaveBeenCalledOnce()
+    expect(fetch).not.toHaveBeenCalled()
+  })
   it('does not invent provider-wide cost estimates', async () => {
     expect(await (await POST(request())).json()).toMatchObject([{ cost_usd: null, status: 'complete', usage_source: 'provider' }])
   })
@@ -65,20 +72,20 @@ describe('native orchestration and explicit sidecar', () => {
   it('limits concurrency to three and restores selection order after out-of-order completion', async () => {
     const releases: Array<() => void> = []
     mocks.chat.mockImplementation(async (_user, body) => { await new Promise<void>(resolve => { releases.push(resolve) }); return answer(body.model) })
-    const pending = POST(request({ ...input, requests: Array.from({ length: 5 }, (_, i) => ({ ...input.requests[0], model: `model-${i}` })) }))
+    const pending = POST(request({ ...input, requests: Array.from({ length: 4 }, (_, i) => ({ ...input.requests[0], model: `model-${i}` })) }))
     await vi.waitFor(() => expect(mocks.chat).toHaveBeenCalledTimes(3))
     releases[2](); releases[0](); releases[1]()
-    await vi.waitFor(() => expect(mocks.chat).toHaveBeenCalledTimes(5))
-    releases[4](); releases[3]()
-    expect((await (await pending).json()).map((item: { content: string }) => item.content)).toEqual(['model-0', 'model-1', 'model-2', 'model-3', 'model-4'])
+    await vi.waitFor(() => expect(mocks.chat).toHaveBeenCalledTimes(4))
+    releases[3]()
+    expect((await (await pending).json()).map((item: { content: string }) => item.content)).toEqual(['model-0', 'model-1', 'model-2', 'model-3'])
   })
   it('propagates client cancellation and does not start queued provider work', async () => {
     const controller = new AbortController()
     mocks.chat.mockImplementation(async (_user, _body, signal: AbortSignal) => { await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })); return answer() })
-    const pending = POST(request({ ...input, requests: Array(5).fill(input.requests[0]) }, controller.signal))
+    const pending = POST(request({ ...input, requests: Array(4).fill(input.requests[0]) }, controller.signal))
     await vi.waitFor(() => expect(mocks.chat).toHaveBeenCalledTimes(3))
     controller.abort()
-    expect((await (await pending).json())).toHaveLength(5)
+    expect((await (await pending).json())).toHaveLength(4)
     expect(mocks.chat).toHaveBeenCalledTimes(3)
   })
   it.each([429, 500, 302])('does not redispatch possibly billable sidecar requests after HTTP %i', async status => {

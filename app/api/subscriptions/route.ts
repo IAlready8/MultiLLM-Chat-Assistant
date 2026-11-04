@@ -1,4 +1,6 @@
+import { getBillingOrigin } from '@/lib/billing-origin'
 import { getProPrice } from '@/lib/billing-price'
+import { BYOK_COPY, GENERATION_ALLOWANCE_COPY, RELEASE_OFFER } from '@/lib/release-offer'
 import { withBillingLock } from '@/lib/billing-lock'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
@@ -13,21 +15,6 @@ import {
 import { logger } from '@/lib/logger'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { readBillingSource } from '@/lib/billing-source'
-
-// Get the absolute URL for Stripe callbacks
-const getBaseUrl = () => {
-  const configured = process.env.NEXTAUTH_URL?.trim()
-  if (configured) {
-    try {
-      return new URL(configured)
-    } catch {
-      console.warn(
-        'Invalid NEXTAUTH_URL; falling back to http://localhost:3000',
-      )
-    }
-  }
-  return new URL('http://localhost:3000')
-}
 
 const ongoingSubscriptionStatuses = new Set([
   'active',
@@ -53,6 +40,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    const baseUrl = getBillingOrigin()
     ensureStripeConfigured('checkout')
     await getProPrice()
 
@@ -61,7 +49,6 @@ export async function POST(req: Request) {
       user.email,
     )
 
-    const baseUrl = getBaseUrl()
 
     const destination = await withBillingLock(`stripe-customer:${stripeCustomerId}`, async () => {
       const existingSubscriptions = await stripe.subscriptions.list({
@@ -89,6 +76,7 @@ export async function POST(req: Request) {
       // Create the Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
+        custom_text: { submit: { message: `${RELEASE_OFFER.limits.PRO} attempted generations per UTC calendar month; at most four models per comparison. ${BYOK_COPY} ${GENERATION_ALLOWANCE_COPY} Cancel renewal to retain access through the paid-through date.` } },
         customer: stripeCustomerId,
         client_reference_id: user.id,
         line_items: [

@@ -1,3 +1,4 @@
+import { MAX_COMPARISON_MODELS } from '@/lib/release-scope'
 import { z } from 'zod'
 
 export class LlmRequestError extends Error {
@@ -62,7 +63,7 @@ const generationFields = {
   requestId: z.string().uuid().optional(),
   turnId: z.string().uuid().optional(),
   instanceId: z.string().max(128).optional(),
-  position: z.number().int().min(0).max(7).optional(),
+  position: z.number().int().min(0).max(MAX_COMPARISON_MODELS - 1).optional(),
 }
 
 export const llmRequestSchema = z.object({

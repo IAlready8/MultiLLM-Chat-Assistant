@@ -1,3 +1,4 @@
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 import { readApiObject } from '@/lib/api-input'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -55,6 +56,7 @@ export const GET = withApiMetrics(async (
 ) => {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/goals/[id]')) return deferredReleaseResponse()
   const { user } = authCheck
   const id = await getGoalIdFromContext(ctx)
 
@@ -80,6 +82,7 @@ export const PUT = withApiMetrics(async (
 ) => {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/goals/[id]')) return deferredReleaseResponse()
   const { user } = authCheck
   const id = await getGoalIdFromContext(ctx)
 
@@ -116,6 +119,7 @@ export const DELETE = withApiMetrics(async (
 ) => {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/goals/[id]')) return deferredReleaseResponse()
   const { user } = authCheck
   const id = await getGoalIdFromContext(ctx)
 

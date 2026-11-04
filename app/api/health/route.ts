@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
   const providerDiagnostics = {
     status: operationalProviders.length > 0 ? 'ok' : 'degraded',
     responseTimeMs: providers.durationMs,
-    message: `${operationalProviders.length} of ${providerRegistry.length} providers operational`,
+    message: `${operationalProviders.length} provider integrations available in this environment; real generation is not checked by health`,
     providers: operationalProviders.map((p) => ({
       id: p.id,
       name: p.name,

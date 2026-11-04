@@ -1,3 +1,5 @@
+// Exercise the preserved implementation separately from immutable V1 route-gate tests.
+vi.mock('@/lib/release-scope', async original => ({ ...await original<typeof import('@/lib/release-scope')>(), isDeferredReleasePath: () => false }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
 

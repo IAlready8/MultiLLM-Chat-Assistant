@@ -1,3 +1,4 @@
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthenticatedUser } from '@/lib/api-auth'
@@ -16,6 +17,7 @@ const requestSchema = z.discriminatedUnion('operation', [
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser()
   if (auth instanceof NextResponse) return auth
+  if (isDeferredReleasePath('/api/llm/decisions/control')) return deferredReleaseResponse()
   if (process.env.JEV_SHADOW_ENABLED !== 'true' || !process.env.TYPESAFE_API_KEY?.trim()) {
     return NextResponse.json({ error: 'Jev decision engine is disabled' }, { status: 503 })
   }

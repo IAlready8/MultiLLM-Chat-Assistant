@@ -1,3 +1,4 @@
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { checkAndConsume } from '@/lib/rate-limit'
@@ -11,6 +12,7 @@ export const maxDuration = 15
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser()
   if (auth instanceof NextResponse) return auth
+  if (isDeferredReleasePath('/api/llm/decisions/shadow')) return deferredReleaseResponse()
   if (process.env.JEV_SHADOW_ENABLED !== 'true' || !process.env.TYPESAFE_API_KEY?.trim()) {
     return NextResponse.json({ error: 'Shadow decisions are disabled' }, { status: 503 })
   }

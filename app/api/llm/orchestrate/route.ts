@@ -1,3 +1,4 @@
+import { MAX_COMPARISON_MODELS } from '@/lib/release-scope'
 import { reserveLlmQuota } from '@/lib/llm-quota'
 import { beginGeneration, finishGeneration } from '@/services/generation-service'
 import { checkAndConsume } from '@/lib/rate-limit'
@@ -21,14 +22,14 @@ const schema = z.object({
     model: z.string().trim().min(1).max(256),
     prompt: z.string().max(10_000),
     requestId: z.string().uuid().optional(),
-  })).min(1).max(8),
+  })).min(1).max(MAX_COMPARISON_MODELS),
 }).refine(value => value.requests.every(item => (item.prompt || value.prompt).trim().length > 0))
 
 const sidecarResultSchema = z.array(z.object({
   provider: z.string(), model: z.string(), content: z.string().max(1_048_576),
   prompt_tokens: z.number().int().nonnegative(), completion_tokens: z.number().int().nonnegative(),
   cost_usd: z.number().finite().nonnegative().nullable(), latency_ms: z.number().finite().nonnegative(),
-})).max(8)
+})).max(MAX_COMPARISON_MODELS)
 
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser()
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     if (input.conversationId && (!input.turnId || input.requests.some(item => !item.requestId))) throw new LlmRequestError('Saved orchestration requires turn and request IDs')
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(45_000)])
     // Durable work uses the native provider lifecycle and the user's credentials.
-    const sidecar = input.conversationId ? undefined : process.env.PYTHON_CORE_URL?.trim()
+    const sidecar = input.conversationId || process.env.NODE_ENV === 'production' ? undefined : process.env.PYTHON_CORE_URL?.trim()
     if (sidecar) {
       const disabled = input.requests.find(item => isProviderDisabled(item.provider))
       if (disabled) throw new LlmRequestError(getProviderDisabledMessage(disabled.provider), 503, PROVIDER_DISABLED_ERROR_CODE)

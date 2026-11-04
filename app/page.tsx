@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { isDeferredReleasePath } from '@/lib/release-scope'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ActivationChecklist } from '@/components/activation-checklist'
@@ -140,7 +141,7 @@ export default function Home() {
           className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-full border border-border bg-card/60 backdrop-blur-sm smooth-transition rainbow-outline-hover"
         >
           <span className="mr-2 h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
-          New: OpenRouter free models now available
+          Connect your own provider API keys
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-2">
             <path d="M5 12h14"/>
             <path d="m12 5 7 7-7 7"/>
@@ -159,12 +160,12 @@ export default function Home() {
             Core Workflow
           </h2>
           <p className="text-sm text-muted-foreground">
-            Follow the checklist first, then move through the five core surfaces below.
+            Follow the checklist first, then move through the core surfaces below.
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {coreWorkflowCards.map(card => (
+          {coreWorkflowCards.filter(card => !isDeferredReleasePath(card.href)).map(card => (
             <Card
               key={card.href}
               className="flex flex-col glass-card rainbow-outline-hover smooth-transition hover:-translate-y-1"
@@ -213,7 +214,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {workspaceCards.map(card => (
+          {workspaceCards.filter(card => !isDeferredReleasePath(card.href)).map(card => (
             <Card
               key={card.href}
               className="flex flex-col glass-card rainbow-outline-hover smooth-transition hover:-translate-y-1"

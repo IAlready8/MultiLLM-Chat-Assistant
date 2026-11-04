@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event'
 import { BillingClient } from '@/app/billing/billing-client'
 import {
   BILLING_PLANS,
-  FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE,
 } from '@/lib/billing-plans'
 
 const replaceLocation = (href = 'http://localhost/billing') => {
@@ -30,7 +29,7 @@ describe('BillingClient', () => {
     replaceLocation()
   })
 
-  it('shows upgrade guidance for free users at the weekly comparison threshold', async () => {
+  it('explains the exact BYOK offer and counting policy before upgrade', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
@@ -42,8 +41,6 @@ describe('BillingClient', () => {
         tier="FREE"
         periodEnd={null}
         plans={BILLING_PLANS}
-        freePlanWeeklySavedBriefGuidance={FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE}
-        weeklySavedBriefComparisons={3}
         checkoutEnabled={true}
         portalEnabled={true}
       />
@@ -51,7 +48,7 @@ describe('BillingClient', () => {
 
     expect(await screen.findByText('Upgrade to Pro')).toBeInTheDocument()
     expect(
-      screen.getByText(/free-plan guidance threshold has been reached/i)
+      screen.getByText(/a prompt to three models uses three units/i)
     ).toBeInTheDocument()
 
     await waitFor(() => {
@@ -81,8 +78,6 @@ describe('BillingClient', () => {
         tier="FREE"
         periodEnd={null}
         plans={BILLING_PLANS}
-        freePlanWeeklySavedBriefGuidance={FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE}
-        weeklySavedBriefComparisons={1}
         checkoutEnabled={true}
         portalEnabled={true}
       />
@@ -118,8 +113,6 @@ describe('BillingClient', () => {
         tier="PRO"
         periodEnd="2026-04-01T00:00:00.000Z"
         plans={BILLING_PLANS}
-        freePlanWeeklySavedBriefGuidance={FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE}
-        weeklySavedBriefComparisons={5}
         checkoutEnabled={true}
         portalEnabled={true}
       />

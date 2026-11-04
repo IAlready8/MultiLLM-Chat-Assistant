@@ -23,6 +23,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { readChatStream } from '@/services/stream-client'
 import { apiClient } from '@/lib/api-client'
 import { getDefaultModel, getModelsForProvider } from '@/lib/model-catalog'
+import { MAX_COMPARISON_MODELS } from '@/lib/release-scope'
 import { operationalProviderRegistry } from '@/lib/provider-registry'
 import type { Conversation, Message as ConversationMessage } from '@/types/prisma'
 import Link from 'next/link'
@@ -157,7 +158,7 @@ export default function MultiChatPage() {
 
       // Create default instances for configured providers
       if (filtered.length > 0) {
-        const instances: ModelInstance[] = filtered.map((provider: string) => ({
+        const instances: ModelInstance[] = filtered.slice(0, MAX_COMPARISON_MODELS).map((provider: string) => ({
           id: generateInstanceId(),
           provider,
           model: getDefaultModel(provider)
@@ -592,7 +593,7 @@ export default function MultiChatPage() {
   }
 
   const addModelInstance = (provider: string) => {
-    if (chatState.activeInstances.length >= 8) return
+    if (chatState.activeInstances.length >= MAX_COMPARISON_MODELS) return
     const newInstance: ModelInstance = {
       id: generateInstanceId(),
       provider,
@@ -751,7 +752,7 @@ export default function MultiChatPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => addModelInstance(provider.id)}
-                    disabled={isBusy || chatState.activeInstances.length >= 8}
+                    disabled={isBusy || chatState.activeInstances.length >= MAX_COMPARISON_MODELS}
                     className="h-auto min-h-8 min-w-0 whitespace-normal px-2 text-xs"
                     title={provider.description}
                   >
@@ -782,6 +783,7 @@ export default function MultiChatPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => removeModelInstance(instance.id)}
+                          aria-label={`Remove ${getProviderLabel(instance.provider)} model`}
                           disabled={isBusy}
                           className="h-6 w-6 p-0"
                         >

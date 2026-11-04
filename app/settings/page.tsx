@@ -12,7 +12,6 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import ApiKeyForm from '@/components/api-key-form'
-import { JevSettingsForm } from '@/components/jev-settings-form'
 import { ExportImportDialog } from '@/components/export-import-dialog'
 import { exportAllData, importAllData } from '@/services/export-import-service'
 import { supportedProviderIds } from '@/lib/provider-registry'
@@ -194,7 +193,6 @@ export default function SettingsPage() {
         <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="providers">API Providers</TabsTrigger>
-          <TabsTrigger value="jev">Jev</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="advanced">Advanced</TabsTrigger>
         </TabsList>
@@ -230,9 +228,6 @@ export default function SettingsPage() {
               <ApiKeyForm />
             </CardContent>
           </Card>
-        </TabsContent>
-        <TabsContent value="jev" className="space-y-6">
-          <JevSettingsForm />
         </TabsContent>
 
 

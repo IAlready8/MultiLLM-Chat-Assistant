@@ -1,3 +1,4 @@
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 import { readApiObject } from '@/lib/api-input'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
@@ -8,7 +9,7 @@ const createTeamSchema = z.object({
   name: z.string().min(1, 'Team name is required').max(100),
 })
 
-const isTeamsApiEnabled = () => process.env.ENABLE_TEAMS_API === 'true'
+const isTeamsApiEnabled = () => !isDeferredReleasePath('/api/teams') && process.env.ENABLE_TEAMS_API === 'true'
 
 const teamsDisabledResponse = () =>
   NextResponse.json(
@@ -28,6 +29,7 @@ export async function GET(req: Request) {
 
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/teams')) return deferredReleaseResponse()
   const { user } = authCheck
 
   const teams = await TeamService.getTeamsByUserId(user.id)
@@ -43,6 +45,7 @@ export async function POST(req: Request) {
 
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/teams')) return deferredReleaseResponse()
   const { user } = authCheck
 
   const body = await readApiObject(req)

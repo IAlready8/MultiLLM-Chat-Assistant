@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { decode } from 'next-auth/jwt'
 import { readSessionTokenFromCookies } from '@/lib/session-cookie'
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 
 const PUBLIC_PATHS = new Set([
   '/auth/signin',
@@ -98,6 +99,8 @@ export async function proxy(request: NextRequest) {
     )
     return NextResponse.redirect(signInUrl)
   }
+
+  if (isDeferredReleasePath(pathname)) return deferredReleaseResponse()
 
   return NextResponse.next()
 }

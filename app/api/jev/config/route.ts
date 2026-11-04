@@ -1,3 +1,4 @@
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import {
@@ -27,6 +28,7 @@ const parseConfigBody = (body: unknown): { token?: string; enabled: boolean } | 
 export async function GET() {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/jev/config')) return deferredReleaseResponse()
   const { user } = authCheck
 
   try {
@@ -63,6 +65,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/jev/config')) return deferredReleaseResponse()
   const { user } = authCheck
 
   let body: unknown
@@ -119,6 +122,7 @@ export async function PUT(request: Request) {
 export async function DELETE() {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/jev/config')) return deferredReleaseResponse()
   const { user } = authCheck
 
   try {

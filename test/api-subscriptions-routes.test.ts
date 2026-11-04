@@ -170,24 +170,12 @@ describe('subscription routes', () => {
     )
   })
 
-  it('falls back to localhost base URL when NEXTAUTH_URL is invalid', async () => {
+  it.each([createSubscriptionSession, createManageSession])('rejects invalid callback configuration before any Stripe action', async handler => {
     process.env.NEXTAUTH_URL = 'not-a-valid-url'
-
-    const response = await createSubscriptionSession(
-      new Request('http://localhost'),
-    )
-    const payload = mockCreateCheckoutSession.mock.calls[0]?.[0] as {
-      success_url: string
-      cancel_url: string
-    }
-
-    expect(response.status).toBe(200)
-    expect(payload.success_url).toBe(
-      'http://localhost:3000/billing?success=true',
-    )
-    expect(payload.cancel_url).toBe(
-      'http://localhost:3000/billing?canceled=true',
-    )
+    expect((await handler(new Request('http://localhost'))).status).toBe(503)
+    expect(mockGetOrCreateStripeCustomer).not.toHaveBeenCalled()
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled()
+    expect(mockCreatePortalSession).not.toHaveBeenCalled()
   })
 
   it('records checkout analytics with request source', async () => {

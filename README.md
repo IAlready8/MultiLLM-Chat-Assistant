@@ -26,7 +26,7 @@ Current exact ICP and use case are locked in:
 
 ## Quickstart
 Requirements:
-- Node.js 22 LTS (`22.22.0`; see `.nvmrc`)
+- Node.js 22 LTS (`22.22.2`; see `.nvmrc`)
 - npm 11
 - Optional Python 3.10+ (only for Python sidecar / Python tests)
 
