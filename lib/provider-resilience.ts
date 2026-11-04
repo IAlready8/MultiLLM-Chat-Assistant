@@ -5,7 +5,9 @@
  * ---------------
  * `providerFetch` in `lib/provider-endpoint.ts` is the single chokepoint for
  * every outbound provider HTTP call (all nine adapters, both the chat and the
- * stream route, plus credential probes). Before this module there was no
+ * stream route, plus credential probes). The HTTP boundary disables retries
+ * for POST and other mutating methods, including all provider generations.
+ * Before this module there was no
  * retry on transient upstream failures and no breaker, so a provider having a
  * bad minute surfaced directly to the user as a failed generation, and a
  * provider that was hard down was still dialed on every single request.
@@ -26,19 +28,16 @@
  *   - anything after the caller's `AbortSignal` has fired
  *   - anything once response bytes may have reached the client
  *
- * The retry sits *before* the response body is consumed. `providerFetch`
- * returns the `Response` to the adapter, which only then starts reading the
- * SSE/NDJSON stream. So a retried attempt can never duplicate tokens that a
- * user already saw: at retry time nothing has been streamed. That ordering is
- * the correctness argument for retrying streaming calls at all, and it is why
- * this module must stay inside `providerFetch` rather than wrapping an
- * adapter's generator.
+ * The retry sits before the response body is consumed and is restricted by
+ * providerFetch to read-only HTTP methods. No response bytes reaching a user
+ * does not establish that a generation was unbilled.
  *
  * BILLABILITY
  * -----------
  * A retried request that the upstream already began processing can be billed
- * twice by the provider. That is why the retry budget is small, applies only
- * to the classes above, and defaults to 2 extra attempts.
+ * twice by the provider. providerFetch therefore forces zero retries for
+ * generations, even when configuration requests a larger retry budget.
+ * Read-only probes retain the bounded retry policy below.
  *
  * CIRCUIT BREAKER
  * ---------------
