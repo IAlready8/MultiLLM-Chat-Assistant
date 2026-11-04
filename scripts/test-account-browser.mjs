@@ -4,16 +4,22 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium, expect } from '@playwright/test'
 
+const launchBrowser = () => chromium.launch(
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+    ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+    : {},
+)
+
 export async function testHistoryBrowser({ baseUrl, email, password }) {
   assert.ok(['localhost', '127.0.0.1'].includes(new URL(baseUrl).hostname))
-  const browser = await chromium.launch()
+  const browser = await launchBrowser()
   const artifacts = path.join(process.env.RUNNER_TEMP || tmpdir(), 'multillm-browser')
   await mkdir(artifacts, { recursive: true })
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   page.setDefaultTimeout(30_000)
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
-  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+  page.on('console', message => { if (message.type() === 'error') errors.push(`${message.text()} (${message.location().url})`) })
   try {
     await page.goto(new URL('/auth/signin?callbackUrl=%2Fmulti-chat', baseUrl).href)
     await page.getByLabel('Email', { exact: true }).fill(email)
@@ -74,7 +80,7 @@ export async function testHistoryBrowser({ baseUrl, email, password }) {
 
 export async function testAccountBrowser({ baseUrl, email, password }) {
   assert.ok(['localhost', '127.0.0.1'].includes(new URL(baseUrl).hostname))
-  const browser = await chromium.launch()
+  const browser = await launchBrowser()
   const artifacts = path.join(process.env.RUNNER_TEMP || tmpdir(), 'multillm-browser')
   await mkdir(artifacts, { recursive: true })
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true })
@@ -82,7 +88,7 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
   page.setDefaultTimeout(30_000)
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
-  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+  page.on('console', message => { if (message.type() === 'error') errors.push(`${message.text()} (${message.location().url})`) })
   try {
     let discoveryAttempts = 0
     let discoveryRecovered = false
@@ -154,22 +160,32 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
     await expect(page.getByText('Restored 0 conversations and 0 messages. Skipped 3 existing copies.', { exact: true })).toBeVisible()
     for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport)
-      await page.goto(new URL('/ai-roundtable', baseUrl).href)
-      const thread = page.getByRole('button').filter({ hasText: 'Roundtable: Page test' }).first()
-      await expect(thread).toBeEnabled()
-      const boundedRead = page.waitForResponse(response => {
-        const url = new URL(response.url())
-        return url.pathname.startsWith('/api/conversations/') && url.searchParams.get('messagesLimit') === '1'
-      })
-      await thread.click()
-      assert.equal((await boundedRead).status(), 200)
-      await expect(page.getByPlaceholder('Describe the objective for the AI conversation...')).toHaveValue('Pagination fixture')
-      await expect(page.locator('div.whitespace-pre-wrap').filter({ hasText: /^Pagination fixture$/ })).toBeVisible()
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Roundtable must not overflow horizontally')
-      await page.screenshot({ path: path.join(artifacts, `roundtable-${viewport.width}.png`), fullPage: true })
+      await page.goto(new URL('/multi-chat', baseUrl).href)
+      await expect(page.getByRole('heading', { name: 'Multi-LLM Chat', exact: true })).toBeVisible()
+      for (const name of ['AI Roundtable', 'Goal Hub', 'Pipeline']) {
+        await expect(page.getByRole('link', { name, exact: true })).toHaveCount(0)
+      }
+      const addModel = page.getByRole('button', { name: 'Ollama (local)', exact: true })
+      await expect(page.getByRole('button', { name: 'Remove Ollama (local) model', exact: true })).toHaveCount(1)
+      await expect(addModel).toBeEnabled()
+      for (let index = 0; index < 3; index++) await addModel.click()
+      await expect(page.getByRole('heading', { name: 'Active Models (4)', exact: true })).toBeVisible()
+      await expect(addModel).toBeDisabled()
+      await page.getByRole('button', { name: /Remove .* model/ }).first().click()
+      await expect(addModel).toBeEnabled()
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Comparison workspace must not overflow horizontally')
+      await page.screenshot({ path: path.join(artifacts, `scope-${viewport.width}.png`), fullPage: true })
+    }
+    for (const pathname of ['/ai-roundtable', '/pipeline', '/goal-hub', '/api/goals', '/api/teams']) {
+      const response = await context.request.get(new URL(pathname, baseUrl).href, { maxRedirects: 0 })
+      assert.equal(response.status(), 404, `Deferred path must reject direct access: ${pathname}`)
+    }
+    for (const pathname of ['/api/jev/judge', '/api/llm/decisions/execute']) {
+      const response = await context.request.post(new URL(pathname, baseUrl).href, { data: {}, maxRedirects: 0 })
+      assert.equal(response.status(), 404, `Deferred endpoint must reject direct access: ${pathname}`)
     }
     assert.deepEqual(errors, [], 'Browser must not report console errors or uncaught exceptions')
-    console.log('Browser QA passed: controlled provider-discovery failure/retry, credential sign-in, persisted profile reload, encrypted archive download/decryption and idempotent restore, desktop and mobile settings and bounded roundtable reload; no console errors')
+    console.log('Browser QA passed: controlled provider-discovery failure/retry, credential sign-in, persisted profile reload, encrypted archive download/decryption and idempotent restore, desktop and mobile settings/comparison, four-model UI limit and direct deferred-route denial; no console errors')
   } catch (error) {
     console.error('Browser QA diagnostics', { url: page.url(), errors })
     await page.screenshot({ path: path.join(artifacts, 'failure.png'), fullPage: true }).catch(() => {})

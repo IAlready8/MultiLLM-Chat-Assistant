@@ -27,6 +27,7 @@ const isDynamicServerUsageError = (error: unknown): boolean => {
 export const metadata: Metadata = {
   title: "MultiLLM Chat Assistant",
   description: "A professional tool for interacting with multiple LLM APIs",
+  icons: { icon: '/apple-touch-icon.png', apple: '/apple-touch-icon.png' },
 };
 
 export default async function RootLayout({
