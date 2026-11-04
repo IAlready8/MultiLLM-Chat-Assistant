@@ -1,6 +1,6 @@
 # V1 operating policy draft
 
-Prepared November 4, 2026 (America/Toronto). Owner delegated policy drafting in this chat. This document is preparation, not published legal text or a claim that deletion/support operations have been implemented.
+Prepared November 4, 2026 (America/Toronto). Owner delegated policy drafting in this chat. This document is preparation, not published legal text or a claim that production deletion/support operations have been validated. A candidate deletion workflow now has local unit, database and browser proof.
 
 ## Product identity and unpublished draft fields
 
@@ -33,7 +33,7 @@ Track this authorization and current totals in [V1_PROVIDER_TEST_BUDGET.json](V1
 
 - Refunds: allow a request for the first workspace subscription payment within 14 calendar days of purchase. Refund only workspace fees, not provider charges. Later renewals are non-refundable except where required or a documented billing error occurred. Requests require operator review; refunds and subscription cancellation are separate actions. Do not claim this process is operational before a private support recipient is verified.
 - Active retention: keep account information, saved prompts/results, personas and encrypted provider keys while the account remains active. Individual deletion removes active application records; data exports omit raw provider keys and payment credentials.
-- Account deletion: fresh identity proof, explicit confirmation and a durable retryable workflow. Stop new work immediately after intent is recorded. Stop Stripe renewal and expire pending checkouts before completing application-data removal. Do not promise deletion while an external step failed. Retain only minimal deletion/billing reconciliation records needed to prevent stale events from restoring access; document an actual schedule before launch.
+- Account deletion: fresh identity proof, explicit confirmation and a durable retryable workflow. Stop new work immediately after intent is recorded. Stop Stripe renewal and expire pending checkouts before completing application-data removal. Do not promise deletion while an external step failed. Keep minimal completed deletion/billing reconciliation identifiers for 90 days, then remove them on the next successful scheduled maintenance run. Pending deletion requests remain retryable and are not expired. The existing daily recovery job is implemented in the candidate; actual invocation and the unattended-recovery bound remain launch gates.
 - Backups: disclose the actual provider retention and any separate backups. The read-only Neon project response reports 21,600 seconds (six hours) of history retention on November 4. This is configuration evidence, not a successful restoration or proof that no other copies exist. Do not publish an invented 30/35-day erasure claim.
 - Provider processing: selected vendors receive the submitted prompt/context. Vendor terms, retention and charges apply separately. Never claim zero retention or no model training across all vendors without vendor-specific evidence.
 - Usage/support: existing essential account/usage/error telemetry may remain. Do not send prompts, raw provider responses or credentials to monitoring. No new advertising trackers or testimonial/savings claims.

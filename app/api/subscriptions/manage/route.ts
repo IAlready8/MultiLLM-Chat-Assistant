@@ -1,3 +1,5 @@
+import prisma from '@/lib/prisma'
+import { withBillingLock } from '@/lib/billing-lock'
 import { getBillingOrigin } from '@/lib/billing-origin'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
@@ -26,20 +28,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'User email not found' }, { status: 400 })
   }
 
+  const email = user.email
   try {
     const baseUrl = getBillingOrigin()
     ensureStripeConfigured('api')
 
-    // Get the Stripe Customer ID
-    const stripeCustomerId = await getOrCreateStripeCustomer(
-      user.id,
-      user.email,
-    )
+    const portalSession = await withBillingLock(`billing-user:${user.id}`, async () => {
+      const currentUser = await prisma.user.findUnique({ where: { id: user.id }, select: { deletionRequestedAt: true } })
+      if (!currentUser || currentUser.deletionRequestedAt) throw new Error('Account unavailable')
+      // Get the Stripe Customer ID
+      const stripeCustomerId = await getOrCreateStripeCustomer(
+        user.id,
+        email,
+      )
 
-    // Create a Stripe Customer Portal session
-    const portalSession = await stripe.billingPortal.sessions.create({
-      customer: stripeCustomerId,
-      return_url: new URL('/billing', baseUrl).toString(),
+      // Create a Stripe Customer Portal session
+      return stripe.billingPortal.sessions.create({
+        customer: stripeCustomerId,
+        return_url: new URL('/billing', baseUrl).toString(),
+      })
+
     })
 
     try {

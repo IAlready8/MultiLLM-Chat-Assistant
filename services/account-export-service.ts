@@ -1,10 +1,10 @@
 import prisma from '@/lib/prisma'
+import type { PrismaClient } from '@/types/prisma'
 import { LlmRequestError } from '@/lib/llm-request'
 
 export const ACCOUNT_EXPORT_MAX_BYTES = 16 * 1024 * 1024
 
-export async function exportAccountHistory(userId: string) {
-  return prisma.$transaction(async tx => {
+async function buildHistoryArchive(tx: PrismaClient, userId: string) {
     const rows = await tx.$queryRaw`
       SELECT COUNT(*)::text AS messages,
         COALESCE(SUM(octet_length(m.content)), 0)::text AS bytes
@@ -32,6 +32,25 @@ export async function exportAccountHistory(userId: string) {
     if (Buffer.byteLength(archive, 'utf8') > ACCOUNT_EXPORT_MAX_BYTES) {
       throw new LlmRequestError('The archive is too large. No partial archive was created.', 413, 'EXPORT_TOO_LARGE')
     }
+    return archive
+}
+
+export async function exportAccountHistory(userId: string) {
+  return prisma.$transaction(tx => buildHistoryArchive(tx, userId), { isolationLevel: 'RepeatableRead', timeout: 20_000 })
+}
+
+/** Portable account data; no password hashes, provider keys, tokens or payment IDs. */
+export async function exportAccountData(userId: string) {
+  return prisma.$transaction(async tx => {
+    const history = JSON.parse(await buildHistoryArchive(tx, userId))
+    const personaCount = await tx.persona.count({ where: { userId } })
+    if (personaCount > 1000) throw new LlmRequestError('The account exceeds the export limit of 1,000 personas. No partial archive was created.', 413, 'EXPORT_TOO_LARGE')
+    const profile = await tx.user.findUnique({ where: { id: userId }, select: { name: true, email: true, image: true } })
+    const personas = await tx.persona.findMany({ where: { userId }, orderBy: { id: 'asc' }, select: { title: true, description: true, prompt: true, createdAt: true, updatedAt: true } })
+    const providers = await tx.providerConfig.findMany({ where: { userId }, select: { provider: true, isActive: true, createdAt: true, updatedAt: true } })
+    const subscription = await tx.subscription.findUnique({ where: { userId }, select: { tier: true, stripeStatus: true, stripeCurrentPeriodEnd: true, stripeCancelAtPeriodEnd: true } })
+    const archive = JSON.stringify({ format: 'multillm-account-data', version: 1, exportedAt: history.exportedAt, profile, personas, providers, subscription, history })
+    if (Buffer.byteLength(archive, 'utf8') > ACCOUNT_EXPORT_MAX_BYTES) throw new LlmRequestError('The archive is too large. No partial archive was created.', 413, 'EXPORT_TOO_LARGE')
     return archive
   }, { isolationLevel: 'RepeatableRead', timeout: 20_000 })
 }

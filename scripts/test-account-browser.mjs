@@ -2,7 +2,10 @@ import assert from 'node:assert/strict'
 import { mkdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { chromium, expect } from '@playwright/test'
+import { chromium, expect as browserExpect } from '@playwright/test'
+
+// Match assertions to the existing 30-second page timeout, including cold dev compilation.
+const expect = browserExpect.configure({ timeout: 30_000 })
 
 const launchBrowser = () => chromium.launch(
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
@@ -189,6 +192,80 @@ export async function testAccountBrowser({ baseUrl, email, password }) {
   } catch (error) {
     console.error('Browser QA diagnostics', { url: page.url(), errors })
     await page.screenshot({ path: path.join(artifacts, 'failure.png'), fullPage: true }).catch(() => {})
+    throw error
+  } finally { await browser.close() }
+}
+
+export async function testPublicBrowser({ baseUrl }) {
+  assert.ok(['localhost', '127.0.0.1'].includes(new URL(baseUrl).hostname))
+  const browser = await launchBrowser()
+  const artifacts = path.join(process.env.RUNNER_TEMP || tmpdir(), 'multillm-browser')
+  await mkdir(artifacts, { recursive: true })
+  const page = await browser.newPage()
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+  try {
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
+      assert.equal((await page.goto(new URL('/', baseUrl).href)).status(), 200)
+      await expect(page.getByRole('heading', { name: 'One brief. Several model perspectives.' }).first()).toBeVisible()
+      await expect(page.getByText('Chat & History', { exact: true })).toHaveCount(0)
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Public landing must fit viewport')
+      await page.screenshot({ path: path.join(artifacts, `public-${width}.png`), fullPage: true })
+      assert.equal((await page.goto(new URL('/pricing', baseUrl).href)).status(), 200)
+      await expect(page.getByText('CAD 19 / month', { exact: true }).first()).toBeVisible()
+      await expect(page.getByText(/paid signup is not open/i).first()).toBeVisible()
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Pricing must fit viewport')
+      await page.screenshot({ path: path.join(artifacts, `pricing-${width}.png`), fullPage: true })
+    }
+    for (const pathname of ['/terms', '/privacy', '/support']) {
+      const response = await page.request.get(new URL(pathname, baseUrl).href)
+      assert.equal(response.status(), 503, 'Unapproved notices must stay unpublished')
+      assert.ok(!(await response.text()).includes('[UNCONFIRMED'))
+    }
+    assert.equal((await page.request.get(new URL('/api/conversations', baseUrl).href)).status(), 401)
+    assert.deepEqual(errors, [], 'Public browser QA must have no console errors')
+    console.log('Public browser QA passed: signed-out landing/pricing, exact offer, closed paid signup, unpublished draft legal/contact, protected API denial, desktop/mobile')
+  } finally { await browser.close() }
+}
+
+export async function testDeletionBrowser({ baseUrl, email, password }) {
+  assert.ok(['localhost', '127.0.0.1'].includes(new URL(baseUrl).hostname))
+  const browser = await launchBrowser()
+  const artifacts = path.join(process.env.RUNNER_TEMP || tmpdir(), 'multillm-browser')
+  await mkdir(artifacts, { recursive: true })
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
+  try {
+    await page.goto(new URL('/auth/signin?callbackUrl=%2Faccount%2Fdeletion', baseUrl).href)
+    await page.getByLabel('Email', { exact: true }).fill(email)
+    await page.getByLabel('Password', { exact: true }).fill(password)
+    await page.getByRole('button', { name: 'Sign in with password', exact: true }).click()
+    await page.waitForURL('**/account/deletion')
+    await expect(page.getByText(email, { exact: true })).toBeVisible()
+    const submit = page.getByRole('button', { name: 'Permanently delete account', exact: true })
+    await expect(submit).toBeDisabled()
+    await page.getByLabel('Type DELETE MY ACCOUNT to confirm', { exact: true }).fill('DELETE MY ACCOUNT')
+    await expect(submit).toBeDisabled()
+    await page.getByLabel('Current password', { exact: true }).fill(password)
+    await expect(submit).toBeEnabled()
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Deletion confirmation must fit narrow screens')
+    await page.screenshot({ path: path.join(artifacts, 'deletion-390.png'), fullPage: true })
+    const deleted = page.waitForResponse(response => response.url().endsWith('/api/account/deletion') && response.request().method() === 'POST')
+    await submit.click()
+    const response = await deleted
+    assert.equal(response.status(), 200)
+    assert.equal((await response.json()).status, 'complete')
+    await page.waitForURL('**/auth/signin?deleted=true')
+    assert.equal((await page.request.get(new URL('/api/conversations', baseUrl).href)).status(), 401)
+    assert.deepEqual(errors, [], 'Successful deletion browser QA must have no console errors')
+    console.log('Deletion browser QA passed: account shown, explicit confirmation, current-password proof, mobile fit, real account removal, logout and old API denial')
+  } catch (error) {
+    await page.screenshot({ path: path.join(artifacts, 'deletion-failure.png'), fullPage: true }).catch(() => {})
     throw error
   } finally { await browser.close() }
 }

@@ -10,6 +10,7 @@ export interface User extends BaseModel {
   emailVerified?: Date | null
   image?: string | null
   password?: string | null
+  deletionRequestedAt?: Date | null
   passwordVersion?: number
   role?: 'OWNER' | 'ADMIN' | 'MEMBER' | null
 }
@@ -101,7 +102,22 @@ export type PrismaModelDelegate<T> = {
   updateMany: (...args: any[]) => Promise<{ count: number }>
 }
 
+export interface AccountDeletion {
+  userId: string
+  stripeCustomerId: string | null
+  status: string
+  requestedAt: Date
+  updatedAt: Date
+  completedAt: Date | null
+  leaseToken: string | null
+  leaseExpiresAt: Date | null
+  attempts: number
+  lastErrorCode: string | null
+}
+
 export interface PrismaClient {
+  account: PrismaModelDelegate<{ id: string; userId: string; provider: string }>
+  accountDeletion: PrismaModelDelegate<AccountDeletion>
   rateLimitBucket: PrismaModelDelegate<{ id: string; timestamps: bigint[]; expiresAt: Date }>
   llmQuotaUsage: PrismaModelDelegate<{ id: string; userId: string; units: number; createdAt: Date }>
   generation: PrismaModelDelegate<Generation>

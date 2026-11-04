@@ -1,3 +1,4 @@
+import { PublicFooter } from '@/components/public-footer'
 import { Suspense } from 'react'
 import type { Metadata } from "next";
 import type { Session } from 'next-auth'
@@ -64,6 +65,7 @@ export default async function RootLayout({
                 <main className="flex-1">
                   {children}
                 </main>
+                <PublicFooter />
               </div>
             </AuthGuard>
             <Toaster />

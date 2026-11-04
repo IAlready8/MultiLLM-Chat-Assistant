@@ -101,7 +101,7 @@ export default function SignInPage() {
     }
   }
 
-  if (session) {
+  if (session?.user?.id) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-md">

@@ -14,12 +14,11 @@ export function AccountHistoryExport() {
   const [complete, setComplete] = useState(false)
   const [restored, setRestored] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
-  return <form className="space-y-3" onSubmit={async event => {
-    event.preventDefault()
+  const download = async (fullAccount = false) => {
     if (busy || password.length < 12) return
     setBusy(true); setError(null); setComplete(false); setRestored(null)
     try {
-      const response = await fetch('/api/account/export', { method: 'POST' })
+      const response = await fetch(fullAccount ? '/api/account/data' : '/api/account/export', { method: 'POST' })
       if (!response.ok) {
         const value = await response.json().catch(() => ({}))
         throw new Error(value.error || 'Unable to export conversation history.')
@@ -30,13 +29,15 @@ export function AccountHistoryExport() {
       const link = document.createElement('a')
       try {
         link.href = url
-        link.download = `multillm-history-${new Date().toISOString().slice(0, 10)}.encrypted`
+        link.download = `multillm-${fullAccount ? 'account' : 'history'}-${new Date().toISOString().slice(0, 10)}.encrypted`
         document.body.appendChild(link); link.click()
       } finally { link.remove(); URL.revokeObjectURL(url) }
       setPassword(''); setComplete(true)
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Unable to export conversation history.') }
     finally { setBusy(false) }
-  }}>
+  }
+  return <form className="space-y-3" onSubmit={async event => { event.preventDefault(); await download() }}>
+
     <Label htmlFor="history-password">Conversation archive password</Label>
     <Input id="history-password" type="password" minLength={12} required
       value={password} disabled={busy} autoComplete="new-password"
@@ -46,6 +47,8 @@ export function AccountHistoryExport() {
     {restored && <p role="status" className="text-sm">{restored}</p>}
     {complete && <p role="status" className="text-sm">Archive prepared. Check your browser downloads.</p>}
     <Button type="submit" disabled={busy || password.length < 12}>{busy ? 'Preparing archive…' : 'Download conversation archive'}</Button>
+    <p className="text-sm text-muted-foreground">You can also export your profile, personas, provider names and subscription state with your conversation history. This account data file opens as JSON; history restore uses the conversation archive above.</p>
+    <Button type="button" variant="outline" disabled={busy || password.length < 12} onClick={() => download(true)}>Download account data</Button>
     <div className="space-y-2 border-t pt-3">
       <Label htmlFor="history-file">Open an existing archive</Label>
       <Input id="history-file" type="file" accept=".encrypted,text/plain" disabled={busy}

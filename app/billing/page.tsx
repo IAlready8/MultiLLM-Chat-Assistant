@@ -1,3 +1,4 @@
+import { isPaidSignupEnabled } from '@/lib/legal-publication'
 import { getLlmQuota } from '@/lib/llm-quota'
 import { getProPrice } from '@/lib/billing-price'
 import { auth } from '@/lib/auth'
@@ -63,7 +64,7 @@ export default async function BillingPage() {
               subscription?.stripeCurrentPeriodEnd?.toISOString() || null
             }
             plans={BILLING_PLANS}
-            checkoutEnabled={isStripeCheckoutConfigured && Boolean(proPrice)}
+            checkoutEnabled={isPaidSignupEnabled() && isStripeCheckoutConfigured && Boolean(proPrice)}
             portalEnabled={isStripeApiConfigured}
           />
         </CardContent>

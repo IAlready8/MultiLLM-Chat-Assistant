@@ -176,7 +176,7 @@ export function BillingClient({
           </div>
           {!checkoutEnabled && tier === 'FREE' ? (
             <p className="text-sm text-muted-foreground">
-              Checkout is currently unavailable because Stripe checkout is not configured.
+              New paid signup is currently unavailable. Review pricing, terms and privacy before purchasing.
             </p>
           ) : null}
           {!portalEnabled && tier === 'PRO' ? (

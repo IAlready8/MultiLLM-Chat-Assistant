@@ -9,10 +9,10 @@ import { SignOutButton } from '@/components/sign-out-button'
 
 export default function Navbar() {
   const pathname = usePathname()
-  const { status } = useSession()
+  const { data: session, status } = useSession()
 
   const navItems = [
-    { name: 'Home', path: '/' },
+    { name: 'Home', path: '/workspace' },
     { name: 'Chat & History', path: '/multi-chat' },
     { name: 'Comparison', path: '/comparison' },
     { name: 'AI Roundtable', path: '/ai-roundtable' },
@@ -22,7 +22,9 @@ export default function Navbar() {
     { name: 'Analytics', path: '/analytics' },
     { name: 'Settings', path: '/settings' },
     { name: 'Billing', path: '/billing' },
-  ].filter(item => status === 'authenticated' && !isDeferredReleasePath(item.path))
+  ].filter(item => status === 'authenticated' && Boolean(session?.user?.id) && !session?.user?.deletionPending && !isDeferredReleasePath(item.path))
+  if (session?.user?.deletionPending) navItems.push({ name: 'Account deletion', path: '/account/deletion' })
+  if (status !== 'authenticated' || !session?.user?.id) navItems.push({ name: 'Pricing', path: '/pricing' }, { name: 'Sign in', path: '/auth/signin' })
 
   return (
     <nav className="border-b border-border/60 bg-background/80 backdrop-blur-lg">
