@@ -8,6 +8,8 @@ The candidate starts from `3c4e3b52223b7af803e31251ff9d1bf41f447b44` on `release
 
 The owner approved CAD 19/month, Free 50 and Pro 2,000 attempted generations per UTC calendar month, four selected models, paid-through access after renewal cancellation, and no Enterprise sales. `lib/release-offer.ts` is the shared offer. Explicit production Free/Pro configuration must match it; all tier caps must be finite. The retained Enterprise example cap is zero. Policies are drafted separately in [V1_POLICY_DRAFT.md](V1_POLICY_DRAFT.md).
 
+Owner follow-up decisions: the public product name is **MultiLLM Chat Assistant**; the legal operator and private support email remain unconfirmed draft placeholders and must not be invented or published. Provider validation has one aggregate **CAD $5 maximum**, with testing stopped at the cap. No real provider test requests have been dispatched; CAD $0 is consumed. Credentials and two Google test identities are still needed. See [V1_PROVIDER_TEST_BUDGET.json](V1_PROVIDER_TEST_BUDGET.json) and the pre-dispatch reservation policy in the operating draft. This budget does not authorize payment operations.
+
 Implemented preparation:
 
 - R01: missing/malformed/unlimited production quota configuration fails closed; current DB entitlements and the existing advisory-lock ledger are preserved.
@@ -72,7 +74,7 @@ The first preview of 9b69887 reached READY at dpl_EF3Ltca1ckVwpznXgSEej2XiNVed, 
 | G02 Revision | PENDING | Approved candidate preview/deployed SHA and configuration evidence |
 | G03 Signup | PENDING | Fresh Google identity outside test-user list and repeat login |
 | G04 Isolation | PARTIAL | Local two-account denial passes; actual Google/cross-browser candidate journey pending |
-| G05 Real AI | PENDING | Two independent vendors; every advertised vendor separately; owner-held keys, explicit budget |
+| G05 Real AI | PENDING | Two independent vendors; every advertised vendor separately; owner-held keys still needed; aggregate CAD $5 test budget approved |
 | G06 Reliability | PARTIAL | Controlled local endpoint passes; real-vendor cancel/timeout/failure behavior pending |
 | G07 History/personas | PARTIAL | Local persistence passes; actual candidate second-browser/persona workflow pending |
 | G08 Quota | PARTIAL | Local configuration, entitlement, boundary and real PostgreSQL races pass; deployed approved config and candidate UI proof pending |
@@ -85,7 +87,7 @@ The first preview of 9b69887 reached READY at dpl_EF3Ltca1ckVwpznXgSEej2XiNVed, 
 
 ## Bounded next work
 
-1. Bind owner-held provider test keys securely, supply two real Google test identities, and specify a provider-test budget. The owner's YES authorized access, but supplied no secret bindings, identities or numerical budget. Do not substitute customers' keys or manufacture OAuth success.
+1. Bind owner-held provider test keys securely and supply two real Google test identities. The owner approved a maximum of CAD $5 total across all provider tests; stop at that cap and reserve a conservative CAD bound before each billable dispatch. No secret bindings or identities have been supplied. Do not substitute customers' keys or manufacture OAuth success.
 2. Execute M1 with two actual vendor streams, cancellation/sibling failure, second-browser persistence and A/B denial. Fix only demonstrated failures before expanding commercial implementation.
 3. Finish public/legal surfaces and durable deletion after the core is proved. Use the delegated policy draft, actual business identity/private contact and confirmed operating facts; do not publish placeholders.
 4. Connect a Stripe sandbox, run the actual checkout/portal/webhook lifecycle, then prepare any necessary live configuration/transaction for explicit approval and budget. Existing live price/webhook records are not lifecycle evidence.
