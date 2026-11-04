@@ -17,6 +17,7 @@ const db = new pg.Pool({ connectionString: database.toString() })
 const runId = randomUUID()
 const owner = `generation-test-owner-${runId}`
 const outsider = `generation-test-outsider-${runId}`
+const capperId = `generation-test-capper-${runId}`
 const historianId = `generation-test-historian-${runId}`
 const password = randomUUID()
 let providerCalls = 0
@@ -75,9 +76,10 @@ async function events(response) {
 
 try {
   const hash = await bcrypt.hash(password, 10)
-  for (const id of [owner, outsider, historianId]) await db.query('INSERT INTO "User" (id, email, name, password) VALUES ($1, $2, $1, $3)', [id, `${id}@example.test`, hash])
+  for (const id of [owner, outsider, historianId, capperId]) await db.query('INSERT INTO "User" (id, email, name, password) VALUES ($1, $2, $1, $3)', [id, `${id}@example.test`, hash])
   await db.query('INSERT INTO "ProviderConfig" (id, provider, "userId", settings, "updatedAt") VALUES ($1, $2, $3, $4, NOW())', [`config-${runId}`, 'ollama', owner, JSON.stringify({ baseUrl: 'http://localhost:11434', models: ['qa-fast'] })])
   await db.query('INSERT INTO "ProviderConfig" (id, provider, "userId", settings, "updatedAt") VALUES ($1, $2, $3, $4, NOW())', [`historian-config-${runId}`, 'ollama', historianId, JSON.stringify({ baseUrl: 'http://localhost:11434', models: ['qa-fast'] })])
+  await db.query('INSERT INTO "ProviderConfig" (id, provider, "userId", settings, "updatedAt") VALUES ($1, $2, $3, $4, NOW())', [`capper-config-${runId}`, 'ollama', capperId, JSON.stringify({ baseUrl: 'http://localhost:11434', models: ['qa-fast'] })])
   modelApi.listen(11434)
   await once(modelApi, 'listening')
   const request = await login(owner)
@@ -101,7 +103,9 @@ try {
   const slow = payload('qa-slow', 0)
   const fast = payload('qa-fast', 1)
   const failed = payload('qa-fail', 2)
+  const callsBeforeParallel = providerCalls
   const streams = await Promise.all([slow, fast, failed].map(input => request('/api/llm/stream', json(input)).then(events)))
+  assert.equal(providerCalls - callsBeforeParallel, 3, 'A failed provider generation must not silently repeat a potentially billable POST')
   assert.equal(streams[0].at(-1).type, 'done')
   assert.deepEqual(streams[1].at(-1).usage, { prompt_tokens: 12, completion_tokens: 4, total_tokens: 16, usage_source: 'provider' })
   assert.equal(streams[2].at(-1).type, 'error')
@@ -126,10 +130,12 @@ try {
   assert.equal(duplicateCount.rows[0].count, 1)
   const regeneration = await events(await request('/api/llm/stream', json(payload('qa-fast', 0))))
   assert.equal(regeneration.at(-1).type, 'done')
-  const truncated = await events(await request('/api/llm/stream', json(payload('qa-truncated', 3))))
+  const reliabilityTurnId = randomUUID()
+  assert.equal((await request(`/api/conversations/${conversation.id}`, json([{ role: 'user', content: 'Failure and cancellation checks', clientId: reliabilityTurnId }]))).status, 200)
+  const truncated = await events(await request('/api/llm/stream', json({ ...payload('qa-truncated', 0), turnId: reliabilityTurnId })))
   assert.equal(truncated.at(-1).code, 'PROVIDER_STREAM_INTERRUPTED')
   const cancel = new AbortController()
-  const canceled = await request('/api/llm/stream', { ...json(payload('qa-cancel', 4)), signal: cancel.signal })
+  const canceled = await request('/api/llm/stream', { ...json({ ...payload('qa-cancel', 1), turnId: reliabilityTurnId }), signal: cancel.signal })
   assert.equal(canceled.status, 200)
   const reader = canceled.body.getReader()
   assert.ok((await reader.read()).value.byteLength > 0)
@@ -155,11 +161,25 @@ try {
   if (process.env.LLM_MONTHLY_REQUEST_LIMITS) {
     const ownerUsage = await db.query('SELECT SUM(units)::int AS used FROM "LlmQuotaUsage" WHERE "userId" = $1', [owner])
     assert.equal(ownerUsage.rows[0].used, 6, 'Replay, rejected ownership and duplicate requests must not consume quota')
-    const attempts = await Promise.all(Array.from({ length: 9 }, () => other('/api/llm/stream', json({ provider: 'ollama', model: 'qa-fast', messages: [{ role: 'user', content: 'quota test' }] }))))
-    assert.equal(attempts.filter(response => response.status === 200).length, 8, 'Atomic quota admission must never exceed the configured allowance')
-    assert.equal(attempts.filter(response => response.status === 429).length, 1)
+    await db.query('INSERT INTO "LlmQuotaUsage" (id, "userId", units) VALUES ($1, $2, $3)', [randomUUID(), outsider, 7])
+    const beforeQuotaRace = providerCalls
+    const attempts = await Promise.all(Array.from({ length: 10 }, () => other('/api/llm/stream', json({ provider: 'ollama', model: 'qa-fast', messages: [{ role: 'user', content: 'quota test' }] }))))
+    assert.equal(attempts.filter(response => response.status === 200).length, 1, 'Atomic quota admission must never exceed the configured allowance')
+    assert.equal(attempts.filter(response => response.status === 429).length, 9)
     await Promise.all(attempts.map(response => response.text()))
+    assert.equal(providerCalls - beforeQuotaRace, 1, 'Only the one remaining unit may dispatch')
   }
+  // Ten separate HTTP requests race for four slots, all reusing position zero.
+  // This exercises server admission rather than trusting a browser or batch cap.
+  const capper = await login(capperId)
+  const capTurn = randomUUID()
+  const capConversation = await (await capper('/api/conversations', json({ title: 'Comparison cap race', messages: [{ role: 'user', content: 'Four model cap', clientId: capTurn }] }))).json()
+  const callsBeforeCap = providerCalls
+  const capAttempts = await Promise.all(Array.from({ length: 10 }, (_, index) => capper('/api/llm/stream', json({ provider: 'ollama', model: `qa-cap-${index}`, conversationId: capConversation.id, requestId: randomUUID(), turnId: capTurn, position: 0, messages: [{ role: 'user', content: 'Four model cap' }] }))))
+  assert.equal(capAttempts.filter(response => response.status === 200).length, 4)
+  assert.equal(capAttempts.filter(response => response.status === 400).length, 6)
+  await Promise.all(capAttempts.map(response => response.text()))
+  assert.equal(providerCalls - callsBeforeCap, 4, 'Rejected fifth models must not dispatch')
   const savedBatch = { conversationId: conversation.id, turnId: duplicateTurn.messages[0].clientId, prompt: 'Next turn', requests: ['qa-fast', 'qa-slow'].map(model => ({ provider: 'ollama', model, prompt: 'Next turn', requestId: randomUUID() })) }
   const pipelineResults = await (await request('/api/llm/orchestrate', json(savedBatch))).json()
   assert.equal(pipelineResults.length, 2)
@@ -269,11 +289,11 @@ try {
   assert.deepEqual(quotaAfterRestore.rows, quotaBeforeRestore.rows, 'Restore must neither add usage nor change existing accounting')
   await db.query('DELETE FROM "User" WHERE id = $1', [outsider])
   assert.equal((await other('/api/conversations')).status, 401, 'A deleted account must not retain access through its session token')
-  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'server-assembled model context', 'owned turn-aligned message pagination', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation'], providerCalls }))
+  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'no automatic provider POST retries', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'concurrent four-model admission despite reused positions', 'durable batch orchestration and replay', 'owned paginated history', 'server-assembled model context', 'owned turn-aligned message pagination', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation'], providerCalls }))
 } finally {
   modelApi.closeAllConnections()
   if (modelApi.listening) await new Promise(resolve => modelApi.close(resolve))
-  await db.query('DELETE FROM "User" WHERE id = ANY($1::text[])', [[owner, outsider, historianId]])
-  await db.query('DELETE FROM "Analytics" WHERE "userId" = ANY($1::text[])', [[owner, outsider, historianId]])
+  await db.query('DELETE FROM "User" WHERE id = ANY($1::text[])', [[owner, outsider, historianId, capperId]])
+  await db.query('DELETE FROM "Analytics" WHERE "userId" = ANY($1::text[])', [[owner, outsider, historianId, capperId]])
   await db.end()
 }

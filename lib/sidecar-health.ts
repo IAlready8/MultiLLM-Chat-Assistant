@@ -12,6 +12,9 @@ const sidecarHealthUrl = () => {
 export async function getSidecarDiagnostics(
   fetchImpl: typeof fetch = fetch
 ): Promise<SidecarDiagnostics> {
+  if (process.env.NODE_ENV === 'production') {
+    return { status: 'disabled', message: 'Python sidecar is unavailable in this release', configured: false }
+  }
   const sidecarUrl = sidecarHealthUrl()
 
   if (!sidecarUrl) {

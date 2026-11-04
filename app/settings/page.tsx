@@ -5,6 +5,7 @@ import { useTheme } from 'next-themes'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { AccountDeletionPanel } from '@/components/account-deletion-panel'
 import { AccountProfileForm } from '@/components/account-profile-form'
 import { ChangePasswordForm } from '@/components/change-password-form'
 import { AccountHistoryExport } from '@/components/account-history-export'
@@ -12,7 +13,6 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import ApiKeyForm from '@/components/api-key-form'
-import { JevSettingsForm } from '@/components/jev-settings-form'
 import { ExportImportDialog } from '@/components/export-import-dialog'
 import { exportAllData, importAllData } from '@/services/export-import-service'
 import { supportedProviderIds } from '@/lib/provider-registry'
@@ -57,17 +57,8 @@ const readFontSizeFromStorage = (): FontSizeOption => {
   return value && isFontSizeOption(value) ? value : 'normal'
 }
 
-const readAnalyticsToggle = (): boolean => {
-  if (typeof window === 'undefined') {
-    return true
-  }
-  const value = window.localStorage.getItem(ANALYTICS_STORAGE_KEY)
-  return value === null ? true : value === 'true'
-}
-
 export default function SettingsPage() {
   const [fontSize, setFontSize] = useState<FontSizeOption>('normal')
-  const [analyticsEnabled, setAnalyticsEnabled] = useState(true)
   const [isResetting, setIsResetting] = useState(false)
   const { toast } = useToast()
 
@@ -75,10 +66,8 @@ export default function SettingsPage() {
 
   const hydrateFromStorage = useCallback(() => {
     const savedFontSize = readFontSizeFromStorage()
-    const savedAnalyticsEnabled = readAnalyticsToggle()
 
     setFontSize(savedFontSize)
-    setAnalyticsEnabled(savedAnalyticsEnabled)
     applyFontScale(savedFontSize)
   }, [])
 
@@ -93,17 +82,6 @@ export default function SettingsPage() {
     toast({
       title: 'Appearance updated',
       description: `${FONT_OPTIONS[option].label} font size applied.`,
-    })
-  }
-
-  const setAnalyticsPreference = (enabled: boolean) => {
-    setAnalyticsEnabled(enabled)
-    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, String(enabled))
-    toast({
-      title: enabled ? 'Analytics enabled' : 'Analytics disabled',
-      description: enabled
-        ? 'Anonymous usage tracking is now enabled.'
-        : 'Anonymous usage tracking is now disabled.',
     })
   }
 
@@ -158,7 +136,6 @@ export default function SettingsPage() {
 
       setTheme('system')
       setFontSize('normal')
-      setAnalyticsEnabled(true)
       applyFontScale('normal')
 
       toast({
@@ -194,7 +171,6 @@ export default function SettingsPage() {
         <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="providers">API Providers</TabsTrigger>
-          <TabsTrigger value="jev">Jev</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="advanced">Advanced</TabsTrigger>
         </TabsList>
@@ -218,6 +194,7 @@ export default function SettingsPage() {
             <ChangePasswordForm />
           </CardContent>
         </Card>
+          <AccountDeletionPanel />
       </TabsContent>
 
         <TabsContent value="providers" className="space-y-6">
@@ -230,9 +207,6 @@ export default function SettingsPage() {
               <ApiKeyForm />
             </CardContent>
           </Card>
-        </TabsContent>
-        <TabsContent value="jev" className="space-y-6">
-          <JevSettingsForm />
         </TabsContent>
 
 
@@ -300,18 +274,9 @@ export default function SettingsPage() {
               <CardDescription>Configure advanced application settings</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Enable Analytics</Label>
-                  <p className="text-sm text-muted-foreground">Send anonymous usage data to improve the platform</p>
-                </div>
-                <Button
-                  variant={analyticsEnabled ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setAnalyticsPreference(!analyticsEnabled)}
-                >
-                  {analyticsEnabled ? 'Enabled' : 'Disabled'}
-                </Button>
+              <div>
+                <Label>Essential account telemetry</Label>
+                <p className="text-sm text-muted-foreground">Account-linked usage and error telemetry supports service operation. See the <a href="/privacy" className="underline">privacy notice</a> for retention and processing details.</p>
               </div>
               <div className="flex items-center justify-between">
                 <div>

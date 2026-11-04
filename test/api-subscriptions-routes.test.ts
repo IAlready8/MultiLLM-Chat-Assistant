@@ -36,6 +36,11 @@ const {
   }
 })
 
+const billingUser = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/prisma', () => ({ default: { user: { findUnique: billingUser } } }))
+const paidSignup = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/legal-publication', () => ({ isPaidSignupEnabled: paidSignup }))
+
 vi.mock('@/lib/billing-price', () => ({ getProPrice: vi.fn().mockResolvedValue({ id: 'price_test', label: '$10 / month' }) }))
 
 vi.mock('@/lib/billing-lock', () => ({ withBillingLock: async (_key: string, work: () => Promise<unknown>) => work() }))
@@ -100,6 +105,8 @@ const originalNextAuthUrl = process.env.NEXTAUTH_URL
 describe('subscription routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    paidSignup.mockReturnValue(true)
+    billingUser.mockResolvedValue({ id: 'user-1', deletionRequestedAt: null })
     process.env.NEXTAUTH_URL = 'http://localhost:3000'
 
     mockEnsureStripeConfigured.mockReset()
@@ -121,6 +128,15 @@ describe('subscription routes', () => {
     mockLoggerError.mockReset()
   })
 
+  it('rejects a stale checkout authorization when deletion begins before its billing lock', async () => {
+    billingUser.mockResolvedValue({ id: 'user-1', deletionRequestedAt: new Date() })
+    expect((await createSubscriptionSession(new Request('http://localhost'))).status).toBe(500)
+    expect(mockGetOrCreateStripeCustomer).not.toHaveBeenCalled()
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled()
+    expect((await createManageSession(new Request('http://localhost'))).status).toBe(500)
+    expect(mockCreatePortalSession).not.toHaveBeenCalled()
+  })
+
   it('forwards auth response for /api/subscriptions', async () => {
     mockGetAuthenticatedUser.mockResolvedValue(
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
@@ -132,6 +148,16 @@ describe('subscription routes', () => {
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
+  })
+
+  it('rejects new paid signup before Stripe resources when notices are unpublished', async () => {
+    paidSignup.mockReturnValue(false)
+    const response = await createSubscriptionSession(new Request('http://localhost'))
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({ code: 'PAID_SIGNUP_CLOSED' })
+    expect(mockGetOrCreateStripeCustomer).not.toHaveBeenCalled()
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled()
+    expect((await createManageSession(new Request('http://localhost'))).status).toBe(200)
   })
 
   it('returns 400 when authenticated user has no email', async () => {
@@ -170,24 +196,12 @@ describe('subscription routes', () => {
     )
   })
 
-  it('falls back to localhost base URL when NEXTAUTH_URL is invalid', async () => {
+  it.each([createSubscriptionSession, createManageSession])('rejects invalid callback configuration before any Stripe action', async handler => {
     process.env.NEXTAUTH_URL = 'not-a-valid-url'
-
-    const response = await createSubscriptionSession(
-      new Request('http://localhost'),
-    )
-    const payload = mockCreateCheckoutSession.mock.calls[0]?.[0] as {
-      success_url: string
-      cancel_url: string
-    }
-
-    expect(response.status).toBe(200)
-    expect(payload.success_url).toBe(
-      'http://localhost:3000/billing?success=true',
-    )
-    expect(payload.cancel_url).toBe(
-      'http://localhost:3000/billing?canceled=true',
-    )
+    expect((await handler(new Request('http://localhost'))).status).toBe(503)
+    expect(mockGetOrCreateStripeCustomer).not.toHaveBeenCalled()
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled()
+    expect(mockCreatePortalSession).not.toHaveBeenCalled()
   })
 
   it('records checkout analytics with request source', async () => {

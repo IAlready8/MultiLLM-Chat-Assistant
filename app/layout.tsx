@@ -1,3 +1,4 @@
+import { PublicFooter } from '@/components/public-footer'
 import { Suspense } from 'react'
 import type { Metadata } from "next";
 import type { Session } from 'next-auth'
@@ -27,6 +28,7 @@ const isDynamicServerUsageError = (error: unknown): boolean => {
 export const metadata: Metadata = {
   title: "MultiLLM Chat Assistant",
   description: "A professional tool for interacting with multiple LLM APIs",
+  icons: { icon: '/apple-touch-icon.png', apple: '/apple-touch-icon.png' },
 };
 
 export default async function RootLayout({
@@ -63,6 +65,7 @@ export default async function RootLayout({
                 <main className="flex-1">
                   {children}
                 </main>
+                <PublicFooter />
               </div>
             </AuthGuard>
             <Toaster />

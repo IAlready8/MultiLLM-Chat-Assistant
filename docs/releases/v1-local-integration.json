@@ -1,0 +1,53 @@
+{
+  "passed": [
+    "real credential authentication",
+    "unauthenticated denial",
+    "cross-origin mutation denial",
+    "parallel responses and isolated failure",
+    "no automatic provider POST retries",
+    "provider token usage",
+    "durable reload ordering",
+    "idempotent replay",
+    "conflicting request denial",
+    "cross-account read/update/delete/generation denial",
+    "duplicate user turn prevention",
+    "regeneration",
+    "truncated stream failure",
+    "cancel and save partial response",
+    "unique usage ledger",
+    "expired lease recovery preserves checkpoint",
+    "concurrent quota reservations",
+    "concurrent four-model admission despite reused positions",
+    "durable batch orchestration and replay",
+    "owned paginated history",
+    "server-assembled model context",
+    "owned turn-aligned message pagination",
+    "persisted account profile and strict field validation",
+    "owned consistent account archive",
+    "atomic archive restore and replay without billing or generation writes",
+    "deleted account session revocation"
+  ],
+  "providerCalls": 18,
+  "browserQa": {
+    "viewports": [
+      {
+        "width": 1440,
+        "height": 1000
+      },
+      {
+        "width": 390,
+        "height": 844
+      }
+    ],
+    "passed": [
+      "bounded history and reload",
+      "profile persistence",
+      "encrypted archive export/decryption and idempotent restore",
+      "four-model selection and removal",
+      "deferred navigation hidden and direct routes rejected"
+    ],
+    "consoleErrors": 0,
+    "localBrowser": "Chromium 151",
+    "fallbackReason": "Browser control tool unavailable; bundled Chromium download denied by network policy"
+  }
+}

@@ -1,3 +1,4 @@
+import { isPaidSignupEnabled } from '@/lib/legal-publication'
 import { getLlmQuota } from '@/lib/llm-quota'
 import { getProPrice } from '@/lib/billing-price'
 import { auth } from '@/lib/auth'
@@ -5,11 +6,7 @@ import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BillingClient } from './billing-client'
-import { ConversationService } from '@/services/conversation-service.db'
-import {
-  BILLING_PLANS,
-  FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE,
-} from '@/lib/billing-plans'
+import { BILLING_PLANS } from '@/lib/billing-plans'
 import { isStripeApiConfigured, isStripeCheckoutConfigured } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 
@@ -23,13 +20,7 @@ export default async function BillingPage() {
   }
 
   const userId = session.user.id
-  const [weeklySavedBriefComparisons, subscription, quota, proPrice] = await Promise.all([
-    userId
-      ? ConversationService.getWeeklySavedBriefComparisonCountForRollingDays(
-          userId,
-          7,
-        )
-      : 0,
+  const [subscription, quota, proPrice] = await Promise.all([
     userId
       ? prisma.subscription.findUnique({
           where: { userId },
@@ -46,10 +37,7 @@ export default async function BillingPage() {
     isStripeCheckoutConfigured ? getProPrice().catch(() => null) : null,
   ])
 
-  const tier: SubscriptionTier =
-    (subscription?.tier as SubscriptionTier | undefined) ||
-    (session.user.tier as SubscriptionTier | undefined) ||
-    'FREE'
+  const tier: SubscriptionTier = quota?.tier ?? 'FREE'
 
   return (
     <div className="container mx-auto p-4">
@@ -76,11 +64,7 @@ export default async function BillingPage() {
               subscription?.stripeCurrentPeriodEnd?.toISOString() || null
             }
             plans={BILLING_PLANS}
-            freePlanWeeklySavedBriefGuidance={
-              FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE
-            }
-            weeklySavedBriefComparisons={weeklySavedBriefComparisons}
-            checkoutEnabled={isStripeCheckoutConfigured && Boolean(proPrice)}
+            checkoutEnabled={isPaidSignupEnabled() && isStripeCheckoutConfigured && Boolean(proPrice)}
             portalEnabled={isStripeApiConfigured}
           />
         </CardContent>

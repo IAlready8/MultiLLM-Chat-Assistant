@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const billingAccount = vi.hoisted(() => vi.fn())
+
 const originalStripeSecret = process.env.STRIPE_SECRET_KEY
 
 const setEnvVar = (key: string, value: string | undefined) => {
@@ -15,6 +17,7 @@ describe('lib/stripe getOrCreateStripeCustomer', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    billingAccount.mockResolvedValue({ deletionRequestedAt: null })
     setEnvVar('STRIPE_SECRET_KEY', 'sk_test_1234567890')
   })
 
@@ -32,6 +35,10 @@ describe('lib/stripe getOrCreateStripeCustomer', () => {
 
     vi.doMock('@/lib/prisma', () => ({
       prisma: {
+        $transaction: async (work: (tx: unknown) => unknown) => work({
+          $queryRaw: vi.fn(), user: { findUnique: billingAccount },
+          subscription: { upsert: mockUpsert },
+        }),
         subscription: {
           findUnique: (...args: unknown[]) => mockFindUnique(...args),
           upsert: (...args: unknown[]) => mockUpsert(...args),
@@ -62,6 +69,10 @@ describe('lib/stripe getOrCreateStripeCustomer', () => {
 
     vi.doMock('@/lib/prisma', () => ({
       prisma: {
+        $transaction: async (work: (tx: unknown) => unknown) => work({
+          $queryRaw: vi.fn(), user: { findUnique: billingAccount },
+          subscription: { upsert: mockUpsert },
+        }),
         subscription: {
           findUnique: (...args: unknown[]) => mockFindUnique(...args),
           upsert: (...args: unknown[]) => mockUpsert(...args),
@@ -101,5 +112,9 @@ describe('lib/stripe getOrCreateStripeCustomer', () => {
         stripeCustomerId: 'cus_new',
       },
     })
+    mockUpsert.mockClear()
+    billingAccount.mockResolvedValue({ deletionRequestedAt: new Date() })
+    await expect(stripeModule.getOrCreateStripeCustomer('user-2', 'new@example.com')).rejects.toThrow('Account unavailable')
+    expect(mockUpsert).not.toHaveBeenCalled()
   })
 })

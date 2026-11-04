@@ -1,16 +1,19 @@
 'use client'
 
 import Link from 'next/link'
+import { isDeferredReleasePath } from '@/lib/release-scope'
 import { usePathname } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { MobileMenu } from '@/components/mobile-menu'
 import { SignOutButton } from '@/components/sign-out-button'
 
 export default function Navbar() {
   const pathname = usePathname()
+  const { data: session, status } = useSession()
 
   const navItems = [
-    { name: 'Home', path: '/' },
-    { name: 'Multi-Chat', path: '/multi-chat' },
+    { name: 'Home', path: '/workspace' },
+    { name: 'Chat & History', path: '/multi-chat' },
     { name: 'Comparison', path: '/comparison' },
     { name: 'AI Roundtable', path: '/ai-roundtable' },
     { name: 'Goal Hub', path: '/goal-hub' },
@@ -18,7 +21,10 @@ export default function Navbar() {
     { name: 'Personas', path: '/personas' },
     { name: 'Analytics', path: '/analytics' },
     { name: 'Settings', path: '/settings' },
-  ]
+    { name: 'Billing', path: '/billing' },
+  ].filter(item => status === 'authenticated' && Boolean(session?.user?.id) && !session?.user?.deletionPending && !isDeferredReleasePath(item.path))
+  if (session?.user?.deletionPending) navItems.push({ name: 'Account deletion', path: '/account/deletion' })
+  if (status !== 'authenticated' || !session?.user?.id) navItems.push({ name: 'Pricing', path: '/pricing' }, { name: 'Sign in', path: '/auth/signin' })
 
   return (
     <nav className="border-b border-border/60 bg-background/80 backdrop-blur-lg">

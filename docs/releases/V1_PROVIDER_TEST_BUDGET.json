@@ -1,0 +1,17 @@
+{
+  "currency": "CAD",
+  "authorizedCap": 5,
+  "scope": "Aggregate across all provider tests in this release execution; not per vendor, run or session",
+  "paidProviderTestRequestsDispatched": 0,
+  "consumedConservativeUpperBound": 0,
+  "outstandingReservations": [],
+  "remainingConservativeBudget": 5,
+  "stopAtCap": true,
+  "reserveUpperBoundBeforeDispatch": true,
+  "automaticGenerationRetriesAllowed": false,
+  "status": "BLOCKED_MISSING_PROVIDER_CREDENTIALS",
+  "excludedAuthorizations": [
+    "Stripe purchases or refunds",
+    "Infrastructure spending or plan changes"
+  ]
+}

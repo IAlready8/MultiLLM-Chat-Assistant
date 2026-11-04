@@ -37,6 +37,7 @@ describe('mandatory-auth routing', () => {
   })
 
   it.each([
+    '/', '/pricing', '/terms', '/privacy', '/support',
     '/auth/signin',
     '/auth/register',
     '/api/auth/providers',
@@ -50,6 +51,12 @@ describe('mandatory-auth routing', () => {
 
     expect(response.status).toBe(200)
     expect(mockDecode).not.toHaveBeenCalled()
+  })
+
+  it.each(['/pricing/admin', '/terms/private', '/privacy/child', '/support/internal', '/api/pricing', '/workspace'])('does not grant prefix-wide public access to %s', async path => {
+    setEnvVar('NEXTAUTH_SECRET', 'test-secret')
+    const response = await middleware(new NextRequest('http://localhost:3000' + path))
+    expect(response.status).toBe(path.startsWith('/api/') ? 401 : 307)
   })
 
   it('rejects cross-origin mutations before session processing', async () => {

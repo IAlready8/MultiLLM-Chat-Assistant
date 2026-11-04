@@ -1,4 +1,8 @@
+import prisma from '@/lib/prisma'
+import { isPaidSignupEnabled } from '@/lib/legal-publication'
+import { getBillingOrigin } from '@/lib/billing-origin'
 import { getProPrice } from '@/lib/billing-price'
+import { BYOK_COPY, GENERATION_ALLOWANCE_COPY, RELEASE_OFFER } from '@/lib/release-offer'
 import { withBillingLock } from '@/lib/billing-lock'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
@@ -13,21 +17,6 @@ import {
 import { logger } from '@/lib/logger'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { readBillingSource } from '@/lib/billing-source'
-
-// Get the absolute URL for Stripe callbacks
-const getBaseUrl = () => {
-  const configured = process.env.NEXTAUTH_URL?.trim()
-  if (configured) {
-    try {
-      return new URL(configured)
-    } catch {
-      console.warn(
-        'Invalid NEXTAUTH_URL; falling back to http://localhost:3000',
-      )
-    }
-  }
-  return new URL('http://localhost:3000')
-}
 
 const ongoingSubscriptionStatuses = new Set([
   'active',
@@ -52,69 +41,76 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'User email not found' }, { status: 400 })
   }
 
+  const email = user.email
   try {
+    if (!isPaidSignupEnabled()) return NextResponse.json({ error: 'New paid signup is not open. Existing subscribers can use billing management.', code: 'PAID_SIGNUP_CLOSED' }, { status: 503 })
+    const baseUrl = getBillingOrigin()
     ensureStripeConfigured('checkout')
     await getProPrice()
 
-    const stripeCustomerId = await getOrCreateStripeCustomer(
-      user.id,
-      user.email,
-    )
-
-    const baseUrl = getBaseUrl()
-
-    const destination = await withBillingLock(`stripe-customer:${stripeCustomerId}`, async () => {
-      const existingSubscriptions = await stripe.subscriptions.list({
-        customer: stripeCustomerId,
-        status: 'all',
-        limit: 100,
-      })
-      const hasOngoingSubscription = existingSubscriptions.data.some(
-        (subscription) => ongoingSubscriptionStatuses.has(subscription.status),
+    const destination = await withBillingLock(`billing-user:${user.id}`, async () => {
+      const currentUser = await prisma.user.findUnique({ where: { id: user.id }, select: { deletionRequestedAt: true } })
+      if (!currentUser || currentUser.deletionRequestedAt) throw new Error('Account unavailable')
+      const stripeCustomerId = await getOrCreateStripeCustomer(
+        user.id,
+        email,
       )
 
-      if (hasOngoingSubscription) {
-        const portalSession = await stripe.billingPortal.sessions.create({
+      return withBillingLock(`stripe-customer:${stripeCustomerId}`, async () => {
+        const existingSubscriptions = await stripe.subscriptions.list({
           customer: stripeCustomerId,
-          return_url: new URL('/billing', baseUrl).toString(),
+          status: 'all',
+          limit: 100,
         })
+        const hasOngoingSubscription = existingSubscriptions.data.some(
+          (subscription) => ongoingSubscriptionStatuses.has(subscription.status),
+        )
 
-        return { url: portalSession.url, destination: 'portal' }
-      }
+        if (hasOngoingSubscription) {
+          const portalSession = await stripe.billingPortal.sessions.create({
+            customer: stripeCustomerId,
+            return_url: new URL('/billing', baseUrl).toString(),
+          })
 
-      const openSessions = await stripe.checkout.sessions.list({ customer: stripeCustomerId, status: 'open', limit: 100 })
-      const open = openSessions.data.find(item => item.metadata?.app === 'multi-llm-chat-assistant' && item.metadata?.priceId === STRIPE_PRO_PRICE_ID && item.url && item.expires_at > Math.floor(Date.now() / 1000))
-      if (open) return { url: open.url, destination: 'checkout' }
+          return { url: portalSession.url, destination: 'portal' }
+        }
 
-      // Create the Stripe Checkout session
-      const session = await stripe.checkout.sessions.create({
-        mode: 'subscription',
-        customer: stripeCustomerId,
-        client_reference_id: user.id,
-        line_items: [
-          {
-            price: STRIPE_PRO_PRICE_ID,
-            quantity: 1,
+        const openSessions = await stripe.checkout.sessions.list({ customer: stripeCustomerId, status: 'open', limit: 100 })
+        const open = openSessions.data.find(item => item.metadata?.app === 'multi-llm-chat-assistant' && item.metadata?.priceId === STRIPE_PRO_PRICE_ID && item.url && item.expires_at > Math.floor(Date.now() / 1000))
+        if (open) return { url: open.url, destination: 'checkout' }
+
+        // Create the Stripe Checkout session
+        const session = await stripe.checkout.sessions.create({
+          mode: 'subscription',
+          custom_text: { submit: { message: `${RELEASE_OFFER.limits.PRO} attempted generations per UTC calendar month; at most four models per comparison. ${BYOK_COPY} ${GENERATION_ALLOWANCE_COPY} Cancel renewal to retain access through the paid-through date.` } },
+          customer: stripeCustomerId,
+          client_reference_id: user.id,
+          line_items: [
+            {
+              price: STRIPE_PRO_PRICE_ID,
+              quantity: 1,
+            },
+          ],
+          subscription_data: {
+            billing_mode: { type: 'flexible' },
+            metadata: {
+              app: 'multi-llm-chat-assistant',
+              tier: 'PRO',
+              userId: user.id,
+            },
           },
-        ],
-        subscription_data: {
-          billing_mode: { type: 'flexible' },
+          success_url: new URL('/billing?success=true', baseUrl).toString(),
+          cancel_url: new URL('/billing?canceled=true', baseUrl).toString(),
           metadata: {
             app: 'multi-llm-chat-assistant',
+            priceId: STRIPE_PRO_PRICE_ID!,
             tier: 'PRO',
             userId: user.id,
           },
-        },
-        success_url: new URL('/billing?success=true', baseUrl).toString(),
-        cancel_url: new URL('/billing?canceled=true', baseUrl).toString(),
-        metadata: {
-          app: 'multi-llm-chat-assistant',
-          priceId: STRIPE_PRO_PRICE_ID!,
-          tier: 'PRO',
-          userId: user.id,
-        },
-      }, { idempotencyKey: `checkout:${user.id}:${STRIPE_PRO_PRICE_ID}:${existingSubscriptions.data[0]?.id ?? 'new'}:${Math.floor(Date.now() / 1800000)}` })
-      return { url: session.url, destination: 'checkout' }
+        }, { idempotencyKey: `checkout:${user.id}:${STRIPE_PRO_PRICE_ID}:${existingSubscriptions.data[0]?.id ?? 'new'}:${Math.floor(Date.now() / 1800000)}` })
+        return { url: session.url, destination: 'checkout' }
+      })
+
     })
 
     try {

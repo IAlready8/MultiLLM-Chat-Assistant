@@ -1,6 +1,10 @@
 import Stripe from 'stripe'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const deletionLookup = vi.hoisted(() => vi.fn())
+const currentUserLookup = vi.hoisted(() => vi.fn())
+const cancelSubscription = vi.hoisted(() => vi.fn())
+
 const {
   mockEnsureStripeConfigured,
   mockConstructEvent,
@@ -50,10 +54,12 @@ vi.mock('@/lib/stripe', () => ({
       retrieve: (customerId: string) => mockCustomerRetrieve(customerId),
     },
     subscriptions: {
+      cancel: cancelSubscription,
       retrieve: (subscriptionId: string) =>
         mockStripeSubscriptionRetrieve(subscriptionId),
     },
   },
+  stripeMode: 'test',
   STRIPE_WEBHOOK_SECRET: 'whsec_test',
   STRIPE_PRO_PRICE_ID: 'price_test',
   ensureStripeConfigured: (mode: 'api' | 'checkout' | 'webhook') =>
@@ -63,6 +69,8 @@ vi.mock('@/lib/stripe', () => ({
 
 vi.mock('@/lib/billing-lock', () => ({
   withBillingLock: async (_key: string, work: (tx: unknown) => Promise<unknown>) => work({
+    accountDeletion: { findFirst: deletionLookup },
+    user: { findUnique: currentUserLookup },
     subscription: { findFirst: mockSubscriptionFindFirst, upsert: mockSubscriptionUpsert },
     stripeWebhookEvent: { findUnique: mockEventFind, create: mockEventCreate },
   }),
@@ -107,6 +115,9 @@ const postWebhook = () =>
 describe('/api/webhooks/stripe', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    deletionLookup.mockResolvedValue(null)
+    currentUserLookup.mockResolvedValue({ id: 'user-1', deletionRequestedAt: null })
+    cancelSubscription.mockResolvedValue({ status: 'canceled' })
     mockEventFind.mockResolvedValue(null)
     mockEventCreate.mockResolvedValue({ id: 'evt_test' })
     mockHeadersGet.mockReturnValue(null)
@@ -336,4 +347,61 @@ describe('/api/webhooks/stripe', () => {
     expect(mockConstructEvent).not.toHaveBeenCalled()
   })
 
+})
+
+describe('webhooks during account deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHeadersGet.mockReturnValue('sig_test')
+    mockEnsureStripeConfigured.mockImplementation(() => undefined)
+    mockEventFind.mockResolvedValue(null)
+    mockEventCreate.mockResolvedValue({ id: 'evt_late' })
+    mockSubscriptionFindFirst.mockResolvedValue(null)
+    deletionLookup.mockResolvedValue({ userId: 'user-1' })
+    currentUserLookup.mockResolvedValue(null)
+    cancelSubscription.mockResolvedValue({ status: 'canceled' })
+    mockStripeSubscriptionRetrieve.mockResolvedValue(makeSubscription())
+    mockConstructEvent.mockReturnValue({ id: 'evt_late', type: 'customer.subscription.created', data: { object: makeSubscription() } })
+  })
+  it('cancels a late active subscription without recreating access', async () => {
+    expect((await postWebhook()).status).toBe(200)
+    expect(cancelSubscription).toHaveBeenCalledWith('sub_123', { invoice_now: false, prorate: false }, expect.objectContaining({ idempotencyKey: 'delete-subscription:user-1:sub_123' }))
+    expect(mockSubscriptionUpsert).not.toHaveBeenCalled()
+  })
+  it('retries a failed cancellation without recording successful reconciliation', async () => {
+    cancelSubscription.mockRejectedValue(new Error('upstream failed'))
+    expect((await postWebhook()).status).toBe(500)
+    expect(mockSubscriptionUpsert).not.toHaveBeenCalled()
+  })
+  it('does not cancel an already terminal subscription', async () => {
+    mockStripeSubscriptionRetrieve.mockResolvedValue(makeSubscription({ status: 'canceled' }))
+    expect((await postWebhook()).status).toBe(200)
+    expect(cancelSubscription).not.toHaveBeenCalled()
+    expect(mockSubscriptionUpsert).not.toHaveBeenCalled()
+  })
+})
+
+it('rejects signed events from the wrong Stripe mode before retrieving or mutating billing', async () => {
+  mockHeadersGet.mockReturnValue('sig_test')
+  mockEnsureStripeConfigured.mockImplementation(() => undefined)
+  mockConstructEvent.mockReturnValue({ id: 'evt_live', livemode: true, type: 'customer.subscription.created', data: { object: makeSubscription() } })
+  mockStripeSubscriptionRetrieve.mockClear(); cancelSubscription.mockClear(); mockSubscriptionUpsert.mockClear()
+  expect((await postWebhook()).status).toBe(400)
+  expect(mockStripeSubscriptionRetrieve).not.toHaveBeenCalled()
+  expect(cancelSubscription).not.toHaveBeenCalled()
+  expect(mockSubscriptionUpsert).not.toHaveBeenCalled()
+})
+it('ignores an unmatched account without canceling a subscription absent deletion intent', async () => {
+  mockHeadersGet.mockReturnValue('sig_test')
+  mockEnsureStripeConfigured.mockImplementation(() => undefined)
+  mockConstructEvent.mockReturnValue({ id: 'evt_unknown', type: 'customer.subscription.created', data: { object: makeSubscription() } })
+  mockEventFind.mockResolvedValue(null)
+  deletionLookup.mockResolvedValue(null)
+  currentUserLookup.mockResolvedValue(null)
+  mockSubscriptionFindFirst.mockResolvedValue(null)
+  mockStripeSubscriptionRetrieve.mockResolvedValue(makeSubscription({ metadata: { app: 'multi-llm-chat-assistant', userId: 'unknown-user' } }))
+  cancelSubscription.mockClear(); mockSubscriptionUpsert.mockClear()
+  expect((await postWebhook()).status).toBe(200)
+  expect(cancelSubscription).not.toHaveBeenCalled()
+  expect(mockSubscriptionUpsert).not.toHaveBeenCalled()
 })

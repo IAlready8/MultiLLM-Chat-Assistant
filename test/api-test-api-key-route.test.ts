@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest, NextResponse } from 'next/server'
 
+const mockLimit = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/rate-limit', () => ({ checkAndConsume: mockLimit }))
+
 const mockGetAuthenticatedUser = vi.fn()
 const mockGetUserApiKey = vi.fn()
 const mockTestProviderKey = vi.fn()
@@ -23,6 +26,7 @@ vi.mock('@/lib/provider-key-test', () => ({
 }))
 
 import { POST } from '@/app/api/test-api-key/route'
+import { LlmRequestError } from '@/lib/llm-request'
 
 const makeRequest = (body: Record<string, unknown>) =>
   new NextRequest('http://localhost/api/test-api-key', {
@@ -34,10 +38,34 @@ const makeRequest = (body: Record<string, unknown>) =>
 describe('/api/test-api-key route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockLimit.mockResolvedValue({ allowed: true })
     mockGetAuthenticatedUser.mockResolvedValue({
       user: { id: 'user-1' },
     })
     mockValidateApiKeyFormat.mockReturnValue(null)
+  })
+  it('limits verification per account before decrypting or contacting a provider', async () => {
+    mockLimit.mockResolvedValue({ allowed: false, retryAfterMs: 1501 })
+    const response = await POST(makeRequest({ provider: 'openai', testSaved: true }))
+    expect(response.status).toBe(429)
+    expect(response.headers.get('Retry-After')).toBe('2')
+    expect(mockLimit).toHaveBeenCalledWith('api-key-test:user-1', { max: 10, windowMs: 60000 })
+    expect(mockGetUserApiKey).not.toHaveBeenCalled()
+    expect(mockTestProviderKey).not.toHaveBeenCalled()
+  })
+  it('fails closed when distributed request protection is unavailable', async () => {
+    mockLimit.mockRejectedValue(new LlmRequestError('Request protection unavailable', 503, 'RATE_LIMIT_UNAVAILABLE', 5))
+    const response = await POST(makeRequest({ provider: 'openai', apiKey: 'sensitive-test-value' }))
+    expect(response.status).toBe(503)
+    expect(response.headers.get('Retry-After')).toBe('5')
+    expect(await response.text()).not.toContain('sensitive-test-value')
+    expect(mockTestProviderKey).not.toHaveBeenCalled()
+  })
+  it('bounds chunked key-verification bodies before provider access', async () => {
+    const response = await POST(makeRequest({ provider: 'openai', apiKey: 'x'.repeat(1048577) }))
+    expect(response.status).toBe(413)
+    expect(mockGetUserApiKey).not.toHaveBeenCalled()
+    expect(mockTestProviderKey).not.toHaveBeenCalled()
   })
 
   it('forwards auth response when strict auth blocks request', async () => {

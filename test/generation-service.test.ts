@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ expired: vi.fn(), find: vi.fn(), findRunning: vi.fn(), create: vi.fn(), update: vi.fn(), messageCreate: vi.fn(), messageUpdate: vi.fn(), conversation: vi.fn(), turn: vi.fn() }))
+const mocks = vi.hoisted(() => ({ expired: vi.fn(), find: vi.fn(), findRunning: vi.fn(), create: vi.fn(), update: vi.fn(), messageCreate: vi.fn(), messageUpdate: vi.fn(), conversation: vi.fn(), turn: vi.fn(), responses: vi.fn(), query: vi.fn() }))
 vi.mock('@/lib/prisma', () => {
   const tx = {
+    $queryRaw: mocks.query,
     generation: { findMany: mocks.expired, findUnique: mocks.find, findFirst: mocks.findRunning, create: mocks.create, updateMany: mocks.update },
     conversation: { findFirst: mocks.conversation, update: vi.fn() },
-    message: { create: mocks.messageCreate, update: mocks.messageUpdate, findFirst: mocks.turn },
+    message: { findMany: mocks.responses, create: mocks.messageCreate, update: mocks.messageUpdate, findFirst: mocks.turn },
   }
   return { prisma: { ...tx, $transaction: async (work: (client: typeof tx) => Promise<unknown>) => work(tx) } }
 })
@@ -15,6 +16,7 @@ describe('durable generation lifecycle', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mocks.find.mockResolvedValue(null)
+    mocks.responses.mockResolvedValue([])
     mocks.update.mockResolvedValue({ count: 1 })
     mocks.conversation.mockResolvedValue({ id: 'conversation', userId: 'user' })
     mocks.turn.mockResolvedValue({ id: 'user-message' })
@@ -24,6 +26,16 @@ describe('durable generation lifecycle', () => {
     expect(generation.replay).toBeNull()
     expect(mocks.messageCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ id: generation.id, provider: 'openai', model: 'model', turnId: input.turnId, generationStatus: 'running' }) })
     expect(mocks.create).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: 'user', requestHash: expect.any(String), messageId: generation.id }) })
+  })
+  it('rejects a fifth model even when the caller reuses a valid position', async () => {
+    mocks.responses.mockResolvedValue(Array.from({ length: 4 }, (_, position) => ({ position, provider: 'openai', model: 'model-' + position })))
+    await expect(beginGeneration('user', { ...input, position: 0, model: 'fifth' })).rejects.toMatchObject({ code: 'COMPARISON_LIMIT_EXCEEDED' })
+    expect(mocks.messageCreate).not.toHaveBeenCalled()
+    expect(mocks.query.mock.calls[0][1]).toBe('comparison:conversation:' + input.turnId)
+  })
+  it('allows user-initiated regeneration in an existing comparison slot', async () => {
+    mocks.responses.mockResolvedValue(Array.from({ length: 4 }, (_, position) => ({ position, provider: 'openai', model: position === 0 ? 'model' : 'model-' + position })))
+    await expect(beginGeneration('user', { ...input, position: 0 })).resolves.toMatchObject({ replay: null })
   })
   it('rejects another user’s conversation before creating anything', async () => {
     mocks.conversation.mockResolvedValue(null)

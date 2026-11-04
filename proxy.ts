@@ -1,7 +1,9 @@
+import { isPublicPagePath } from '@/lib/public-routes'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { decode } from 'next-auth/jwt'
 import { readSessionTokenFromCookies } from '@/lib/session-cookie'
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 
 const PUBLIC_PATHS = new Set([
   '/auth/signin',
@@ -15,6 +17,7 @@ const PUBLIC_PATHS = new Set([
 ])
 
 const isPublicPath = (pathname: string): boolean => {
+  if (isPublicPagePath(pathname)) return true
   for (const prefix of PUBLIC_PATHS) {
     if (pathname === prefix || pathname.startsWith(prefix + '/')) {
       return true
@@ -98,6 +101,8 @@ export async function proxy(request: NextRequest) {
     )
     return NextResponse.redirect(signInUrl)
   }
+
+  if (isDeferredReleasePath(pathname)) return deferredReleaseResponse()
 
   return NextResponse.next()
 }

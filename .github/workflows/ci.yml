@@ -166,6 +166,7 @@ jobs:
             sleep 1
           done
           node scripts/test-generation-flow.mjs || { cat generation-server.log; exit 1; }
+          node scripts/test-account-deletion.mjs || { cat generation-server.log; exit 1; }
 
       - name: Upload browser QA screenshots
         if: always()

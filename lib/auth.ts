@@ -23,6 +23,7 @@ declare module 'next-auth' {
       id: string
       role: TeamRole
       tier: SubscriptionTier
+      deletionPending?: boolean
     } & DefaultSession['user']
   }
 
@@ -30,6 +31,8 @@ declare module 'next-auth' {
     id?: string
     role?: TeamRole
     tier?: SubscriptionTier
+    authenticatedAt?: number
+    authProvider?: string
     pv?: number
   }
 }
@@ -39,6 +42,8 @@ declare module 'next-auth/jwt' {
     id?: string
     role?: TeamRole
     tier?: SubscriptionTier
+    authenticatedAt?: number
+    authProvider?: string
     pv?: number
   }
 }
@@ -134,9 +139,11 @@ export const authOptions: NextAuthOptions = {
       console.info(`[auth] sign-in method=${account?.provider ?? 'unknown'}`)
       return true
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id
+        token.authenticatedAt = Date.now()
+        token.authProvider = account?.provider
         try {
           const record = await prisma.user.findUnique({
             where: { id: user.id },
@@ -160,9 +167,16 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         const userId = token.id || token.sub
-        if (userId) {
-          session.user.id = userId
+        if (!userId) return { expires: session.expires }
+        const current = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { passwordVersion: true, deletionRequestedAt: true },
+        })
+        if (!current || (current.passwordVersion ?? 0) !== (token.pv ?? 0)) {
+          return { expires: session.expires }
         }
+        session.user.id = userId
+        session.user.deletionPending = Boolean(current.deletionRequestedAt)
         session.user.role = token.role || 'MEMBER'
         session.user.tier = token.tier || 'FREE'
       }
@@ -217,6 +231,8 @@ export async function authIdentity() {
       email: token.email,
       role: (token.role || 'MEMBER') as TeamRole,
       pv: typeof token.pv === 'number' ? token.pv : 0,
+      authenticatedAt: typeof token.authenticatedAt === 'number' ? token.authenticatedAt : undefined,
+      authProvider: typeof token.authProvider === 'string' ? token.authProvider : undefined,
     },
   }
 }
@@ -228,12 +244,18 @@ export async function auth() {
     return null
   }
 
+  const current = await prisma.user.findUnique({
+    where: { id: identity.user.id },
+    select: { passwordVersion: true, deletionRequestedAt: true },
+  })
+  if (!current || (current.passwordVersion ?? 0) !== identity.user.pv) return null
   const tier = await loadSubscriptionTier(identity.user.id)
 
   return {
     expires: identity.expires,
     user: {
       ...identity.user,
+      deletionPending: Boolean(current.deletionRequestedAt),
       tier,
     },
   }

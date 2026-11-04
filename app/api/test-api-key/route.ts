@@ -1,4 +1,6 @@
 import { readApiObject } from '@/lib/api-input'
+import { checkAndConsume } from '@/lib/rate-limit'
+import { LlmRequestError } from '@/lib/llm-request'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { getUserApiKey } from '@/lib/api-key-service'
@@ -113,8 +115,12 @@ export async function POST(request: NextRequest) {
   const { user } = authCheck
 
   try {
+    const limit = await checkAndConsume(`api-key-test:${user.id}`, { max: 10, windowMs: 60_000 })
+    if (!limit.allowed) {
+      throw new LlmRequestError('Too many key verification attempts. Try again shortly.', 429, 'RATE_LIMITED', Math.max(1, Math.ceil(limit.retryAfterMs / 1000)))
+    }
     const body = await readApiObject(request)
-  if (body instanceof NextResponse) return body
+    if (body instanceof NextResponse) return body
     const providerRaw = body?.provider
     const testSaved = body?.testSaved === true
 
@@ -167,6 +173,12 @@ export async function POST(request: NextRequest) {
     const result = await testKey(provider, apiKey)
     return NextResponse.json(result, { status: 200 })
   } catch (error) {
+    if (error instanceof LlmRequestError) {
+      return NextResponse.json(
+        { valid: false, message: error.message, code: error.code },
+        { status: error.status, headers: { 'Cache-Control': 'no-store', ...(error.retryAfterSeconds ? { 'Retry-After': String(error.retryAfterSeconds) } : {}) } },
+      )
+    }
     console.error('Failed to test API key.')
     return NextResponse.json(
       buildResult(false, 'Failed to test API key.', 'unreachable'),

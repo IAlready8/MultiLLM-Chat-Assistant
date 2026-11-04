@@ -263,10 +263,10 @@ describe('/api/provider-configs route', () => {
       }),
     )
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(503)
     await expect(response.json()).resolves.toMatchObject({
       success: false,
-      code: 'PROVIDER_ENDPOINT_BLOCKED',
+      code: 'PROVIDER_DISABLED',
     })
     expect(mockStoreUserApiKey).not.toHaveBeenCalled()
   })
@@ -310,10 +310,10 @@ describe('/api/provider-configs route', () => {
       ),
     )
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(503)
     await expect(response.json()).resolves.toMatchObject({
       success: false,
-      code: 'PROVIDER_ENDPOINT_BLOCKED',
+      code: 'PROVIDER_DISABLED',
     })
     expect(mockTestProviderKey).not.toHaveBeenCalled()
     expect(mockStoreUserApiKey).not.toHaveBeenCalled()

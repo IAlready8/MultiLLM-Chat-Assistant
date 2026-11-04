@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ query: vi.fn(), count: vi.fn(), conversations: vi.fn(), messages: vi.fn(), transaction: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({ default: { $transaction: mocks.transaction } }))
-import { exportAccountHistory } from '@/services/account-export-service'
+import { exportAccountData, exportAccountHistory } from '@/services/account-export-service'
 beforeEach(() => {
   vi.resetAllMocks()
   mocks.query.mockResolvedValue([{ messages: '1', bytes: '5' }])
@@ -22,4 +22,20 @@ it.each([{ messages: '5001', bytes: '1' }, { messages: '1', bytes: '8388609' }])
   mocks.query.mockResolvedValue([stats])
   await expect(exportAccountHistory('owner')).rejects.toMatchObject({ status: 413 })
   expect(mocks.messages).not.toHaveBeenCalled()
+})
+
+it('exports owned profile and personas with explicit secret-free selections', async () => {
+  const user = vi.fn().mockResolvedValue({ name: 'Owned user', email: 'unit@test.invalid' })
+  const personas = vi.fn().mockResolvedValue([{ title: 'Owned', prompt: 'Owned prompt' }])
+  const providers = vi.fn().mockResolvedValue([{ provider: 'openai', isActive: true }])
+  mocks.transaction.mockImplementation(work => work({
+    $queryRaw: mocks.query, conversation: { count: mocks.count, findMany: mocks.conversations }, message: { findMany: mocks.messages },
+    user: { findUnique: user }, persona: { count: async () => 1, findMany: personas }, providerConfig: { findMany: providers }, subscription: { findUnique: async () => ({ tier: 'FREE' }) },
+  }))
+  const value = JSON.parse(await exportAccountData('owner'))
+  expect(value.personas[0].prompt).toBe('Owned prompt')
+  expect(value.history.messages[0].content).toBe('Hello')
+  expect(providers).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'owner' }, select: { provider: true, isActive: true, createdAt: true, updatedAt: true } }))
+  expect(user.mock.calls[0][0].select).not.toHaveProperty('password')
+  expect(personas.mock.calls[0][0].where).toEqual({ userId: 'owner' })
 })

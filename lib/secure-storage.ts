@@ -95,3 +95,8 @@ export async function getLegacyApiKeyIfPresent(provider: string): Promise<string
   
   return null;
 }
+
+export function clearStoredApiKeys(): void {
+  for (const provider of Object.keys(secureStorage)) delete secureStorage[provider];
+  storageEncryptionKeyPromise = null;
+}

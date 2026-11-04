@@ -1,3 +1,4 @@
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { jevChoose, getJevApiKey, JevError } from '@/lib/jev'
@@ -29,6 +30,7 @@ const judgeSchema = z.object({
 export async function POST(request: Request) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/jev/judge')) return deferredReleaseResponse()
   const { user } = authCheck
 
   let body: unknown

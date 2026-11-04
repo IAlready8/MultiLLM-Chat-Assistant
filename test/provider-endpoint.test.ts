@@ -12,6 +12,31 @@ afterEach(() => {
 })
 
 describe('provider endpoint policy', () => {
+  it.each(['POST', 'post', 'PUT', 'PATCH', 'DELETE'])('never repeats a potentially billable %s after an upstream rejection', async method => {
+    vi.stubEnv('LLM_FETCH_RETRIES', '5')
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('unavailable', { status: 503 }))
+    const response = await providerFetch('openai', 'https://api.openai.com/v1/chat/completions', { method }, {
+      fetchImpl,
+      resilience: { retries: 5, baseDelayMs: 10, maxDelayMs: 10, breaker: { enabled: false, failureThreshold: 5, openMs: 1000 } },
+    })
+    expect(response.status).toBe(503)
+    expect(fetchImpl).toHaveBeenCalledOnce()
+  })
+  it('does not repeat a generation after an ambiguous network failure', async () => {
+    vi.stubEnv('LLM_FETCH_RETRIES', '5')
+    const fetchImpl = vi.fn().mockRejectedValueOnce(new TypeError('fetch failed')).mockResolvedValue(new Response('would duplicate provider work'))
+    await expect(providerFetch('openai', 'https://api.openai.com/v1/chat/completions', { method: 'POST' }, { fetchImpl })).rejects.toThrow('fetch failed')
+    expect(fetchImpl).toHaveBeenCalledOnce()
+  })
+  it('retains bounded retries for read-only model probes', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response('unavailable', { status: 503 })).mockResolvedValueOnce(new Response('models'))
+    const response = await providerFetch('openai', 'https://api.openai.com/v1/models', { method: 'GET' }, {
+      fetchImpl,
+      resilience: { retries: 1, baseDelayMs: 10, maxDelayMs: 10, breaker: { enabled: false, failureThreshold: 5, openMs: 1000 } },
+    })
+    expect(response.status).toBe(200)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
   it('uses exact official base URLs for hosted providers', () => {
     expect(getProviderBaseUrl('openai', undefined)).toBe('https://api.openai.com/v1')
     expect(getProviderBaseUrl('openai', 'https://api.openai.com/v1/')).toBe(
