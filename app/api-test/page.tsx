@@ -4,78 +4,84 @@ import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { useToast } from '@/components/ui/use-toast'
-import { getModelsForProvider } from '@/lib/model-catalog'
 import { operationalProviderRegistry } from '@/lib/provider-registry'
 
 type ProviderStatus = 'unknown' | 'connected' | 'disconnected'
 
-const MODEL_OPTIONS = Object.fromEntries(
-  operationalProviderRegistry.map(provider => [
-    provider.id,
-    getModelsForProvider(provider.id).map(model => model.id),
-  ])
-) as Record<string, string[]>
+type KeyTestResult = {
+  valid: boolean
+  message: string
+  latencyMs?: number
+}
 
 const INITIAL_PROVIDER_STATUS = Object.fromEntries(
   operationalProviderRegistry.map(provider => [provider.id, 'unknown'])
 ) as Record<string, ProviderStatus>
 
+const UNREACHABLE_MESSAGE =
+  'The verification service could not be reached. Nothing was tested. Try again shortly.'
+
+const readResult = (value: unknown): KeyTestResult | null => {
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as { valid?: unknown; message?: unknown; error?: unknown; latencyMs?: unknown }
+  const message =
+    typeof candidate.message === 'string'
+      ? candidate.message
+      : typeof candidate.error === 'string'
+        ? candidate.error
+        : null
+  if (!message) return null
+  return {
+    valid: candidate.valid === true,
+    message,
+    ...(typeof candidate.latencyMs === 'number' ? { latencyMs: candidate.latencyMs } : {}),
+  }
+}
+
 export default function ApiTestPage() {
-  const [provider, setProvider] = useState('openai')
-  const [model, setModel] = useState('gpt-4o')
-  const [prompt, setPrompt] = useState('Hello, how are you?')
-  const [isLoading, setIsLoading] = useState(false)
-  const [response, setResponse] = useState('')
+  const [provider, setProvider] = useState(operationalProviderRegistry[0]?.id ?? 'openai')
   const [apiKey, setApiKey] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [result, setResult] = useState<KeyTestResult | null>(null)
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderStatus>>(
     INITIAL_PROVIDER_STATUS
   )
-  const { toast } = useToast()
 
-  const handleProviderChange = (nextProvider: string) => {
-    setProvider(nextProvider)
-    const nextModels = MODEL_OPTIONS[nextProvider] || []
-    if (nextModels.length > 0) {
-      setModel(nextModels[0])
-    }
-  }
+  const selectedProvider = operationalProviderRegistry.find(item => item.id === provider)
 
   const testApi = async () => {
     setIsLoading(true)
-    setResponse('')
+    setResult(null)
+    const trimmedKey = apiKey.trim()
 
     try {
-      if (!apiKey.trim()) {
-        setProviderStatus(prev => ({ ...prev, [provider]: 'disconnected' }))
-        toast({
-          title: 'Missing API key',
-          description: 'Enter an API key to run a simulated connectivity test.',
-          variant: 'destructive'
-        })
+      // A typed key is verified as entered and is not saved. With no key
+      // typed, the key already saved in Settings is verified server-side.
+      const response = await fetch('/api/test-api-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          trimmedKey ? { provider, apiKey: trimmedKey } : { provider, testSaved: true }
+        ),
+      })
+      const parsed = readResult(await response.json().catch(() => null))
+      if (!parsed) {
+        // No verdict came back, so the provider status stays as it was.
+        setResult({ valid: false, message: UNREACHABLE_MESSAGE })
         return
       }
-
-      // This would call the actual API in a real implementation
-      // For now, we'll simulate a response without an artificial delay.
-      setResponse(`This is a simulated response from ${provider} using model ${model}. You asked: "${prompt}"`)
-      setProviderStatus(prev => ({ ...prev, [provider]: 'connected' }))
-
-      toast({
-        title: 'Success',
-        description: `API test completed for ${provider}`
-      })
-    } catch (error) {
-      console.error('API test error:', error)
-      setResponse('Error occurred during API test')
-      setProviderStatus(prev => ({ ...prev, [provider]: 'disconnected' }))
-      toast({
-        title: 'Error',
-        description: 'Failed to complete API test',
-        variant: 'destructive'
-      })
+      setResult(parsed)
+      // Only a real verdict from the provider check moves the status badge.
+      if (response.ok) {
+        setProviderStatus(prev => ({
+          ...prev,
+          [provider]: parsed.valid ? 'connected' : 'disconnected',
+        }))
+      }
+    } catch {
+      setResult({ valid: false, message: UNREACHABLE_MESSAGE })
     } finally {
       setIsLoading(false)
     }
@@ -84,97 +90,82 @@ export default function ApiTestPage() {
   return (
     <div className="container mx-auto p-6 max-w-3xl space-y-6">
       <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-bold">API Configuration Test</h1>
-          <Badge variant="secondary">Simulated</Badge>
-        </div>
+        <h1 className="text-3xl font-bold">API Configuration Test</h1>
         <p className="text-sm text-muted-foreground">
-          Test your API configurations and connections before running live chats.
+          Verify a provider API key against the provider before running live chats.
         </p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Run a connectivity check</CardTitle>
-          <CardDescription>Use a test prompt to confirm provider access.</CardDescription>
+          <CardDescription>
+            The check contacts the provider with the key. It does not send a prompt
+            and does not use your monthly generation allowance.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">Provider</label>
-              <select
-                value={provider}
-                onChange={(e) => handleProviderChange(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                {operationalProviderRegistry.map(providerOption => (
-                  <option key={providerOption.id} value={providerOption.id}>
-                    {providerOption.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="api-test-provider">Provider</Label>
+            <select
+              id="api-test-provider"
+              value={provider}
+              onChange={(event) => {
+                setProvider(event.target.value)
+                setResult(null)
+              }}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {operationalProviderRegistry.map(providerOption => (
+                <option key={providerOption.id} value={providerOption.id}>
+                  {providerOption.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div>
-              <label className="text-sm font-medium mb-2 block">Model</label>
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                {(MODEL_OPTIONS[provider] || []).map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          <div>
-            <label className="text-sm font-medium mb-2 block">Test Prompt</label>
-            <Textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Enter a test prompt to send to the API..."
-              rows={3}
-            />
-          </div>
-          
-          <div>
-            <label className="text-sm font-medium mb-2 block">API Key (for testing)</label>
+          <div className="space-y-2">
+            <Label htmlFor="api-test-key">API key (optional)</Label>
             <Input
+              id="api-test-key"
               type="password"
+              autoComplete="off"
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your API key for testing"
+              maxLength={512}
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder={selectedProvider?.placeholder ?? 'API key'}
             />
-            <p className="text-xs text-muted-foreground mt-1">
-              Note: This is just for testing. In the full app, API keys are securely stored.
+            <p className="text-xs text-muted-foreground">
+              Leave this empty to verify the key you saved in Settings. A key typed
+              here is checked once and is not saved.
             </p>
           </div>
-          
+
           <Button className="w-full" onClick={testApi} disabled={isLoading}>
             {isLoading ? 'Testing...' : 'Test API Connection'}
           </Button>
-          
-          {response && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">API Response</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="whitespace-pre-wrap p-4 bg-muted rounded-md">
-                  {response}
-                </div>
-              </CardContent>
-            </Card>
+
+          {result && (
+            <div
+              role={result.valid ? 'status' : 'alert'}
+              className={`rounded-md border p-4 text-sm ${
+                result.valid ? 'border-border bg-muted' : 'border-destructive/50 text-destructive'
+              }`}
+            >
+              <p className="font-medium">{result.valid ? 'Verified' : 'Not verified'}</p>
+              <p>{result.message}</p>
+              {result.latencyMs !== undefined && result.latencyMs > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Provider responded in {Math.round(result.latencyMs)} ms.
+                </p>
+              ) : null}
+            </div>
           )}
-          
+
           <Card className="bg-muted/40">
             <CardHeader>
               <CardTitle className="text-base">Provider Status</CardTitle>
-              <CardDescription>Track connectivity checks per provider.</CardDescription>
+              <CardDescription>Results of the checks run on this page in this visit.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">

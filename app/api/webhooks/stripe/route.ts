@@ -109,6 +109,16 @@ async function reconcileSubscription(subscription: Stripe.Subscription, tx: Pris
     )
   }
 
+  // Self-serve account deletion cancels the Stripe subscription and then
+  // removes the user. Stripe reports that cancellation afterwards; with no
+  // account left there is nothing to reconcile, and writing would violate the
+  // user foreign key and make Stripe retry the event for days.
+  const owner = await tx.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  })
+  if (!owner) return
+
   const proItem = subscription.items.data.find(
     (item) => item.price.id === STRIPE_PRO_PRICE_ID,
   )

@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { OAuthProviderButtons } from '@/components/oauth-provider-buttons'
+import { LegalConsentNotice } from '@/components/legal-consent-notice'
 import { resolveAuthCallbackUrl } from '@/lib/auth-redirect'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -56,16 +57,17 @@ export default function RegisterPage() {
             <Badge variant="secondary">Verified provider</Badge>
           </div>
           <CardDescription>
-            Use Google to create a durable workspace account.
+            Use a verified sign-in provider to create your workspace account.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
           <OAuthProviderButtons callbackUrl={callbackUrl} />
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Password registration is unavailable until verified email and account
-            recovery are configured. Existing password accounts can still sign in.
+            New accounts are created with a verified sign-in provider. Existing
+            password accounts can still sign in.
           </p>
+          <LegalConsentNotice />
         </CardContent>
 
         <CardFooter className="justify-center text-sm text-muted-foreground">

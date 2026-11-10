@@ -21,6 +21,7 @@ import {
 } from '@/lib/stripe'
 import { getReleaseMetadata, type ReleaseMetadata } from '@/lib/release-metadata'
 import { getSidecarDiagnostics } from '@/lib/sidecar-health'
+import { getLaunchReadiness, type LaunchReadiness } from '@/lib/launch-readiness'
 
 type CheckStatus = 'ok' | 'warning' | 'error'
 
@@ -40,6 +41,7 @@ type SystemStatusResponse = {
   version: string
   release: ReleaseMetadata
   checks: SystemCheck[]
+  launchReadiness: LaunchReadiness
   systemInfo: {
     app: string
     environment: string
@@ -291,6 +293,9 @@ export const GET = withApiMetrics(async () => {
     version: release.version,
     release,
     checks,
+    // Reported separately from `checks`: these are release-readiness findings,
+    // not runtime health, so they never change overallStatus or paging.
+    launchReadiness: getLaunchReadiness(),
     systemInfo: {
       app: 'Multi-LLM Chat Assistant',
       environment: process.env.NODE_ENV || 'development',

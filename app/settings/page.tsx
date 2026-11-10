@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { AccountProfileForm } from '@/components/account-profile-form'
 import { ChangePasswordForm } from '@/components/change-password-form'
 import { AccountHistoryExport } from '@/components/account-history-export'
+import { DeleteAccountForm } from '@/components/delete-account-form'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
@@ -19,13 +20,15 @@ import { supportedProviderIds } from '@/lib/provider-registry'
 
 const PROFILE_STORAGE_KEY = 'settings.profile'
 const FONT_SIZE_STORAGE_KEY = 'settings.fontSize'
-const ANALYTICS_STORAGE_KEY = 'settings.analyticsEnabled'
+// Written by an earlier release for a toggle that never affected collection.
+// Still listed so a configuration reset clears it from the browser.
+const LEGACY_ANALYTICS_STORAGE_KEY = 'settings.analyticsEnabled'
 const LOCAL_PREFERENCE_KEYS = [
   'modelSettings',
   'userPreferences',
   PROFILE_STORAGE_KEY,
   FONT_SIZE_STORAGE_KEY,
-  ANALYTICS_STORAGE_KEY,
+  LEGACY_ANALYTICS_STORAGE_KEY,
 ]
 
 type FontSizeOption = 'small' | 'normal' | 'large'
@@ -57,17 +60,8 @@ const readFontSizeFromStorage = (): FontSizeOption => {
   return value && isFontSizeOption(value) ? value : 'normal'
 }
 
-const readAnalyticsToggle = (): boolean => {
-  if (typeof window === 'undefined') {
-    return true
-  }
-  const value = window.localStorage.getItem(ANALYTICS_STORAGE_KEY)
-  return value === null ? true : value === 'true'
-}
-
 export default function SettingsPage() {
   const [fontSize, setFontSize] = useState<FontSizeOption>('normal')
-  const [analyticsEnabled, setAnalyticsEnabled] = useState(true)
   const [isResetting, setIsResetting] = useState(false)
   const { toast } = useToast()
 
@@ -75,10 +69,8 @@ export default function SettingsPage() {
 
   const hydrateFromStorage = useCallback(() => {
     const savedFontSize = readFontSizeFromStorage()
-    const savedAnalyticsEnabled = readAnalyticsToggle()
 
     setFontSize(savedFontSize)
-    setAnalyticsEnabled(savedAnalyticsEnabled)
     applyFontScale(savedFontSize)
   }, [])
 
@@ -93,17 +85,6 @@ export default function SettingsPage() {
     toast({
       title: 'Appearance updated',
       description: `${FONT_OPTIONS[option].label} font size applied.`,
-    })
-  }
-
-  const setAnalyticsPreference = (enabled: boolean) => {
-    setAnalyticsEnabled(enabled)
-    window.localStorage.setItem(ANALYTICS_STORAGE_KEY, String(enabled))
-    toast({
-      title: enabled ? 'Analytics enabled' : 'Analytics disabled',
-      description: enabled
-        ? 'Anonymous usage tracking is now enabled.'
-        : 'Anonymous usage tracking is now disabled.',
     })
   }
 
@@ -158,7 +139,6 @@ export default function SettingsPage() {
 
       setTheme('system')
       setFontSize('normal')
-      setAnalyticsEnabled(true)
       applyFontScale('normal')
 
       toast({
@@ -302,19 +282,6 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label>Enable Analytics</Label>
-                  <p className="text-sm text-muted-foreground">Send anonymous usage data to improve the platform</p>
-                </div>
-                <Button
-                  variant={analyticsEnabled ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setAnalyticsPreference(!analyticsEnabled)}
-                >
-                  {analyticsEnabled ? 'Enabled' : 'Disabled'}
-                </Button>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
                   <Label>Legacy Local Data</Label>
                   <p className="text-sm text-muted-foreground">Export or import older conversations stored in this browser. Server conversation history and provider keys are not included.</p>
                 </div>
@@ -339,6 +306,13 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </CardContent>
+          </Card>
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <CardTitle>Delete Account</CardTitle>
+              <CardDescription>Permanently remove your account and all of its data</CardDescription>
+            </CardHeader>
+            <CardContent><DeleteAccountForm /></CardContent>
           </Card>
         </TabsContent>
       </Tabs>

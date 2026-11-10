@@ -190,6 +190,9 @@ describe('/api/admin/status route', () => {
     expect(payload.generatedAt).toBeTypeOf('string')
     expect(payload.overallStatus).toBe('ok')
     expect(payload.checks).toHaveLength(8)
+    // Launch findings ride alongside health checks and never alter them.
+    expect(['ok', 'warning', 'error']).toContain(payload.launchReadiness.status)
+    expect(Array.isArray(payload.launchReadiness.findings)).toBe(true)
     expect(payload.version).toBe('0.2.0-private-pilot.3')
     expect(payload.release).toEqual({
       version: '0.2.0-private-pilot.3',

@@ -17,6 +17,7 @@ export default function Navbar() {
     { name: 'Pipeline', path: '/pipeline' },
     { name: 'Personas', path: '/personas' },
     { name: 'Analytics', path: '/analytics' },
+    { name: 'Billing', path: '/billing' },
     { name: 'Settings', path: '/settings' },
   ]
 
@@ -26,14 +27,16 @@ export default function Navbar() {
         <Link href="/" className="text-xl font-bold tracking-tight rainbow-text">
           MultiLLM
         </Link>
-        <div className="hidden items-center gap-1 lg:flex">
+        {/* Ten links only fit on one line from the xl breakpoint; below it the
+            menu button is used so the bar never overflows the viewport. */}
+        <div className="hidden items-center gap-1 xl:flex">
           {navItems.map((item) => (
             <Link
               key={item.path}
               href={item.path}
               data-active={pathname === item.path ? 'true' : 'false'}
               aria-current={pathname === item.path ? 'page' : undefined}
-              className={`nav-rainbow-link relative px-4 py-2 rounded-lg transition-all smooth-transition ${
+              className={`nav-rainbow-link relative whitespace-nowrap px-3 py-2 rounded-lg transition-all smooth-transition ${
                 pathname === item.path
                   ? 'text-foreground font-medium bg-card/80 border border-border shadow-sm rainbow-outline-hover'
                   : 'text-muted-foreground hover:text-foreground hover:bg-card/50'

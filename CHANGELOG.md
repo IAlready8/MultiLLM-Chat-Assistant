@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Public launch readiness (branch `release/public-launch-readiness-20261110`):
+  - Self-serve account deletion: `DELETE /api/account` and a Delete Account
+    card under Settings, Advanced. Requires the account email typed back,
+    plus the current password for password accounts; limited to 5 attempts
+    per 15 minutes. Stripe subscriptions are cancelled before any data is
+    removed, and the account is kept if cancellation fails. Analytics rows
+    are purged explicitly; all other user data cascades. No schema change.
+  - Public `/terms` and `/privacy` pages, a consent notice on sign-in and
+    register, and a legal footer. One allowlist (`lib/public-routes.ts`) is
+    shared by the request proxy and `AuthGuard`. Operator name, contact
+    address and governing law come from `LEGAL_ENTITY_NAME`, `SUPPORT_EMAIL`
+    and `LEGAL_GOVERNING_LAW`; clauses with no configured value are omitted.
+  - `/robots.txt`, `/.well-known/security.txt` (served only when
+    `SUPPORT_EMAIL` is set), site metadata with a title template, and an
+    in-app 404 page.
+  - Per-plan monthly allowances on `/billing` when
+    `LLM_MONTHLY_REQUEST_LIMITS` is set, a Billing link in the main
+    navigation, and a Launch Readiness card on the admin status page.
+  - Per-user throttles on provider key checks (60 per 10 minutes, fails
+    closed) and on Stripe checkout and portal session creation (10 per 15
+    minutes, fails open).
+
+### Fixed
+
+- The API test page reported `Success` and a Connected badge for any
+  non-empty key without contacting a provider. It now verifies through
+  `/api/test-api-key`, and only a real verdict changes the status badge.
+- The Stripe webhook acknowledges events for an account that no longer
+  exists instead of failing on the user foreign key and being retried.
+- Billing plan cards no longer show internal labels (`stripe-self-serve`,
+  `sales-led`, `Operator-managed`).
+
+### Removed
+
+- The `Enable Analytics` settings toggle. It wrote only to `localStorage`,
+  no code read it, and it described account-linked usage records as
+  anonymous.
+- 4,881 lines in 21 modules that nothing imported, including two legacy API
+  clients that returned fabricated "simulated" model responses on upstream
+  failure and called an unofficial GitHub Copilot endpoint with spoofed
+  editor headers. The live provider path is unchanged.
+- Environment variables from `.env.example` that no code reads: the
+  `DB_*` pool settings, `RATE_LIMIT_LLM_*`, `ENABLE_PERFORMANCE_MONITORING`,
+  `METRICS_RETENTION_HOURS`, `ALERT_WEBHOOK_URL`, `CIRCUIT_BREAKER_*` and
+  `NEXT_PUBLIC_SECURE_STORAGE_KEY`.
+
+### Added (earlier, unreleased)
+
 - Provider resilience layer at the single outbound provider chokepoint
   (`lib/provider-resilience.ts`, wired into `providerFetch`): bounded retry
   with exponential backoff and full jitter for transient upstream failures

@@ -2,6 +2,7 @@ import { getProPrice } from '@/lib/billing-price'
 import { withBillingLock } from '@/lib/billing-lock'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
+import { enforceRouteLimit } from '@/lib/route-rate-limit'
 import {
   stripe,
   getOrCreateStripeCustomer,
@@ -46,6 +47,18 @@ export async function POST(req: Request) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+
+  // Each call creates Stripe API objects. Cap it per account, but never let a
+  // limiter outage stand between a customer and paying or cancelling.
+  const limited = await enforceRouteLimit({
+    scope: 'billing-checkout',
+    userId: user.id,
+    max: 10,
+    windowMs: 15 * 60 * 1000,
+    onUnavailable: 'allow',
+  })
+  if (limited) return limited
+
   const source = await readBillingSource(req)
 
   if (!user.email) {

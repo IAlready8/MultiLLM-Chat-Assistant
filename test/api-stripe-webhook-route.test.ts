@@ -11,6 +11,7 @@ const {
   mockSubscriptionUpsert,
   mockEventFind,
   mockEventCreate,
+  mockUserFind,
   MockStripeConfigurationError,
 } = vi.hoisted(() => {
   class MockStripeConfigurationError extends Error {
@@ -30,6 +31,7 @@ const {
     mockSubscriptionUpsert: vi.fn(),
     mockEventFind: vi.fn(),
     mockEventCreate: vi.fn(),
+    mockUserFind: vi.fn(),
     MockStripeConfigurationError,
   }
 })
@@ -65,6 +67,7 @@ vi.mock('@/lib/billing-lock', () => ({
   withBillingLock: async (_key: string, work: (tx: unknown) => Promise<unknown>) => work({
     subscription: { findFirst: mockSubscriptionFindFirst, upsert: mockSubscriptionUpsert },
     stripeWebhookEvent: { findUnique: mockEventFind, create: mockEventCreate },
+    user: { findUnique: mockUserFind },
   }),
 }))
 
@@ -115,6 +118,7 @@ describe('/api/webhooks/stripe', () => {
     mockStripeSubscriptionRetrieve.mockResolvedValue(makeSubscription())
     mockSubscriptionFindFirst.mockResolvedValue(null)
     mockSubscriptionUpsert.mockResolvedValue({ id: 'subscription-1' })
+    mockUserFind.mockResolvedValue({ id: 'user-1' })
   })
 
   it('returns 400 when Stripe signature header is missing', async () => {
@@ -266,6 +270,24 @@ describe('/api/webhooks/stripe', () => {
       }),
     )
   })
+  it('acknowledges a cancellation for a deleted account without writing entitlements', async () => {
+    mockHeadersGet.mockReturnValue('sig_test')
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_deleted_account',
+      type: 'customer.subscription.deleted',
+      data: { object: makeSubscription({ status: 'canceled' }) },
+    })
+    mockStripeSubscriptionRetrieve.mockResolvedValue(makeSubscription({ status: 'canceled' }))
+    mockUserFind.mockResolvedValue(null)
+
+    const response = await postWebhook()
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ received: true })
+    expect(mockUserFind).toHaveBeenCalledWith({ where: { id: 'user-1' }, select: { id: true } })
+    expect(mockSubscriptionUpsert).not.toHaveBeenCalled()
+  })
+
   it('acknowledges a duplicate event without another Stripe fetch or entitlement write', async () => {
     mockHeadersGet.mockReturnValue('sig_test')
     mockConstructEvent.mockReturnValue({ id: 'evt_duplicate', type: 'customer.subscription.updated', data: { object: { id: 'sub_123', customer: 'cus_123' } } })

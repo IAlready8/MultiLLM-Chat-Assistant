@@ -1,4 +1,4 @@
-import { getLlmQuota } from '@/lib/llm-quota'
+import { getLlmQuota, readQuotaLimits } from '@/lib/llm-quota'
 import { getProPrice } from '@/lib/billing-price'
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
@@ -46,6 +46,14 @@ export default async function BillingPage() {
     isStripeCheckoutConfigured ? getProPrice().catch(() => null) : null,
   ])
 
+  // Show each plan's allowance only when the server is actually enforcing one.
+  let planAllowances: ReturnType<typeof readQuotaLimits> = null
+  try {
+    planAllowances = readQuotaLimits()
+  } catch {
+    planAllowances = null
+  }
+
   const tier: SubscriptionTier =
     (subscription?.tier as SubscriptionTier | undefined) ||
     (session.user.tier as SubscriptionTier | undefined) ||
@@ -72,6 +80,7 @@ export default async function BillingPage() {
             hasBillingAccount={Boolean(subscription?.stripeCustomerId)}
             quota={quota}
             proPriceLabel={proPrice?.label}
+            planAllowances={planAllowances}
             periodEnd={
               subscription?.stripeCurrentPeriodEnd?.toISOString() || null
             }

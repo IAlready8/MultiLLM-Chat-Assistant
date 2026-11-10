@@ -39,6 +39,10 @@ type SystemStatusResponse = {
     branch: string | null
   }
   checks: SystemCheck[]
+  launchReadiness?: {
+    status: CheckStatus
+    findings: Array<{ id: string; severity: 'warning' | 'error'; message: string }>
+  }
   systemInfo: {
     app: string
     environment: string
@@ -263,6 +267,50 @@ export default function SystemStatusPage() {
           </div>
         </CardContent>
       </Card>
+
+      {statusData.launchReadiness ? (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle>Launch Readiness</CardTitle>
+              <Badge
+                variant={
+                  statusData.launchReadiness.status === 'ok'
+                    ? 'default'
+                    : statusData.launchReadiness.status === 'error'
+                      ? 'destructive'
+                      : 'secondary'
+                }
+                className="capitalize"
+              >
+                {statusData.launchReadiness.status}
+              </Badge>
+            </div>
+            <CardDescription>
+              Configuration a public, paid release should not ship without. These do not affect system health.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statusData.launchReadiness.findings.length === 0 ? (
+              <p className="text-sm">No launch configuration gaps found.</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {statusData.launchReadiness.findings.map((finding) => (
+                  <li key={finding.id} className="flex items-start gap-2">
+                    <Badge
+                      variant={finding.severity === 'error' ? 'destructive' : 'secondary'}
+                      className="capitalize"
+                    >
+                      {finding.severity}
+                    </Badge>
+                    <span>{finding.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
