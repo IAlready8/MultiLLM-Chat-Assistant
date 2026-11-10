@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
+import { getAppName } from '@/lib/app-name'
 
-const DEFAULT_NAME = 'MultiLLM Chat Assistant'
 const DESCRIPTION =
   'Run one brief across multiple AI providers, compare the answers side by side, and keep the history.'
 
@@ -26,7 +26,7 @@ export const getSiteUrl = (
 export const buildSiteMetadata = (
   env: Record<string, string | undefined> = process.env,
 ): Metadata => {
-  const name = env.NEXT_PUBLIC_APP_NAME?.trim() || DEFAULT_NAME
+  const name = getAppName(env.NEXT_PUBLIC_APP_NAME ?? '')
   const siteUrl = getSiteUrl(env)
 
   return {

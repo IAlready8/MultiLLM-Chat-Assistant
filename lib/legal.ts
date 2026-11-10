@@ -1,3 +1,5 @@
+import { getAppName } from '@/lib/app-name'
+
 /**
  * Operator-specific facts for the public legal pages.
  *
@@ -29,8 +31,7 @@ export type LegalDetails = {
 export const getLegalDetails = (): LegalDetails => {
   const email = clean(process.env.SUPPORT_EMAIL, 254)
   return {
-    productName:
-      clean(process.env.NEXT_PUBLIC_APP_NAME, 80) ?? 'MultiLLM Chat Assistant',
+    productName: getAppName(),
     operatorName: clean(process.env.LEGAL_ENTITY_NAME, 120),
     contactEmail: email && EMAIL_PATTERN.test(email) ? email : null,
     governingLaw: clean(process.env.LEGAL_GOVERNING_LAW, 120),

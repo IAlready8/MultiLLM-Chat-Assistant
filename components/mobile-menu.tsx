@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Menu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SignOutButton } from '@/components/sign-out-button'
+import { getAppName } from '@/lib/app-name'
 import {
   Sheet,
   SheetContent,
@@ -35,7 +36,7 @@ export function MobileMenu({ items }: MobileMenuProps) {
         <SheetHeader>
           <SheetTitle>Menu</SheetTitle>
           <SheetDescription className="sr-only">
-            Navigate MultiLLM and manage your signed-in session.
+            Navigate {getAppName()} and manage your signed-in session.
           </SheetDescription>
         </SheetHeader>
         <nav className="mt-8 flex flex-col gap-2">

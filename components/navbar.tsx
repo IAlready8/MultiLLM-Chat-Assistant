@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { MobileMenu } from '@/components/mobile-menu'
 import { SignOutButton } from '@/components/sign-out-button'
+import { getAppName } from '@/lib/app-name'
 
 export default function Navbar() {
   const pathname = usePathname()
@@ -25,7 +26,7 @@ export default function Navbar() {
     <nav className="border-b border-border/60 bg-background/80 backdrop-blur-lg">
       <div className="container mx-auto flex items-center justify-between gap-4 px-4 py-3">
         <Link href="/" className="text-xl font-bold tracking-tight rainbow-text">
-          MultiLLM
+          {getAppName()}
         </Link>
         {/* Ten links only fit on one line from the xl breakpoint; below it the
             menu button is used so the bar never overflows the viewport. */}

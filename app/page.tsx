@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ActivationChecklist } from '@/components/activation-checklist'
+import { getAppName } from '@/lib/app-name'
 
 const coreWorkflowCards = [
   {
@@ -127,7 +128,7 @@ export default function Home() {
 
       <section className="mb-10 px-4 text-center" aria-labelledby="home-hero-title">
         <h1 id="home-hero-title" className="heading-underline text-4xl md:text-5xl font-bold mb-6">
-          <span className="rainbow-text">MultiLLM</span> Chat Assistant
+          <span className="rainbow-text">{getAppName()}</span>
         </h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
           Compare provider outputs, reuse personas, preserve conversation history, and improve repeatable client deliverables.
