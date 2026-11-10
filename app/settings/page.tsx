@@ -9,6 +9,7 @@ import { AccountProfileForm } from '@/components/account-profile-form'
 import { ChangePasswordForm } from '@/components/change-password-form'
 import { AccountHistoryExport } from '@/components/account-history-export'
 import { DeleteAccountForm } from '@/components/delete-account-form'
+import { AccountDataDownload } from '@/components/account-data-download'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
@@ -270,6 +271,13 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="advanced" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Account Data</CardTitle>
+              <CardDescription>A portable copy of what this workspace holds about you</CardDescription>
+            </CardHeader>
+            <CardContent><AccountDataDownload /></CardContent>
+          </Card>
           <Card>
             <CardHeader><CardTitle>Server Conversation Archive</CardTitle></CardHeader>
             <CardContent><AccountHistoryExport /></CardContent>
