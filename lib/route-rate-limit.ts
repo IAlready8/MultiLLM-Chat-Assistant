@@ -64,3 +64,19 @@ export async function enforceRouteLimit(
     })
   }
 }
+
+/**
+ * One shared per-user ceiling for ordinary workspace writes (conversations,
+ * personas, goals, provider settings, profile). Far above anything a person
+ * does by hand, low enough that a script on one account cannot grow the
+ * database without bound. Fails open: a limiter outage must not stop someone
+ * saving their work.
+ */
+export const enforceWorkspaceWriteLimit = (userId: string) =>
+  enforceRouteLimit({
+    scope: 'workspace-write',
+    userId,
+    max: 240,
+    windowMs: 60 * 1000,
+    onUnavailable: 'allow',
+  })

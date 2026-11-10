@@ -6,6 +6,7 @@ import {
   hasValidApiKey,
 } from '@/lib/api-key-service'
 import prisma from '@/lib/prisma'
+import { enforceWorkspaceWriteLimit } from '@/lib/route-rate-limit'
 
 // Manual validation (zod schema triggers false-positive redaction in tooling)
 const parseConfigBody = (body: unknown): { token?: string; enabled: boolean } | null => {
@@ -64,6 +65,8 @@ export async function PUT(request: Request) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   let body: unknown
   try {
@@ -120,6 +123,8 @@ export async function DELETE() {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   try {
     const { deleteUserProviderConfig } = await import('@/lib/api-key-service')

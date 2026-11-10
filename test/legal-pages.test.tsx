@@ -133,14 +133,16 @@ describe('legal navigation', () => {
     for (const link of screen.getAllByRole('link', { name: 'Privacy Policy' })) {
       expect(link).toHaveAttribute('href', '/privacy')
     }
-    expect(screen.getByRole('navigation', { name: 'Legal' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Site' })).toBeInTheDocument()
   })
 
-  it('treats only the legal documents as public pages', () => {
-    expect([...PUBLIC_PAGE_PATHS]).toEqual(['/terms', '/privacy'])
+  it('treats only the offer, legal and support pages as public', () => {
+    expect([...PUBLIC_PAGE_PATHS]).toEqual(['/pricing', '/terms', '/privacy', '/support'])
+    expect(isPublicPagePath('/pricing')).toBe(true)
+    expect(isPublicPagePath('/support')).toBe(true)
     expect(isPublicPagePath('/terms')).toBe(true)
     expect(isPublicPagePath('/privacy/')).toBe(true)
-    for (const path of ['/', '/settings', '/termsandmore', '/privacy-export', '/api/terms', '/billing']) {
+    for (const path of ['/', '/settings', '/termsandmore', '/privacy-export', '/api/terms', '/billing', '/pricing-admin', '/supporters', '/api/pricing']) {
       expect(isPublicPagePath(path)).toBe(false)
     }
   })

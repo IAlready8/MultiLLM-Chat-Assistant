@@ -441,4 +441,37 @@ describe('/api/health route', () => {
     )
     expect(source).not.toMatch(/^\s*['"]use server['"]/m)
   })
+  it('shares one database and limiter probe across a burst of concurrent requests', async () => {
+    let release: (value: unknown) => void = () => undefined
+    const gate = new Promise((resolve) => {
+      release = resolve
+    })
+    mockQueryRaw.mockImplementation(async () => {
+      await gate
+      return [{ ok: 1 }]
+    })
+
+    const burst = Array.from({ length: 40 }, () =>
+      GET(new NextRequest('http://localhost:3000/api/health')),
+    )
+    await Promise.resolve()
+    release(undefined)
+    const responses = await Promise.all(burst)
+
+    expect(responses.every((response) => response.status === 200)).toBe(true)
+    // One probe is two queries (connectivity, then schema), not 40 x 2.
+    expect(mockQueryRaw).toHaveBeenCalledTimes(2)
+    expect(mockProbeRateLimitBackend).toHaveBeenCalledTimes(1)
+  })
+
+  it('probes again on the next request so results are never stale', async () => {
+    await GET(new NextRequest('http://localhost:3000/api/health'))
+    mockQueryRaw.mockRejectedValue(new Error('connection refused'))
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/health'))
+    const payload = await response.json()
+
+    expect(payload.checks.database.status).toBe('degraded')
+    expect(mockProbeRateLimitBackend).toHaveBeenCalledTimes(2)
+  })
 })

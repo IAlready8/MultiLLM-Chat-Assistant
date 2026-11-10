@@ -13,7 +13,7 @@ describe('robots policy', () => {
     const [rule] = robots().rules as Array<{ userAgent: string; allow: string[]; disallow: string[] }>
     expect(rule.userAgent).toBe('*')
     expect(rule.disallow).toEqual(['/'])
-    expect(rule.allow).toEqual(['/auth/signin', '/auth/register', '/terms', '/privacy'])
+    expect(rule.allow).toEqual(['/auth/signin', '/auth/register', '/pricing', '/terms', '/privacy', '/support'])
     expect(rule.allow.some((path) => path.startsWith('/api'))).toBe(false)
   })
 })

@@ -138,7 +138,7 @@ export default function PrivacyPage() {
 
       <LegalSection heading="7. Your choices and rights">
         <ul className="list-disc space-y-2 pl-5">
-          <li><strong>Access and export.</strong> Download an archive of your conversations from Settings.</li>
+          <li><strong>Access and export.</strong> Download your account data and an archive of your conversations from Settings.</li>
           <li><strong>Correction.</strong> Update your display name in Settings.</li>
           <li><strong>Deletion.</strong> Permanently delete your account and its data from Settings.</li>
           <li><strong>Billing.</strong> Manage or cancel a subscription from the Billing page.</li>

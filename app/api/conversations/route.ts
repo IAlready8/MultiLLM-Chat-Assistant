@@ -14,6 +14,7 @@ import {
 import { z } from 'zod'
 import { readBoundedJson, LlmRequestError } from '@/lib/llm-request'
 import { parseConversationPage } from '@/lib/conversation-pagination'
+import { enforceWorkspaceWriteLimit } from '@/lib/route-rate-limit'
 
 // Zod schema for creating a conversation
 const createConvoSchema = z.object({
@@ -71,6 +72,8 @@ export const POST = withApiMetrics(async (req: Request) => {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   let body: unknown
     try { body = await readBoundedJson(req) } catch (error) {

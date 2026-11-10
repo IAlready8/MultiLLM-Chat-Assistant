@@ -17,6 +17,7 @@ const PUBLIC_PATHS = new Set<string>([
   ...PUBLIC_PAGE_PATHS,
   // Crawler policy and vulnerability-disclosure contact (RFC 9116).
   '/robots.txt',
+  '/sitemap.xml',
   '/.well-known/security.txt',
 ])
 
