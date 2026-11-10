@@ -20,7 +20,7 @@ describe('legal details', () => {
   it('never invents an operator, contact, or jurisdiction when none is configured', () => {
     clearLegalEnv()
     expect(getLegalDetails()).toEqual({
-      productName: 'MultiLLM Chat Assistant',
+      productName: 'ManyOne',
       operatorName: null,
       contactEmail: null,
       governingLaw: null,

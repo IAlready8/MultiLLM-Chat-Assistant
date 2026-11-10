@@ -16,7 +16,7 @@ test.describe('Home and API Test utility flows', () => {
     })
 
     await expect(
-      page.getByRole('heading', { name: 'MultiLLM Chat Assistant' })
+      page.getByRole('heading', { name: 'ManyOne' })
     ).toBeVisible()
     await expect(page.getByRole('link', { name: 'Go to Multi-Chat' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'View Analytics' })).toBeVisible()

@@ -60,13 +60,13 @@ describe('site metadata', () => {
   })
 
   it('builds titled, shareable metadata and omits metadataBase when no origin is known', () => {
-    const configured = buildSiteMetadata({ NEXT_PUBLIC_APP_NAME: 'Example App', NEXTAUTH_URL: 'https://app.example.test' })
+    const configured = buildSiteMetadata({ NEXT_PUBLIC_APP_NAME: '  Example App  ', NEXTAUTH_URL: 'https://app.example.test' })
     expect(configured.title).toEqual({ default: 'Example App', template: '%s | Example App' })
     expect(configured.metadataBase?.toString()).toBe('https://app.example.test/')
     expect(configured.openGraph).toMatchObject({ siteName: 'Example App' })
 
     const bare = buildSiteMetadata({})
-    expect(bare.title).toEqual({ default: 'MultiLLM Chat Assistant', template: '%s | MultiLLM Chat Assistant' })
+    expect(bare.title).toEqual({ default: 'ManyOne', template: '%s | ManyOne' })
     expect('metadataBase' in bare).toBe(false)
   })
 })

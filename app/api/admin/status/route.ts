@@ -22,6 +22,7 @@ import {
 import { getReleaseMetadata, type ReleaseMetadata } from '@/lib/release-metadata'
 import { getSidecarDiagnostics } from '@/lib/sidecar-health'
 import { getLaunchReadiness, type LaunchReadiness } from '@/lib/launch-readiness'
+import { getAppName } from '@/lib/app-name'
 
 type CheckStatus = 'ok' | 'warning' | 'error'
 
@@ -297,7 +298,7 @@ export const GET = withApiMetrics(async () => {
     // not runtime health, so they never change overallStatus or paging.
     launchReadiness: getLaunchReadiness(),
     systemInfo: {
-      app: 'Multi-LLM Chat Assistant',
+      app: getAppName(),
       environment: process.env.NODE_ENV || 'development',
       nodeVersion: process.version,
       strictAuth,
