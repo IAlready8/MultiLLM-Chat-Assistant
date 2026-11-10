@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Monetization readiness (branch `release/monetization-readiness-20261110`):
+  - Public `/pricing` page: what the product does, Free and Pro, the live
+    Stripe price and the enforced monthly allowances. It never quotes a price
+    or allowance the server is not enforcing. The Stripe price lookup is
+    cached for ten minutes and coalesced.
+  - Public `/support` page with the self-serve billing, data and account
+    tasks, plus the contact address when `SUPPORT_EMAIL` is set.
+  - `sitemap.xml` listing the public pages, referenced from `robots.txt`.
+  - `GET /api/account/usage` and an in-app plan notice shown at 80 percent of
+    the monthly allowance, when it is used up, and when a subscription
+    payment did not go through.
+  - `GET /api/account/data` and a Settings card: a JSON copy of the caller's
+    profile, personas, goals, connected providers, plan and usage. No key
+    material, settings blobs, password hashes or Stripe identifiers.
+  - One shared per-user ceiling (240 a minute, fails open) on conversation,
+    persona, goal, provider-config, Jev-config and profile writes.
+  - `docs/LAUNCH_CHECKLIST.md`: the ordered operator steps to open paid
+    public access.
+
+### Changed
+
+- `/api/health` shares one in-flight database and limiter probe across
+  concurrent requests. Nothing is cached, so status is never stale.
+
 - Public launch readiness (branch `release/public-launch-readiness-20261110`):
   - Self-serve account deletion: `DELETE /api/account` and a Delete Account
     card under Settings, Advanced. Requires the account email typed back,

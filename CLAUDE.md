@@ -88,6 +88,28 @@ From `package.json`:
   - `app/admin/errors/page.tsx`
   - `app/admin/status/page.tsx`
 
+## Surface added after the audit above (code-verified 2026-11-10)
+Routes:
+- `app/api/account/route.ts` (DELETE: self-serve account deletion)
+- `app/api/account/data/route.ts` (GET: account data export, no secrets)
+- `app/api/account/usage/route.ts` (GET: plan, allowance, payment state)
+- `app/.well-known/security.txt/route.ts` (served only when `SUPPORT_EMAIL` is set)
+
+Public pages (readable signed out; the single allowlist is `lib/public-routes.ts`,
+shared by `proxy.ts` and `components/auth-guard.tsx`):
+- `app/pricing/page.tsx`
+- `app/support/page.tsx`
+- `app/terms/page.tsx`
+- `app/privacy/page.tsx`
+- `app/robots.ts`, `app/sitemap.ts`
+
+Rules that hold for this surface:
+- Public pages never state a price, allowance, operator name or contact that is
+  not configured. They omit the clause instead.
+- `lib/launch-readiness.ts` reports missing launch configuration on
+  `/admin/status`. It never changes `overallStatus`.
+- Operator launch steps live in `docs/LAUNCH_CHECKLIST.md`.
+
 ## 02.3 production scope decision
 Every visible surface is explicitly classified.
 
