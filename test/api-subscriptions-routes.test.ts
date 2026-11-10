@@ -40,6 +40,9 @@ vi.mock('@/lib/billing-price', () => ({ getProPrice: vi.fn().mockResolvedValue({
 
 vi.mock('@/lib/billing-lock', () => ({ withBillingLock: async (_key: string, work: () => Promise<unknown>) => work() }))
 
+const mockCheckAndConsume = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/rate-limit', () => ({ checkAndConsume: mockCheckAndConsume }))
+
 vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: () => mockGetAuthenticatedUser(),
 }))
@@ -117,8 +120,37 @@ describe('subscription routes', () => {
       url: 'https://stripe.test/portal',
     })
     mockRecordAnalyticsEvent.mockResolvedValue(undefined)
+    mockCheckAndConsume.mockResolvedValue({ allowed: true })
     mockLoggerWarn.mockReset()
     mockLoggerError.mockReset()
+  })
+
+  it('throttles repeated checkout and portal requests per account before calling Stripe', async () => {
+    mockCheckAndConsume.mockResolvedValue({ allowed: false, retryAfterMs: 42_000 })
+
+    const checkout = await createSubscriptionSession(new Request('http://localhost'))
+    const portal = await createManageSession(new Request('http://localhost'))
+
+    expect(checkout.status).toBe(429)
+    expect(checkout.headers.get('retry-after')).toBe('42')
+    expect(portal.status).toBe(429)
+    expect(mockCheckAndConsume).toHaveBeenCalledWith('billing-checkout:user-1', { max: 10, windowMs: 900_000 })
+    expect(mockCheckAndConsume).toHaveBeenCalledWith('billing-portal:user-1', { max: 10, windowMs: 900_000 })
+    expect(mockGetOrCreateStripeCustomer).not.toHaveBeenCalled()
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled()
+    expect(mockCreatePortalSession).not.toHaveBeenCalled()
+  })
+
+  it('keeps checkout and the billing portal available when the limiter backend is down', async () => {
+    mockCheckAndConsume.mockRejectedValue(new Error('limiter backend unavailable'))
+
+    const checkout = await createSubscriptionSession(new Request('http://localhost'))
+    const portal = await createManageSession(new Request('http://localhost'))
+
+    expect(checkout.status).toBe(200)
+    await expect(checkout.json()).resolves.toMatchObject({ url: 'https://stripe.test/checkout' })
+    expect(portal.status).toBe(200)
+    await expect(portal.json()).resolves.toEqual({ url: 'https://stripe.test/portal' })
   })
 
   it('forwards auth response for /api/subscriptions', async () => {

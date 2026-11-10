@@ -22,6 +22,9 @@ vi.mock('@/lib/provider-key-test', () => ({
     mockValidateApiKeyFormat(provider, apiKey),
 }))
 
+const mockCheckAndConsume = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/rate-limit', () => ({ checkAndConsume: mockCheckAndConsume }))
+
 import { POST } from '@/app/api/test-api-key/route'
 
 const makeRequest = (body: Record<string, unknown>) =>
@@ -38,6 +41,30 @@ describe('/api/test-api-key route', () => {
       user: { id: 'user-1' },
     })
     mockValidateApiKeyFormat.mockReturnValue(null)
+    mockCheckAndConsume.mockResolvedValue({ allowed: true })
+  })
+
+  it('throttles key checks per account before contacting any provider', async () => {
+    mockCheckAndConsume.mockResolvedValue({ allowed: false, retryAfterMs: 30_000 })
+
+    const response = await POST(makeRequest({ provider: 'openai', apiKey: 'sk-test-key-12345' }))
+
+    expect(response.status).toBe(429)
+    expect(response.headers.get('retry-after')).toBe('30')
+    await expect(response.json()).resolves.toMatchObject({ valid: false, reason: 'rate_limited' })
+    expect(mockCheckAndConsume).toHaveBeenCalledWith('provider-key-test:user-1', { max: 60, windowMs: 600_000 })
+    expect(mockTestProviderKey).not.toHaveBeenCalled()
+    expect(mockGetUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('fails closed without contacting a provider when the limiter backend is down', async () => {
+    mockCheckAndConsume.mockRejectedValue(new Error('limiter backend unavailable'))
+
+    const response = await POST(makeRequest({ provider: 'openai', apiKey: 'sk-test-key-12345' }))
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toMatchObject({ valid: false })
+    expect(mockTestProviderKey).not.toHaveBeenCalled()
   })
 
   it('forwards auth response when strict auth blocks request', async () => {
