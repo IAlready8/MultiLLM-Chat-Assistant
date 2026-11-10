@@ -27,7 +27,9 @@ export default function Navbar() {
         <Link href="/" className="text-xl font-bold tracking-tight rainbow-text">
           MultiLLM
         </Link>
-        <div className="hidden items-center gap-1 lg:flex">
+        {/* Ten links only fit on one line from the xl breakpoint; below it the
+            menu button is used so the bar never overflows the viewport. */}
+        <div className="hidden items-center gap-1 xl:flex">
           {navItems.map((item) => (
             <Link
               key={item.path}

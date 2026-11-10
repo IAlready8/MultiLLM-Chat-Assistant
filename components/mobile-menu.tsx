@@ -26,7 +26,7 @@ export function MobileMenu({ items }: MobileMenuProps) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="lg:hidden rainbow-outline-hover">
+        <Button variant="ghost" size="icon" className="xl:hidden rainbow-outline-hover">
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle menu</span>
         </Button>
