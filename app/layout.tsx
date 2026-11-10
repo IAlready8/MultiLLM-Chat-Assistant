@@ -10,6 +10,7 @@ import { AcquisitionAttributionCapture } from '@/components/acquisition-attribut
 import { auth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/toaster";
 import { SiteFooter } from "@/components/site-footer";
+import { UsageNotice } from "@/components/usage-notice";
 import { buildSiteMetadata } from "@/lib/site-metadata";
 
 type DynamicUsageError = Error & { digest?: string }
@@ -59,6 +60,7 @@ export default async function RootLayout({
             <AuthGuard>
               <div className="min-h-screen flex flex-col">
                 <Navbar />
+                <UsageNotice />
                 <main className="flex-1">
                   {children}
                 </main>
