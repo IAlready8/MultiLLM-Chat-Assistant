@@ -13,7 +13,7 @@ import {
 } from '../scripts/alias-commit-guard.mjs'
 
 const EXPECTED_SHA = '68273ed6082f825299d98c7c3be2e990edc9ec86'
-const EXPECTED_VERSION = '0.2.0-private-pilot.3'
+const EXPECTED_VERSION = '0.2.0'
 const healthyRelease = {
   status: 'healthy',
   release: {
