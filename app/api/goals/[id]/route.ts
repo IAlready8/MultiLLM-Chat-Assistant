@@ -11,6 +11,7 @@ import {
   apiReadCacheKey,
   invalidateApiReadCache,
 } from '@/lib/api-read-cache'
+import { enforceWorkspaceWriteLimit } from '@/lib/route-rate-limit'
 
 const goalStatusSchema = z.enum([
   'not-started',
@@ -81,6 +82,8 @@ export const PUT = withApiMetrics(async (
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
   const id = await getGoalIdFromContext(ctx)
 
   const body = await readApiObject(req)
@@ -117,6 +120,8 @@ export const DELETE = withApiMetrics(async (
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
   const id = await getGoalIdFromContext(ctx)
 
   try {

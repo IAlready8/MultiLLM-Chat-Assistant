@@ -12,6 +12,7 @@ import {
 import { z } from 'zod'
 import { readBoundedJson, LlmRequestError } from '@/lib/llm-request'
 import { getConversationMessagePage, parseMessagePage } from '@/services/conversation-context'
+import { enforceWorkspaceWriteLimit } from '@/lib/route-rate-limit'
 
 // Zod schema for adding messages
 const addMessagesSchema = z.array(
@@ -90,6 +91,8 @@ export async function POST(
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   try {
     const { params } = context
@@ -179,6 +182,8 @@ export async function PUT(
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   try {
     const { params } = context
@@ -230,6 +235,8 @@ export async function DELETE(
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   try {
     const { params } = context

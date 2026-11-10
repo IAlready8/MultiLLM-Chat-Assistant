@@ -31,6 +31,7 @@ import {
 } from '@/lib/provider-endpoint'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { mergeAttributionFromCookieHeader } from '@/lib/acquisition-attribution'
+import { enforceWorkspaceWriteLimit } from '@/lib/route-rate-limit'
 
 const normalizeProvider = (provider: string) => provider.trim().toLowerCase()
 
@@ -144,6 +145,8 @@ export async function POST(request: NextRequest) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   try {
     const body = await request.json()
@@ -252,6 +255,8 @@ export async function PUT(request: NextRequest) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   try {
     const body = await request.json()
@@ -431,6 +436,8 @@ export async function DELETE(request: NextRequest) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   try {
     const { searchParams } = new URL(request.url)

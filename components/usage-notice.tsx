@@ -54,15 +54,15 @@ export function UsageNotice() {
     isPublicPagePath(pathname)
 
   useEffect(() => {
-    if (suppressed) {
-      setNotice(null)
-      return
-    }
+    // Nothing renders while suppressed, so stale state needs no reset here.
+    if (suppressed) return
     const controller = new AbortController()
-    setDismissed(readDismissed())
     fetch('/api/account/usage', { signal: controller.signal, cache: 'no-store' })
       .then(async (response) => (response.ok ? ((await response.json()) as UsageSnapshot) : null))
-      .then((snapshot) => setNotice(selectUsageNotice(snapshot)))
+      .then((snapshot) => {
+        setDismissed(readDismissed())
+        setNotice(selectUsageNotice(snapshot))
+      })
       // Never let a usage lookup failure interrupt the workspace.
       .catch(() => undefined)
     return () => controller.abort()
