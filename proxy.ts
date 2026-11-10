@@ -15,6 +15,9 @@ const PUBLIC_PATHS = new Set<string>([
   '/api/cron/generations', // Bearer-authenticated by the route, not a browser session.
   // Legal documents must be readable before an account exists.
   ...PUBLIC_PAGE_PATHS,
+  // Crawler policy and vulnerability-disclosure contact (RFC 9116).
+  '/robots.txt',
+  '/.well-known/security.txt',
 ])
 
 const isPublicPath = (pathname: string): boolean => {

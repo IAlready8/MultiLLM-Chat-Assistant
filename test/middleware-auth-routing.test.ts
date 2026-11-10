@@ -45,6 +45,8 @@ describe('mandatory-auth routing', () => {
     '/api/cron/generations',
     '/terms',
     '/privacy',
+    '/robots.txt',
+    '/.well-known/security.txt',
   ])('keeps %s public', async (path) => {
     const response = await middleware(
       new NextRequest(`http://localhost:3000${path}`),
@@ -54,7 +56,7 @@ describe('mandatory-auth routing', () => {
     expect(mockDecode).not.toHaveBeenCalled()
   })
 
-  it.each(['/termsandmore', '/privacy-export', '/api/terms', '/settings'])(
+  it.each(['/termsandmore', '/privacy-export', '/api/terms', '/settings', '/robots.txt.bak', '/.well-known/other'])(
     'does not widen public access to %s',
     async (path) => {
       const response = await middleware(

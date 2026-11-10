@@ -10,6 +10,7 @@ import { AcquisitionAttributionCapture } from '@/components/acquisition-attribut
 import { auth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/toaster";
 import { SiteFooter } from "@/components/site-footer";
+import { buildSiteMetadata } from "@/lib/site-metadata";
 
 type DynamicUsageError = Error & { digest?: string }
 
@@ -25,10 +26,7 @@ const isDynamicServerUsageError = (error: unknown): boolean => {
   )
 }
 
-export const metadata: Metadata = {
-  title: "MultiLLM Chat Assistant",
-  description: "A professional tool for interacting with multiple LLM APIs",
-};
+export const metadata: Metadata = buildSiteMetadata();
 
 export default async function RootLayout({
   children,
