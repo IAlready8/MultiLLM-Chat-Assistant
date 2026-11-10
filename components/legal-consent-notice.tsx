@@ -12,6 +12,10 @@ export function LegalConsentNotice() {
       <Link className="text-primary hover:underline" href="/privacy">
         Privacy Policy
       </Link>
+      . See{' '}
+      <Link className="text-primary hover:underline" href="/pricing">
+        plans and pricing
+      </Link>
       .
     </p>
   )

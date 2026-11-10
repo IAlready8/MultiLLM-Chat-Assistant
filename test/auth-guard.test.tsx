@@ -32,7 +32,7 @@ beforeEach(() => {
 })
 
 describe('AuthGuard', () => {
-  it.each(['/terms', '/privacy', '/auth/signin', '/auth/register'])(
+  it.each(['/terms', '/privacy', '/pricing', '/support', '/auth/signin', '/auth/register'])(
     'renders %s for a signed-out visitor without redirecting',
     (pathname) => {
       renderAt(pathname)
