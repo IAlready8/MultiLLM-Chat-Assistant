@@ -17,6 +17,7 @@ export default function Navbar() {
     { name: 'Pipeline', path: '/pipeline' },
     { name: 'Personas', path: '/personas' },
     { name: 'Analytics', path: '/analytics' },
+    { name: 'Billing', path: '/billing' },
     { name: 'Settings', path: '/settings' },
   ]
 
@@ -33,7 +34,7 @@ export default function Navbar() {
               href={item.path}
               data-active={pathname === item.path ? 'true' : 'false'}
               aria-current={pathname === item.path ? 'page' : undefined}
-              className={`nav-rainbow-link relative px-4 py-2 rounded-lg transition-all smooth-transition ${
+              className={`nav-rainbow-link relative whitespace-nowrap px-3 py-2 rounded-lg transition-all smooth-transition ${
                 pathname === item.path
                   ? 'text-foreground font-medium bg-card/80 border border-border shadow-sm rainbow-outline-hover'
                   : 'text-muted-foreground hover:text-foreground hover:bg-card/50'

@@ -138,4 +138,52 @@ describe('BillingClient', () => {
       expect(location.href).toBe('https://stripe.test/portal')
     })
   })
+  it('shows each plan\'s enforced monthly allowance and customer-facing billing terms', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }))
+
+    render(
+      <BillingClient
+        tier="FREE"
+        periodEnd={null}
+        plans={BILLING_PLANS}
+        freePlanWeeklySavedBriefGuidance={FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE}
+        weeklySavedBriefComparisons={0}
+        checkoutEnabled={true}
+        portalEnabled={true}
+        proPriceLabel="$10 / month"
+        planAllowances={{ FREE: 50, PRO: 2000, ENTERPRISE: null }}
+      />
+    )
+
+    expect(await screen.findByText('50 generations per month.')).toBeInTheDocument()
+    expect(screen.getByText('2,000 generations per month.')).toBeInTheDocument()
+    expect(screen.getByText('Unlimited generations per month.')).toBeInTheDocument()
+    expect(screen.getByText('$10 / month')).toBeInTheDocument()
+    expect(screen.getByText('Billed by subscription. Cancel any time from this page.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute('href', '/terms')
+    const text = document.body.textContent ?? ''
+    expect(text).not.toContain('stripe-self-serve')
+    expect(text).not.toContain('sales-led')
+    expect(text).not.toContain('Operator-managed')
+  })
+
+  it('states no allowance when the server is not enforcing one', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }))
+
+    render(
+      <BillingClient
+        tier="FREE"
+        periodEnd={null}
+        plans={BILLING_PLANS}
+        freePlanWeeklySavedBriefGuidance={FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE}
+        weeklySavedBriefComparisons={0}
+        checkoutEnabled={true}
+        portalEnabled={true}
+        planAllowances={null}
+      />
+    )
+
+    expect(await screen.findByText('Upgrade to Pro')).toBeInTheDocument()
+    expect(screen.queryByText(/generations per month/)).not.toBeInTheDocument()
+  })
 })
