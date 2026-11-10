@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { AccountProfileForm } from '@/components/account-profile-form'
 import { ChangePasswordForm } from '@/components/change-password-form'
 import { AccountHistoryExport } from '@/components/account-history-export'
+import { DeleteAccountForm } from '@/components/delete-account-form'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
@@ -339,6 +340,13 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </CardContent>
+          </Card>
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <CardTitle>Delete Account</CardTitle>
+              <CardDescription>Permanently remove your account and all of its data</CardDescription>
+            </CardHeader>
+            <CardContent><DeleteAccountForm /></CardContent>
           </Card>
         </TabsContent>
       </Tabs>
