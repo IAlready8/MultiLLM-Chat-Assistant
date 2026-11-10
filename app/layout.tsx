@@ -9,6 +9,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { AcquisitionAttributionCapture } from '@/components/acquisition-attribution-capture'
 import { auth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/toaster";
+import { SiteFooter } from "@/components/site-footer";
 
 type DynamicUsageError = Error & { digest?: string }
 
@@ -63,6 +64,7 @@ export default async function RootLayout({
                 <main className="flex-1">
                   {children}
                 </main>
+                <SiteFooter />
               </div>
             </AuthGuard>
             <Toaster />
