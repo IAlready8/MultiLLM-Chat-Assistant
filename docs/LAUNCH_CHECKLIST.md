@@ -56,9 +56,11 @@ In this order:
 1. In Stripe live mode, confirm the Pro product has one active, fixed,
    recurring price.
 2. Set `STRIPE_SECRET_KEY` and `STRIPE_PRO_PRICE_ID`.
-3. Create a webhook endpoint at `<NEXTAUTH_URL>/api/webhooks/stripe` for the
-   subscription and invoice events, and set `STRIPE_WEBHOOK_SECRET` to its
-   signing secret. All three Stripe variables must be set together or the
+3. Create a webhook endpoint at `<NEXTAUTH_URL>/api/webhooks/stripe` for
+   `checkout.session.completed`, `customer.subscription.created`,
+   `customer.subscription.updated`, `customer.subscription.deleted`,
+   `invoice.paid` and `invoice.payment_failed`, and set
+   `STRIPE_WEBHOOK_SECRET` to its signing secret. All three Stripe variables must be set together or the
    app refuses to start in production.
 4. Enable the Customer Portal in Stripe (cancel subscription and update
    payment method).

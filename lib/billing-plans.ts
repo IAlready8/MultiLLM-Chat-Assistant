@@ -22,7 +22,7 @@ export const BILLING_PLANS: BillingPlan[] = [
     subscriptionModel: 'none',
     billingSummary: 'No payment required.',
     weeklySavedBriefComparisonGuidance: 'Best fit for up to 3 weekly saved brief comparisons.',
-    analyticsAccess: 'Core workflow telemetry and activation progress.',
+    analyticsAccess: 'Core workflow analytics.',
     personaAccess: 'Reusable personas supported.',
     comparisonAccess: 'Multi-provider comparison available.',
     selfServe: false,
