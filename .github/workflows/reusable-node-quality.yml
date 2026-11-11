@@ -55,7 +55,7 @@ jobs:
         if: inputs.package-manager == 'pnpm'
         uses: pnpm/action-setup@v4
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.node-version }}
       - name: Check package manager and lockfile
