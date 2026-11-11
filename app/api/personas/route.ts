@@ -13,6 +13,7 @@ import {
   invalidateApiReadCache,
 } from '@/lib/api-read-cache'
 import { z } from 'zod'
+import { enforceWorkspaceWriteLimit } from '@/lib/route-rate-limit'
 
 // Zod schema for persona validation
 const personaSchema = z.object({
@@ -70,6 +71,8 @@ export const POST = withApiMetrics(async (req: Request) => {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   const body = await readApiObject(req)
   if (body instanceof NextResponse) return body

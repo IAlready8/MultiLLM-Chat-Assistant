@@ -43,6 +43,13 @@ describe('mandatory-auth routing', () => {
     '/api/health',
     '/api/webhooks/stripe',
     '/api/cron/generations',
+    '/terms',
+    '/privacy',
+    '/robots.txt',
+    '/.well-known/security.txt',
+    '/pricing',
+    '/support',
+    '/sitemap.xml',
   ])('keeps %s public', async (path) => {
     const response = await middleware(
       new NextRequest(`http://localhost:3000${path}`),
@@ -51,6 +58,18 @@ describe('mandatory-auth routing', () => {
     expect(response.status).toBe(200)
     expect(mockDecode).not.toHaveBeenCalled()
   })
+
+  it.each(['/termsandmore', '/privacy-export', '/api/terms', '/settings', '/robots.txt.bak', '/.well-known/other', '/pricing-admin', '/supporters', '/sitemap.xml.bak'])(
+    'does not widen public access to %s',
+    async (path) => {
+      const response = await middleware(
+        new NextRequest(`http://localhost:3000${path}`),
+      )
+
+      expect([307, 401, 500]).toContain(response.status)
+      expect(response.status).not.toBe(200)
+    },
+  )
 
   it('rejects cross-origin mutations before session processing', async () => {
     const response = await middleware(new NextRequest('http://localhost:3000/api/config', { method: 'POST', headers: { origin: 'https://attacker.example' } }))

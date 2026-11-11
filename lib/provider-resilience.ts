@@ -68,9 +68,8 @@
  * `PROVIDER_BREAKER_THRESHOLD`    consecutive failures to open (default 5)
  * `PROVIDER_BREAKER_OPEN_MS`      how long to stay open (default 30000)
  *
- * `LLM_FETCH_RETRIES` is an existing name in this repository: it is already
- * read by `services/api-client.ts` and `services/server-api-client.ts`. This
- * module reuses it rather than introducing a competing knob.
+ * `LLM_FETCH_RETRIES` is the long-standing name for this knob in this
+ * repository and in deployed environments. This module is now its only reader.
  *
  * TEST ENVIRONMENT
  * ----------------

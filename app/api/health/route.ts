@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { metrics } from '@/lib/api-logger'
 import { getCacheDiagnostics } from '@/lib/cache'
+import { coalesce } from '@/lib/coalesce'
 import prisma from '@/lib/prisma'
 import { getRateLimitDiagnostics, probeRateLimitBackend } from '@/lib/rate-limit'
 import { getReleaseMetadata } from '@/lib/release-metadata'
@@ -85,6 +86,16 @@ async function probeDatabase(): Promise<{
   }
 }
 
+// This endpoint is public and unauthenticated, and each probe costs real
+// database and limiter round trips. Coalescing means a burst of health
+// requests shares one in-flight probe per instance instead of multiplying
+// into that many queries. Results are not cached, so they are never stale.
+const probeDatabaseOnce = coalesce(probeDatabase)
+const probeRateLimitOnce = coalesce(async () => {
+  await probeRateLimitBackend()
+  return getRateLimitDiagnostics()
+})
+
 // Health check API route. Each dependency check reports its own duration;
 // the top-level response time covers the whole request.
 export async function GET(request: NextRequest) {
@@ -97,11 +108,8 @@ export async function GET(request: NextRequest) {
   // Independent dependency probes run concurrently so one slow dependency
   // does not inflate the others' timings or the total response time.
   const [database, rateLimit, sidecar] = await Promise.all([
-    timed(probeDatabase),
-    timed(async () => {
-      await probeRateLimitBackend()
-      return getRateLimitDiagnostics()
-    }),
+    timed(probeDatabaseOnce),
+    timed(probeRateLimitOnce),
     timed(() => getSidecarDiagnostics()),
   ])
   const cache = await timed(() => getCacheDiagnostics())

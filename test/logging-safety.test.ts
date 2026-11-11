@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiLog } from '@/lib/api-logger'
 import { logger } from '@/lib/logger'
 import { sanitizeLogValue } from '@/lib/log-sanitizer'
+import { version as appVersion } from '@/package.json'
 
 const originalCommitSha = process.env.VERCEL_GIT_COMMIT_SHA
 const originalCommitRef = process.env.VERCEL_GIT_COMMIT_REF
@@ -61,7 +62,7 @@ describe('logging safety', () => {
 
     const payload = JSON.parse(String(errorSpy.mock.calls[0]?.[0]))
     expect(payload.release).toEqual({
-      version: '0.2.0-private-pilot.3',
+      version: appVersion,
       commitSha: null,
       commitShort: null,
       branch: null,
@@ -88,7 +89,7 @@ describe('logging safety', () => {
 
     const payload = JSON.parse(String(errorSpy.mock.calls[0]?.[0]))
     expect(payload.release).toEqual({
-      version: '0.2.0-private-pilot.3',
+      version: appVersion,
       commitSha: null,
       commitShort: null,
       branch: null,

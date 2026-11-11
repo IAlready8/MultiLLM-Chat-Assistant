@@ -88,7 +88,7 @@ else
   ok "Provider services do not contain placeholder NotImplementedError stubs"
 fi
 
-if rg -n "streamChatMessage\(|/api/llm/chat" app/api/llm/stream/route.ts services/api-service.ts >/dev/null 2>&1; then
+if rg -n "streamChatMessage\(|/api/llm/chat" app/api/llm/stream/route.ts >/dev/null 2>&1; then
   warn "Streaming currently traverses a separate service layer; run parity tests after Next upgrade."
 fi
 

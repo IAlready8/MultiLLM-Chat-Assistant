@@ -1,4 +1,4 @@
-# MultiLLM Chat Assistant
+# ManyOne
 
 [![CI](https://github.com/IAlready8/MultiLLM-Chat-Assistant/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/IAlready8/MultiLLM-Chat-Assistant/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/IAlready8/MultiLLM-Chat-Assistant)](LICENSE)

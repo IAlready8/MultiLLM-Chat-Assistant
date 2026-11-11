@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { AccountProfileForm } from '@/components/account-profile-form'
 import { ChangePasswordForm } from '@/components/change-password-form'
 import { AccountHistoryExport } from '@/components/account-history-export'
+import { DeleteAccountForm } from '@/components/delete-account-form'
+import { AccountDataDownload } from '@/components/account-data-download'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
@@ -19,15 +21,15 @@ import { supportedProviderIds } from '@/lib/provider-registry'
 
 const PROFILE_STORAGE_KEY = 'settings.profile'
 const FONT_SIZE_STORAGE_KEY = 'settings.fontSize'
-// Legacy key from a removed no-op toggle. Kept in the reset list so a reset
-// clears any value an older build left in this browser.
-const ANALYTICS_STORAGE_KEY = 'settings.analyticsEnabled'
+// Written by an earlier release for a toggle that never affected collection.
+// Still listed so a configuration reset clears it from the browser.
+const LEGACY_ANALYTICS_STORAGE_KEY = 'settings.analyticsEnabled'
 const LOCAL_PREFERENCE_KEYS = [
   'modelSettings',
   'userPreferences',
   PROFILE_STORAGE_KEY,
   FONT_SIZE_STORAGE_KEY,
-  ANALYTICS_STORAGE_KEY,
+  LEGACY_ANALYTICS_STORAGE_KEY,
 ]
 
 type FontSizeOption = 'small' | 'normal' | 'large'
@@ -270,6 +272,13 @@ export default function SettingsPage() {
 
         <TabsContent value="advanced" className="space-y-6">
           <Card>
+            <CardHeader>
+              <CardTitle>Your Account Data</CardTitle>
+              <CardDescription>A portable copy of what this workspace holds about you</CardDescription>
+            </CardHeader>
+            <CardContent><AccountDataDownload /></CardContent>
+          </Card>
+          <Card>
             <CardHeader><CardTitle>Server Conversation Archive</CardTitle></CardHeader>
             <CardContent><AccountHistoryExport /></CardContent>
           </Card>
@@ -313,6 +322,13 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </CardContent>
+          </Card>
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <CardTitle>Delete Account</CardTitle>
+              <CardDescription>Permanently remove your account and all of its data</CardDescription>
+            </CardHeader>
+            <CardContent><DeleteAccountForm /></CardContent>
           </Card>
         </TabsContent>
       </Tabs>

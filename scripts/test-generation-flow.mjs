@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import pg from 'pg'
 import bcrypt from 'bcryptjs'
@@ -269,7 +269,74 @@ try {
   assert.deepEqual(quotaAfterRestore.rows, quotaBeforeRestore.rows, 'Restore must neither add usage nor change existing accounting')
   await db.query('DELETE FROM "User" WHERE id = $1', [outsider])
   assert.equal((await other('/api/conversations')).status, 401, 'A deleted account must not retain access through its session token')
-  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'server-assembled model context', 'owned turn-aligned message pagination', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation'], providerCalls }))
+  // Plan usage and the account data export, against real rows.
+  const usageResponse = await historian('/api/account/usage')
+  assert.equal(usageResponse.status, 200)
+  const usage = await usageResponse.json()
+  assert.equal(usage.tier, 'FREE')
+  assert.equal(usage.quota.limit, 8, 'Usage must report the enforced FREE allowance')
+  assert.equal(usage.quota.remaining, Math.max(0, 8 - usage.quota.used))
+  assert.equal(usage.paymentNeedsAttention, false)
+  assert.equal((await fetch(new URL('/api/account/usage', base), { redirect: 'manual' })).status, 401, 'Usage must require a session')
+  const dataResponse = await historian('/api/account/data')
+  assert.equal(dataResponse.status, 200)
+  assert.match(dataResponse.headers.get('content-disposition') ?? '', /^attachment; filename="account-data-/)
+  const dataText = await dataResponse.text()
+  const accountData = JSON.parse(dataText)
+  assert.equal(accountData.profile.id, historianId)
+  assert.equal(accountData.profile.email, `${historianId}@example.test`)
+  assert.ok(accountData.connectedProviders.length > 0 && accountData.connectedProviders.every(item => typeof item.hasSavedApiKey === 'boolean'))
+  assert.ok(accountData.conversations.count > 0)
+  const storedSecrets = (await db.query('SELECT "apiKey", "settings" FROM "ProviderConfig" WHERE "userId" = $1', [historianId])).rows
+  const storedHash = (await db.query('SELECT password FROM "User" WHERE id = $1', [historianId])).rows[0].password
+  for (const secret of [storedHash, ...storedSecrets.flatMap(row => [row.apiKey, row.settings])].filter(value => typeof value === 'string' && value.length >= 12)) {
+    assert.ok(!dataText.includes(secret), 'Account data export must not contain stored secrets')
+  }
+  assert.ok(!dataText.includes(owner), 'Account data export must not contain another account')
+  for (const path of ['/pricing', '/support', '/terms', '/privacy', '/sitemap.xml', '/robots.txt']) {
+    assert.equal((await fetch(new URL(path, base), { redirect: 'manual' })).status, 200, `${path} must be readable signed out`)
+  }
+  // Self-serve account deletion against the real database: every refusal path
+  // leaves the account intact, and one confirmed request removes all of it.
+  const deleteAccount = (client, body, headers = {}) => client('/api/account', { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) })
+  const historianEmail = `${historianId}@example.test`
+  const ownedCounts = async id => (await db.query('SELECT (SELECT COUNT(*) FROM "User" WHERE id = $1)::int AS users, (SELECT COUNT(*) FROM "Conversation" WHERE "userId" = $1)::int AS conversations, (SELECT COUNT(*) FROM "Message" m JOIN "Conversation" c ON c.id = m."conversationId" WHERE c."userId" = $1)::int AS messages, (SELECT COUNT(*) FROM "Generation" WHERE "userId" = $1)::int AS generations, (SELECT COUNT(*) FROM "ProviderConfig" WHERE "userId" = $1)::int AS configs, (SELECT COUNT(*) FROM "LlmQuotaUsage" WHERE "userId" = $1)::int AS quota, (SELECT COUNT(*) FROM "Analytics" WHERE "userId" = $1)::int AS analytics', [id])).rows[0]
+  await db.query('INSERT INTO "Analytics" (id, event, "userId") VALUES ($1, $2, $3)', [`deletion-analytics-${runId}`, 'analytics_viewed', historianId])
+  const historianBefore = await ownedCounts(historianId)
+  const ownerBefore = await ownedCounts(owner)
+  assert.ok(historianBefore.conversations > 0 && historianBefore.messages > 0 && historianBefore.generations > 0 && historianBefore.configs > 0 && historianBefore.analytics > 0, 'Deletion must be exercised against an account that owns data')
+  assert.equal((await deleteAccount(historian, {})).status, 400)
+  assert.equal((await deleteAccount(historian, { confirmEmail: `${owner}@example.test` })).status, 400, 'Another account email must not confirm deletion')
+  assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, userId: owner })).status, 400, 'A caller must not be able to name a different account')
+  const passwordRequired = await deleteAccount(historian, { confirmEmail: historianEmail })
+  assert.equal(passwordRequired.status, 400)
+  assert.equal((await passwordRequired.json()).code, 'PASSWORD_REQUIRED')
+  assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, password: 'wrong-password' })).status, 401)
+  assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, password }, { Origin: 'https://attacker.example' })).status, 403, 'Cross-origin deletion must be refused')
+  assert.deepEqual(await ownedCounts(historianId), historianBefore, 'Refused deletion attempts must not remove anything')
+  // Five attempts were consumed above; the sixth in the window is throttled
+  // even though it carries valid credentials.
+  assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, password })).status, 429, 'Deletion attempts must be rate limited per account')
+  assert.deepEqual(await ownedCounts(historianId), historianBefore)
+  // Clear only this account's deletion bucket in whichever shared backend is
+  // active, so the confirmed request below is evaluated on its own merits.
+  const deletionBucket = `account-delete:${historianId}`
+  if (process.env.RATE_LIMIT_BACKEND === 'postgres') {
+    await db.query('DELETE FROM "RateLimitBucket" WHERE id = $1', [createHash('sha256').update(deletionBucket).digest('hex')])
+  } else if (process.env.REDIS_URL) {
+    const { createClient } = await import('redis')
+    const redis = createClient({ url: process.env.REDIS_URL })
+    await redis.connect()
+    await redis.del(deletionBucket)
+    await redis.quit()
+  }
+  const deleted = await deleteAccount(historian, { confirmEmail: historianEmail.toUpperCase(), password })
+  assert.equal(deleted.status, 200, `Confirmed deletion failed: ${deleted.status}`)
+  assert.deepEqual(await ownedCounts(historianId), { users: 0, conversations: 0, messages: 0, generations: 0, configs: 0, quota: 0, analytics: 0 }, 'Deletion must remove the account and everything it owns')
+  assert.deepEqual(await ownedCounts(owner), ownerBefore, 'Deleting one account must not touch another account')
+  assert.equal((await historian('/api/conversations')).status, 401, 'A self-deleted account must not retain access through its session token')
+  assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, password })).status, 401)
+  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'server-assembled model context', 'owned turn-aligned message pagination', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation', 'self-serve account deletion with cascade, refusal paths and rate limit', 'plan usage, secret-free account data export and public pages'], providerCalls }))
 } finally {
   modelApi.closeAllConnections()
   if (modelApi.listening) await new Promise(resolve => modelApi.close(resolve))

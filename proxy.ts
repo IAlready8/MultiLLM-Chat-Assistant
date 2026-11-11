@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { decode } from 'next-auth/jwt'
 import { readSessionTokenFromCookies } from '@/lib/session-cookie'
+import { PUBLIC_PAGE_PATHS } from '@/lib/public-routes'
 
-const PUBLIC_PATHS = new Set([
+const PUBLIC_PATHS = new Set<string>([
   '/auth/signin',
   '/auth/register',
   '/auth/signout',
@@ -12,6 +13,12 @@ const PUBLIC_PATHS = new Set([
   '/api/health',
   '/api/webhooks',
   '/api/cron/generations', // Bearer-authenticated by the route, not a browser session.
+  // Legal documents must be readable before an account exists.
+  ...PUBLIC_PAGE_PATHS,
+  // Crawler policy and vulnerability-disclosure contact (RFC 9116).
+  '/robots.txt',
+  '/sitemap.xml',
+  '/.well-known/security.txt',
 ])
 
 const isPublicPath = (pathname: string): boolean => {

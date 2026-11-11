@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
+import { version as appVersion } from '@/package.json'
 
 const mockQueryRaw = vi.fn()
 const mockMetricsSnapshot = vi.fn()
@@ -149,9 +150,9 @@ describe('/api/health route', () => {
     expect(payload.checks.api.responseTime).toBe(
       payload.checks.api.responseTimeMs
     )
-    expect(payload.version).toBe('0.2.0-private-pilot.3')
+    expect(payload.version).toBe(appVersion)
     expect(payload.release).toEqual({
-      version: '0.2.0-private-pilot.3',
+      version: appVersion,
       commitSha: null,
       commitShort: null,
       branch: null,
@@ -373,7 +374,7 @@ describe('/api/health route', () => {
     expect(response.status).toBe(200)
     const payload = await response.json()
     expect(payload.release).toEqual({
-      version: '0.2.0-private-pilot.3',
+      version: appVersion,
       commitSha: '38bd6ff663ad85a9586de66c42978458fd8f2c25',
       commitShort: '38bd6ff',
       branch: 'main',
@@ -439,5 +440,38 @@ describe('/api/health route', () => {
       'utf8',
     )
     expect(source).not.toMatch(/^\s*['"]use server['"]/m)
+  })
+  it('shares one database and limiter probe across a burst of concurrent requests', async () => {
+    let release: (value: unknown) => void = () => undefined
+    const gate = new Promise((resolve) => {
+      release = resolve
+    })
+    mockQueryRaw.mockImplementation(async () => {
+      await gate
+      return [{ ok: 1 }]
+    })
+
+    const burst = Array.from({ length: 40 }, () =>
+      GET(new NextRequest('http://localhost:3000/api/health')),
+    )
+    await Promise.resolve()
+    release(undefined)
+    const responses = await Promise.all(burst)
+
+    expect(responses.every((response) => response.status === 200)).toBe(true)
+    // One probe is two queries (connectivity, then schema), not 40 x 2.
+    expect(mockQueryRaw).toHaveBeenCalledTimes(2)
+    expect(mockProbeRateLimitBackend).toHaveBeenCalledTimes(1)
+  })
+
+  it('probes again on the next request so results are never stale', async () => {
+    await GET(new NextRequest('http://localhost:3000/api/health'))
+    mockQueryRaw.mockRejectedValue(new Error('connection refused'))
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/health'))
+    const payload = await response.json()
+
+    expect(payload.checks.database.status).toBe('degraded')
+    expect(mockProbeRateLimitBackend).toHaveBeenCalledTimes(2)
   })
 })
