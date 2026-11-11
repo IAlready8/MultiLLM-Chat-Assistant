@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Provider generation requests are never retried automatically. A provider
+  can bill a generation even when no response bytes arrive, so only read-only
+  provider calls keep the bounded retry policy (ported from #211).
+- `scripts/test-account-browser.mjs` allows 30 seconds for each UI assertion.
+  A cold `next dev` first load measured 5.2 seconds against the default 5
+  second window and failed runs in which every request had succeeded.
 - `/api/health` shares one in-flight database and limiter probe across
   concurrent requests. Nothing is cached, so status is never stale.
 
