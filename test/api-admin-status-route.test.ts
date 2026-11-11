@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
+import { version as appVersion } from '@/package.json'
 
 const stripeState = vi.hoisted(() => ({
   apiConfigured: true,
@@ -190,9 +191,12 @@ describe('/api/admin/status route', () => {
     expect(payload.generatedAt).toBeTypeOf('string')
     expect(payload.overallStatus).toBe('ok')
     expect(payload.checks).toHaveLength(8)
-    expect(payload.version).toBe('0.2.0-private-pilot.3')
+    // Launch findings ride alongside health checks and never alter them.
+    expect(['ok', 'warning', 'error']).toContain(payload.launchReadiness.status)
+    expect(Array.isArray(payload.launchReadiness.findings)).toBe(true)
+    expect(payload.version).toBe(appVersion)
     expect(payload.release).toEqual({
-      version: '0.2.0-private-pilot.3',
+      version: appVersion,
       commitSha: null,
       commitShort: null,
       branch: null,
@@ -390,7 +394,7 @@ describe('/api/admin/status route', () => {
     expect(response.status).toBe(200)
     expect(payload.source).toBe('admin-status')
     expect(payload.release).toEqual({
-      version: '0.2.0-private-pilot.3',
+      version: appVersion,
       commitSha: '38bd6ff663ad85a9586de66c42978458fd8f2c25',
       commitShort: '38bd6ff',
       branch: 'main',

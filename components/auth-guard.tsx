@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
+import { isPublicPagePath } from '@/lib/public-routes'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -15,7 +16,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter()
   const pathname = usePathname()
   const currentPath = pathname ?? '/'
-  const isAuthPage = currentPath.startsWith('/auth')
+  // Auth pages and public legal pages render without a session.
+  const isAuthPage =
+    currentPath.startsWith('/auth') || isPublicPagePath(currentPath)
   const signInUrl = `/auth/signin?callbackUrl=${encodeURIComponent(currentPath)}`
 
   useEffect(() => {

@@ -4,7 +4,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BillingPlan, BillingPlanId } from '@/lib/billing-plans'
+import {
+  describePlanAllowance,
+  type BillingPlan,
+  type BillingPlanId,
+  type PlanAllowances,
+} from '@/lib/billing-plans'
 
 type SubscriptionTier = BillingPlanId
 
@@ -15,6 +20,8 @@ interface BillingClientProps {
   hasBillingAccount?: boolean
   quota?: { limit: number | null; used: number; resetsAt: string } | null
   proPriceLabel?: string
+  /** Enforced monthly allowances per plan; null when none are configured. */
+  planAllowances?: PlanAllowances | null
   periodEnd: string | null
   plans: BillingPlan[]
   freePlanWeeklySavedBriefGuidance: number
@@ -43,7 +50,7 @@ const formatPeriodEnd = (periodEnd: string | null) => {
 export function BillingClient({
   tier,
   periodEnd,
-  status, cancelAtPeriodEnd, hasBillingAccount, quota, proPriceLabel,
+  status, cancelAtPeriodEnd, hasBillingAccount, quota, proPriceLabel, planAllowances,
   plans,
   freePlanWeeklySavedBriefGuidance,
   weeklySavedBriefComparisons,
@@ -201,9 +208,17 @@ export function BillingClient({
         </CardContent>
       </Card>
 
+      <p className="text-sm text-muted-foreground">
+        Plans cover this workspace only. Usage charges from the AI providers you
+        connect are billed by those providers on your own API keys. See the{' '}
+        <a className="text-primary hover:underline" href="/terms">Terms of Service</a>{' '}
+        for renewal, cancellation and refund terms.
+      </p>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {plans.map(plan => {
           const isCurrentPlan = plan.id === tier
+          const allowance = describePlanAllowance(plan.id, planAllowances)
           return (
             <Card key={plan.id} className={isCurrentPlan ? 'border-primary' : ''}>
               <CardHeader>
@@ -215,11 +230,12 @@ export function BillingClient({
               <CardContent className="space-y-2 text-sm text-muted-foreground">
                 {plan.id === 'PRO' && proPriceLabel ? <p className="font-medium text-foreground">{proPriceLabel}</p> : null}
                 <p>{plan.summary}</p>
+                {allowance ? <p className="font-medium text-foreground">{allowance}</p> : null}
                 <p>{plan.weeklySavedBriefComparisonGuidance}</p>
                 <p>Analytics: {plan.analyticsAccess}</p>
                 <p>Personas: {plan.personaAccess}</p>
                 <p>Comparison: {plan.comparisonAccess}</p>
-                <p>Subscription model: {plan.subscriptionModel}</p>
+                <p>{plan.billingSummary}</p>
               </CardContent>
             </Card>
           )

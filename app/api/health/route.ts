@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { metrics } from '@/lib/api-logger'
 import { getCacheDiagnostics } from '@/lib/cache'
+import { coalesce } from '@/lib/coalesce'
 import prisma from '@/lib/prisma'
 import { getRateLimitDiagnostics, probeRateLimitBackend } from '@/lib/rate-limit'
 import { getReleaseMetadata } from '@/lib/release-metadata'
@@ -38,23 +39,62 @@ async function timed<T>(run: () => Promise<T> | T): Promise<{ value: T; duration
   return { value, durationMs: Date.now() - startedAt }
 }
 
+type SchemaState = 'current' | 'behind' | 'unchecked'
+
+// Postgres SQLSTATE codes for a missing column (42703) or table (42P01).
+const MISSING_SCHEMA_PATTERN = /\b(42703|42P01)\b|does not exist/i
+
+function isMissingSchemaError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { code?: unknown; message?: unknown; meta?: { code?: unknown; message?: unknown } }
+  return [candidate.code, candidate.message, candidate.meta?.code, candidate.meta?.message]
+    .some((value) => typeof value === 'string' && MISSING_SCHEMA_PATTERN.test(value))
+}
+
 async function probeDatabase(): Promise<{
   status: 'connected' | 'degraded'
+  schema: SchemaState
   message?: string
 }> {
+  const progress: { stage: 'connect' | 'schema' } = { stage: 'connect' }
   try {
-    await withTimeout(Promise.resolve(prisma.$queryRaw`SELECT 1`), DATABASE_PROBE_TIMEOUT_MS)
-    return { status: 'connected' }
+    await withTimeout(
+      (async () => {
+        await prisma.$queryRaw`SELECT 1`
+        progress.stage = 'schema'
+        // Zero-row read of columns that every authenticated request depends on.
+        // It fails only when a required migration has not been applied.
+        await prisma.$queryRaw`SELECT "role", "passwordVersion" FROM "User" LIMIT 0`
+      })(),
+      DATABASE_PROBE_TIMEOUT_MS,
+    )
+    return { status: 'connected', schema: 'current' }
   } catch (error) {
-    return {
-      status: 'degraded',
-      message:
-        error instanceof ProbeTimeoutError
-          ? 'Database health check timed out'
-          : 'Database health check failed',
+    if (error instanceof ProbeTimeoutError) {
+      return { status: 'degraded', schema: 'unchecked', message: 'Database health check timed out' }
     }
+    if (progress.stage === 'schema') {
+      return isMissingSchemaError(error)
+        ? {
+            status: 'degraded',
+            schema: 'behind',
+            message: 'Database schema is behind this release; apply pending migrations',
+          }
+        : { status: 'degraded', schema: 'unchecked', message: 'Database schema check failed' }
+    }
+    return { status: 'degraded', schema: 'unchecked', message: 'Database health check failed' }
   }
 }
+
+// This endpoint is public and unauthenticated, and each probe costs real
+// database and limiter round trips. Coalescing means a burst of health
+// requests shares one in-flight probe per instance instead of multiplying
+// into that many queries. Results are not cached, so they are never stale.
+const probeDatabaseOnce = coalesce(probeDatabase)
+const probeRateLimitOnce = coalesce(async () => {
+  await probeRateLimitBackend()
+  return getRateLimitDiagnostics()
+})
 
 // Health check API route. Each dependency check reports its own duration;
 // the top-level response time covers the whole request.
@@ -68,11 +108,8 @@ export async function GET(request: NextRequest) {
   // Independent dependency probes run concurrently so one slow dependency
   // does not inflate the others' timings or the total response time.
   const [database, rateLimit, sidecar] = await Promise.all([
-    timed(probeDatabase),
-    timed(async () => {
-      await probeRateLimitBackend()
-      return getRateLimitDiagnostics()
-    }),
+    timed(probeDatabaseOnce),
+    timed(probeRateLimitOnce),
     timed(() => getSidecarDiagnostics()),
   ])
   const cache = await timed(() => getCacheDiagnostics())
@@ -81,6 +118,7 @@ export async function GET(request: NextRequest) {
   )
 
   const databaseStatus = database.value.status
+  const databaseSchema = database.value.schema
   const databaseMessage = database.value.message
   const rateLimitDiagnostics = rateLimit.value
   const sidecarDiagnostics = sidecar.value
@@ -145,6 +183,7 @@ export async function GET(request: NextRequest) {
     checks: {
       database: {
         status: databaseStatus,
+        schema: databaseSchema,
         responseTime: database.durationMs,
         responseTimeMs: database.durationMs,
         ...(databaseMessage ? { message: databaseMessage } : {}),

@@ -1,6 +1,7 @@
 import { readApiObject } from '@/lib/api-input'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
+import { enforceRouteLimit } from '@/lib/route-rate-limit'
 import { getUserApiKey } from '@/lib/api-key-service'
 import { testProviderKey, validateApiKeyFormat } from '@/lib/provider-key-test'
 import {
@@ -112,9 +113,22 @@ export async function POST(request: NextRequest) {
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
+  // Every check makes this server call a provider endpoint. Without a ceiling
+  // an account could use it to hammer providers or to test stolen keys in bulk.
+  // Sized so loading Settings (one saved-key check per provider) stays clear.
+  const limited = await enforceRouteLimit({
+    scope: 'provider-key-test',
+    userId: user.id,
+    max: 60,
+    windowMs: 10 * 60 * 1000,
+    onUnavailable: 'deny',
+    errorBody: (message) => ({ valid: false, message, reason: 'rate_limited' }),
+  })
+  if (limited) return limited
+
   try {
     const body = await readApiObject(request)
-  if (body instanceof NextResponse) return body
+    if (body instanceof NextResponse) return body
     const providerRaw = body?.provider
     const testSaved = body?.testSaved === true
 

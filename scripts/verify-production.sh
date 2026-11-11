@@ -31,7 +31,7 @@ Examples:
   bash scripts/verify-production.sh --base-url https://example.vercel.app
   bash scripts/verify-production.sh --base-url https://example.vercel.app \
     --expected-commit-sha 0123456789abcdef0123456789abcdef01234567 \
-    --expected-version 0.2.0-private-pilot.3 \
+    --expected-version 0.2.0 \
     --require-oauth-provider google
   bash scripts/verify-production.sh --apply-migrations --require-stripe --require-sidecar
 

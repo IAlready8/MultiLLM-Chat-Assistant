@@ -6,6 +6,7 @@ import { Lock, Mail } from 'lucide-react'
 import { signIn, signOut, useSession } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { OAuthProviderButtons } from '@/components/oauth-provider-buttons'
+import { LegalConsentNotice } from '@/components/legal-consent-notice'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -228,6 +229,8 @@ export default function SignInPage() {
               {loading ? 'Signing in...' : 'Sign in with password'}
             </Button>
           </form>
+
+          <LegalConsentNotice />
         </CardContent>
 
         <CardFooter className="justify-center text-sm text-muted-foreground">

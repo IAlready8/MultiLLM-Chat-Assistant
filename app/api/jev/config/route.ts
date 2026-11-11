@@ -7,6 +7,7 @@ import {
 } from '@/lib/api-key-service'
 import { LlmRequestError, readBoundedJson } from '@/lib/llm-request'
 import prisma from '@/lib/prisma'
+import { enforceWorkspaceWriteLimit } from '@/lib/route-rate-limit'
 
 const MAX_CONFIG_BODY_BYTES = 4_096
 
@@ -67,6 +68,8 @@ export async function PUT(request: Request) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   let body: unknown
   try {
@@ -127,6 +130,8 @@ export async function DELETE() {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
 
   try {
     const { deleteUserProviderConfig } = await import('@/lib/api-key-service')

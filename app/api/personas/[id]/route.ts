@@ -11,6 +11,7 @@ import {
   invalidateApiReadCache,
 } from '@/lib/api-read-cache'
 import { z } from 'zod'
+import { enforceWorkspaceWriteLimit } from '@/lib/route-rate-limit'
 
 // Zod schema for updating a persona
 const updatePersonaSchema = z.object({
@@ -68,6 +69,8 @@ export const PUT = withApiMetrics(async (
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
   const id = await getPersonaIdFromContext(ctx)
 
   try {
@@ -129,6 +132,8 @@ export const DELETE = withApiMetrics(async (
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  const writeLimited = await enforceWorkspaceWriteLimit(user.id)
+  if (writeLimited) return writeLimited
   const id = await getPersonaIdFromContext(ctx)
 
   try {

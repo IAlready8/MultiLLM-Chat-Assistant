@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { readApiObject } from '@/lib/api-input'
 import prisma from '@/lib/prisma'
+import { enforceWorkspaceWriteLimit } from '@/lib/route-rate-limit'
 
 const schema = z.object({ name: z.string().trim().min(1).max(100) }).strict()
 const profile = (user: { name?: string | null; email?: string | null }) => ({
@@ -18,6 +19,8 @@ export async function GET() {
 export async function PATCH(request: Request) {
   const auth = await getAuthenticatedUser()
   if (auth instanceof NextResponse) return auth
+  const writeLimited = await enforceWorkspaceWriteLimit(auth.user.id)
+  if (writeLimited) return writeLimited
   const body = await readApiObject(request)
   if (body instanceof NextResponse) return body
   const input = schema.safeParse(body)

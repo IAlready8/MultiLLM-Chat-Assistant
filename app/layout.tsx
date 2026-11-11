@@ -9,6 +9,9 @@ import { AuthGuard } from "@/components/auth-guard";
 import { AcquisitionAttributionCapture } from '@/components/acquisition-attribution-capture'
 import { auth } from "@/lib/auth";
 import { Toaster } from "@/components/ui/toaster";
+import { SiteFooter } from "@/components/site-footer";
+import { UsageNotice } from "@/components/usage-notice";
+import { buildSiteMetadata } from "@/lib/site-metadata";
 
 type DynamicUsageError = Error & { digest?: string }
 
@@ -24,10 +27,7 @@ const isDynamicServerUsageError = (error: unknown): boolean => {
   )
 }
 
-export const metadata: Metadata = {
-  title: "MultiLLM Chat Assistant",
-  description: "A professional tool for interacting with multiple LLM APIs",
-};
+export const metadata: Metadata = buildSiteMetadata();
 
 export default async function RootLayout({
   children,
@@ -60,9 +60,11 @@ export default async function RootLayout({
             <AuthGuard>
               <div className="min-h-screen flex flex-col">
                 <Navbar />
+                <UsageNotice />
                 <main className="flex-1">
                   {children}
                 </main>
+                <SiteFooter />
               </div>
             </AuthGuard>
             <Toaster />

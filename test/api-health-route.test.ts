@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
+import { version as appVersion } from '@/package.json'
 
 const mockQueryRaw = vi.fn()
 const mockMetricsSnapshot = vi.fn()
@@ -43,6 +44,7 @@ const originalGithubRefName = process.env.GITHUB_REF_NAME
 describe('/api/health route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockQueryRaw.mockReset()
     mockQueryRaw.mockResolvedValue([{ ok: 1 }])
     mockProbeRateLimitBackend.mockResolvedValue(undefined)
     mockMetricsSnapshot.mockReturnValue({
@@ -148,9 +150,9 @@ describe('/api/health route', () => {
     expect(payload.checks.api.responseTime).toBe(
       payload.checks.api.responseTimeMs
     )
-    expect(payload.version).toBe('0.2.0-private-pilot.3')
+    expect(payload.version).toBe(appVersion)
     expect(payload.release).toEqual({
-      version: '0.2.0-private-pilot.3',
+      version: appVersion,
       commitSha: null,
       commitShort: null,
       branch: null,
@@ -183,6 +185,59 @@ describe('/api/health route', () => {
       alertLevel: 'critical',
       shouldPage: true,
     })
+  })
+
+  it('confirms the schema columns every authenticated request depends on', async () => {
+    const response = await GET(new NextRequest('http://localhost/api/health'))
+    const payload = await response.json()
+
+    expect(payload.checks.database.schema).toBe('current')
+    const queries = mockQueryRaw.mock.calls.map((call) => (call[0] as TemplateStringsArray).join('?'))
+    expect(queries).toEqual(['SELECT 1', 'SELECT "role", "passwordVersion" FROM "User" LIMIT 0'])
+  })
+
+  it.each([
+    ['missing column', Object.assign(new Error('column "role" does not exist'), { code: 'P2010', meta: { code: '42703' } })],
+    ['missing table', Object.assign(new Error('relation "User" does not exist'), { code: '42P01' })],
+  ])('reports a %s as a critical schema-behind database state', async (_label, schemaError) => {
+    mockQueryRaw.mockResolvedValueOnce([{ ok: 1 }]).mockRejectedValueOnce(schemaError)
+
+    const payload = await (await GET(new NextRequest('http://localhost/api/health'))).json()
+
+    expect(payload.status).toBe('degraded')
+    expect(payload.checks.database).toMatchObject({
+      status: 'degraded',
+      schema: 'behind',
+      message: 'Database schema is behind this release; apply pending migrations',
+    })
+    expect(payload.summary).toEqual({
+      coreAvailability: 'degraded',
+      degradedChecks: ['database'],
+      alertLevel: 'critical',
+      shouldPage: true,
+    })
+    expect(JSON.stringify(payload)).not.toContain('passwordVersion')
+  })
+
+  it('does not blame the schema for an unrelated failure of the schema query', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ ok: 1 }]).mockRejectedValueOnce(new Error('Connection terminated unexpectedly'))
+
+    const payload = await (await GET(new NextRequest('http://localhost/api/health'))).json()
+
+    expect(payload.checks.database).toMatchObject({
+      status: 'degraded',
+      schema: 'unchecked',
+      message: 'Database schema check failed',
+    })
+  })
+
+  it('skips the schema query when the database is unreachable', async () => {
+    mockQueryRaw.mockRejectedValue(new Error('connect ECONNREFUSED'))
+
+    const payload = await (await GET(new NextRequest('http://localhost/api/health'))).json()
+
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1)
+    expect(payload.checks.database).toMatchObject({ status: 'degraded', schema: 'unchecked' })
   })
 
   it('does not expose connection credentials in public health errors', async () => {
@@ -319,7 +374,7 @@ describe('/api/health route', () => {
     expect(response.status).toBe(200)
     const payload = await response.json()
     expect(payload.release).toEqual({
-      version: '0.2.0-private-pilot.3',
+      version: appVersion,
       commitSha: '38bd6ff663ad85a9586de66c42978458fd8f2c25',
       commitShort: '38bd6ff',
       branch: 'main',
@@ -385,5 +440,38 @@ describe('/api/health route', () => {
       'utf8',
     )
     expect(source).not.toMatch(/^\s*['"]use server['"]/m)
+  })
+  it('shares one database and limiter probe across a burst of concurrent requests', async () => {
+    let release: (value: unknown) => void = () => undefined
+    const gate = new Promise((resolve) => {
+      release = resolve
+    })
+    mockQueryRaw.mockImplementation(async () => {
+      await gate
+      return [{ ok: 1 }]
+    })
+
+    const burst = Array.from({ length: 40 }, () =>
+      GET(new NextRequest('http://localhost:3000/api/health')),
+    )
+    await Promise.resolve()
+    release(undefined)
+    const responses = await Promise.all(burst)
+
+    expect(responses.every((response) => response.status === 200)).toBe(true)
+    // One probe is two queries (connectivity, then schema), not 40 x 2.
+    expect(mockQueryRaw).toHaveBeenCalledTimes(2)
+    expect(mockProbeRateLimitBackend).toHaveBeenCalledTimes(1)
+  })
+
+  it('probes again on the next request so results are never stale', async () => {
+    await GET(new NextRequest('http://localhost:3000/api/health'))
+    mockQueryRaw.mockRejectedValue(new Error('connection refused'))
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/health'))
+    const payload = await response.json()
+
+    expect(payload.checks.database.status).toBe('degraded')
+    expect(mockProbeRateLimitBackend).toHaveBeenCalledTimes(2)
   })
 })
