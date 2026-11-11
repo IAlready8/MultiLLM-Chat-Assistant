@@ -139,7 +139,19 @@ jobs:
 
 
       - name: Install Chromium for authenticated browser QA
-        run: npx playwright install --with-deps chromium
+        # `--with-deps` also installs OS packages through apt. When the runner's
+        # Ubuntu mirror is unreachable that step fails before any test runs
+        # (2026-11-11: "Temporary failure resolving azure.archive.ubuntu.com"
+        # on three consecutive runs). The browser itself comes from Playwright's
+        # own CDN, so fall back to installing only the browser. The QA that
+        # follows is unchanged: if a system library were really missing,
+        # Chromium would fail to launch and the job would still fail.
+        run: |
+          if npx playwright install --with-deps chromium; then
+            exit 0
+          fi
+          echo "::warning title=Browser install::OS dependency install failed; installing the browser only."
+          npx playwright install chromium
 
       - name: Authenticated generation integration tests
         env:
