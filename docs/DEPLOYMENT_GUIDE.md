@@ -19,8 +19,8 @@ This is the platform-agnostic deployment reference for the current release basel
 - `npm run test:run`
 - `npm run build`
 - `npm run verify:prod`
-- Optional when DB schema changes are in scope:
-  - `npm run verify:prod -- --apply-migrations`
+- When DB schema changes are in scope: apply them to production **before** merge,
+  following [Change & Deploy Process, section 7](CHANGE_AND_DEPLOY_PROCESS.md#7-schema-changes-apply-first-then-merge)
 
 ## 3. Required Environment Families
 At minimum, configure:

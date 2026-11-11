@@ -288,6 +288,14 @@ export default function SettingsPage() {
               <CardDescription>Configure advanced application settings</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div data-testid="usage-analytics-disclosure">
+                <Label>Usage analytics</Label>
+                <p className="text-sm text-muted-foreground">
+                  Usage events are stored with your account to power your Analytics page: provider, model, token counts,
+                  response time, and which features you use. Prompt and response text is not part of these events.
+                  This recording is always on and is not anonymous.
+                </p>
+              </div>
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Legacy Local Data</Label>
