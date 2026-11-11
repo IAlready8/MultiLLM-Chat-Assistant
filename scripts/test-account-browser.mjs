@@ -2,7 +2,15 @@ import assert from 'node:assert/strict'
 import { mkdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { chromium, expect } from '@playwright/test'
+import { chromium, expect as baseExpect } from '@playwright/test'
+
+// These checks run against `next dev`, which compiles each page and API route
+// on first use. A cold first load (session, usage and config routes compiling
+// one after another) measured 5.2 seconds on a slow runner, just past
+// Playwright's default 5 second assertion window, and failed a run in which
+// every request had succeeded. Every assertion below is unchanged; only the
+// time allowed for the UI to reach the asserted state is.
+const expect = baseExpect.configure({ timeout: 30_000 })
 
 export async function testHistoryBrowser({ baseUrl, email, password }) {
   assert.ok(['localhost', '127.0.0.1'].includes(new URL(baseUrl).hostname))
