@@ -407,10 +407,11 @@ export async function providerFetch(
 
   const fetchImpl = options.fetchImpl ?? fetch
 
-  // One upstream dial plus the redirect guard. The body is never read here,
-  // which is what makes a retry of this unit safe for streaming calls: at
-  // retry time no provider bytes have reached the client. See
-  // `lib/provider-resilience.ts` for the full retry contract.
+  // A provider may charge a generation even if no response bytes arrive.
+  // Only read-only HTTP methods may retry; environment settings and caller
+  // overrides cannot silently repeat a potentially billable POST.
+  const resilience = options.resilience ?? resolveProviderResilienceConfig()
+  const retrySafe = ['GET', 'HEAD', 'OPTIONS'].includes((init.method ?? 'GET').toUpperCase())
   const attempt = async (): Promise<Response> => {
     const response = await fetchImpl(target.toString(), {
       ...init,
@@ -437,7 +438,7 @@ export async function providerFetch(
   return withProviderResilience(
     provider,
     attempt,
-    options.resilience ?? resolveProviderResilienceConfig(),
+    retrySafe ? resilience : { ...resilience, retries: 0 },
     options.resilienceHooks ?? {},
     options.signal ?? (init.signal as AbortSignal | undefined) ?? undefined,
   )

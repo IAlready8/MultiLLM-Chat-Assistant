@@ -101,7 +101,9 @@ try {
   const slow = payload('qa-slow', 0)
   const fast = payload('qa-fast', 1)
   const failed = payload('qa-fail', 2)
+  const callsBeforeParallel = providerCalls
   const streams = await Promise.all([slow, fast, failed].map(input => request('/api/llm/stream', json(input)).then(events)))
+  assert.equal(providerCalls - callsBeforeParallel, 3, 'A failed provider generation must not silently repeat a potentially billable POST')
   assert.equal(streams[0].at(-1).type, 'done')
   assert.deepEqual(streams[1].at(-1).usage, { prompt_tokens: 12, completion_tokens: 4, total_tokens: 16, usage_source: 'provider' })
   assert.equal(streams[2].at(-1).type, 'error')
@@ -336,7 +338,7 @@ try {
   assert.deepEqual(await ownedCounts(owner), ownerBefore, 'Deleting one account must not touch another account')
   assert.equal((await historian('/api/conversations')).status, 401, 'A self-deleted account must not retain access through its session token')
   assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, password })).status, 401)
-  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'server-assembled model context', 'owned turn-aligned message pagination', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation', 'self-serve account deletion with cascade, refusal paths and rate limit', 'plan usage, secret-free account data export and public pages'], providerCalls }))
+  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'no automatic provider POST retries', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'server-assembled model context', 'owned turn-aligned message pagination', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation', 'self-serve account deletion with cascade, refusal paths and rate limit', 'plan usage, secret-free account data export and public pages'], providerCalls }))
 } finally {
   modelApi.closeAllConnections()
   if (modelApi.listening) await new Promise(resolve => modelApi.close(resolve))
