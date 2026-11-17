@@ -85,3 +85,11 @@ describe('describePlanAllowance', () => {
     expect(describePlanAllowance('PRO', undefined)).toBeNull()
   })
 })
+
+it('reports production quota enforcement failures as release errors', () => {
+  expect(getLaunchReadiness({ NODE_ENV: 'production' }).findings).toContainEqual(expect.objectContaining({ id: 'plan-limits-required', severity: 'error' }))
+  for (const limits of ['{"FREE":50,"PRO":2000,"ENTERPRISE":null}', '{"FREE":1,"PRO":2,"ENTERPRISE":0}']) {
+    expect(getLaunchReadiness({ NODE_ENV: 'production', LLM_MONTHLY_REQUEST_LIMITS: limits }).findings).toContainEqual(expect.objectContaining({ id: 'plan-limits-invalid', severity: 'error' }))
+  }
+  expect(getLaunchReadiness({ NODE_ENV: 'production', LLM_MONTHLY_REQUEST_LIMITS: '{"FREE":50,"PRO":2000,"ENTERPRISE":0}' }).findings.some(f => f.id.startsWith('plan-limits-'))).toBe(false)
+})
