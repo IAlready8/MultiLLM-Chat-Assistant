@@ -159,7 +159,7 @@ export default function MultiChatPage() {
 
       // Create default instances for configured providers
       if (filtered.length > 0) {
-        const instances: ModelInstance[] = filtered.map((provider: string) => ({
+        const instances: ModelInstance[] = filtered.slice(0, MAX_COMPARISON_MODELS).map((provider: string) => ({
           id: generateInstanceId(),
           provider,
           model: getDefaultModel(provider)
