@@ -44,8 +44,8 @@ created end to end.
 ## 4. Plan allowances (required before selling Pro)
 
 Set `LLM_MONTHLY_REQUEST_LIMITS` to the approved numbers, for example
-`{"FREE":50,"PRO":2000,"ENTERPRISE":null}`. `null` means unlimited. Pro must
-allow more than Free or the paid plan sells nothing extra.
+`{"FREE":50,"PRO":2000,"ENTERPRISE":0}`. Production rejects missing, unlimited or malformed values. Free and Pro must
+match the approved offer. Enterprise is not sold.
 
 Check: `/pricing` and `/billing` show both allowances.
 

@@ -61,6 +61,9 @@ describe('MultiChatPage provider model picker', () => {
     await user.click(screen.getByRole('button', { name: /Ollama \(local\)/i }))
     expect(screen.getByRole('option', { name: 'Llama 3 (8B)' })).toBeVisible()
 
+    expect(screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })).toBeDisabled()
+    await user.click(screen.getAllByRole('button', { name: /Remove.*model/i })[0])
+
     await user.click(
       screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })
     )

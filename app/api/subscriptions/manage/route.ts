@@ -1,3 +1,4 @@
+import { getBillingOrigin } from '@/lib/billing-origin'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { enforceRouteLimit } from '@/lib/route-rate-limit'
@@ -12,20 +13,7 @@ import { logger } from '@/lib/logger'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { readBillingSource } from '@/lib/billing-source'
 
-// Get the absolute URL for Stripe callbacks
-const getBaseUrl = () => {
-  const configured = process.env.NEXTAUTH_URL?.trim()
-  if (configured) {
-    try {
-      return new URL(configured)
-    } catch {
-      console.warn(
-        'Invalid NEXTAUTH_URL; falling back to http://localhost:3000',
-      )
-    }
-  }
-  return new URL('http://localhost:3000')
-}
+
 
 /**
  * POST /api/subscriptions/manage
@@ -54,6 +42,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    const baseUrl = getBillingOrigin()
     ensureStripeConfigured('api')
 
     // Get the Stripe Customer ID
@@ -61,7 +50,6 @@ export async function POST(req: Request) {
       user.id,
       user.email,
     )
-    const baseUrl = getBaseUrl()
 
     // Create a Stripe Customer Portal session
     const portalSession = await stripe.billingPortal.sessions.create({
