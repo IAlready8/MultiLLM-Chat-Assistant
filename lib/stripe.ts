@@ -9,13 +9,18 @@ export const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET?.trim()
 const PLACEHOLDER_STRIPE_SECRET_KEY =
   'placeholder_stripe_secret_key_for_local_init'
 
-// Backward-compatible flag used by existing call sites
+export const stripeMode = /^(sk|rk)_test_/.test(STRIPE_SECRET_KEY ?? '') ? 'test'
+  : /^(sk|rk)_live_/.test(STRIPE_SECRET_KEY ?? '') ? 'live' : null
+const previewStripeAllowed = process.env.VERCEL_ENV !== 'preview' || stripeMode === 'test'
+
+// Preview databases and customer mappings are isolated from production.
+// Never let inherited live credentials operate on production billing there.
 export const isStripeConfigured = Boolean(
-  STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET,
+  STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET && previewStripeAllowed,
 )
 
 export const isStripeApiConfigured = Boolean(
-  STRIPE_SECRET_KEY && STRIPE_SECRET_KEY !== PLACEHOLDER_STRIPE_SECRET_KEY,
+  STRIPE_SECRET_KEY && STRIPE_SECRET_KEY !== PLACEHOLDER_STRIPE_SECRET_KEY && previewStripeAllowed,
 )
 export const isStripeCheckoutConfigured = Boolean(
   isStripeApiConfigured && STRIPE_PRO_PRICE_ID,
@@ -49,6 +54,7 @@ export function getStripeConfigurationUserMessage(
 export function ensureStripeConfigured(
   mode: 'api' | 'checkout' | 'webhook',
 ): void {
+  if (!previewStripeAllowed) throw new StripeConfigurationError('Preview billing requires Stripe sandbox credentials.')
   switch (mode) {
     case 'api':
       if (!isStripeApiConfigured) {
@@ -144,17 +150,22 @@ export async function getOrCreateStripeCustomer(
   )
 
   // 3. Save the new customer ID and ensure a subscription row exists
-  await prisma.subscription.upsert({
-    where: { userId },
-    update: {
-      stripeCustomerId: customer.id,
-    },
-    create: {
-      userId,
-      tier: 'FREE',
-      stripeCustomerId: customer.id,
-    },
-  })
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { deletionRequestedAt: true } })
+    if (!user || user.deletionRequestedAt) throw new Error('Account unavailable')
+    await tx.subscription.upsert({
+      where: { userId },
+      update: {
+        stripeCustomerId: customer.id,
+      },
+      create: {
+        userId,
+        tier: 'FREE',
+        stripeCustomerId: customer.id,
+      },
+    })
 
+  })
   return customer.id
 }

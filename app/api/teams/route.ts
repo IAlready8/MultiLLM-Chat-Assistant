@@ -1,3 +1,4 @@
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 import { readApiObject } from '@/lib/api-input'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
@@ -28,6 +29,7 @@ export async function GET(req: Request) {
 
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/teams')) return deferredReleaseResponse()
   const { user } = authCheck
 
   const teams = await TeamService.getTeamsByUserId(user.id)
@@ -43,6 +45,7 @@ export async function POST(req: Request) {
 
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/teams')) return deferredReleaseResponse()
   const { user } = authCheck
 
   const body = await readApiObject(req)

@@ -152,15 +152,7 @@ export default async function PricingPage() {
             How data is handled is in the{' '}
             <Link className="text-primary hover:underline" href="/privacy">Privacy Policy</Link>.
           </li>
-          {contactEmail ? (
-            <li>
-              Need something larger for a team?{' '}
-              <a className="text-primary hover:underline" href={`mailto:${contactEmail}`}>
-                Contact us
-              </a>
-              .
-            </li>
-          ) : null}
+
         </ul>
       </section>
     </div>

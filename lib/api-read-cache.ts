@@ -104,3 +104,10 @@ export async function cachedJsonResponse<T>(
     if (inFlightLoads.get(key) === loadPromise) inFlightLoads.delete(key)
   }
 }
+
+/** Selectively fence completed and in-flight reads belonging to a deleted user. */
+export function invalidateUserApiReadCache(userId: string) {
+  for (const key of new Set([...cache.keys(), ...inFlightLoads.keys()])) {
+    if (key.endsWith(`:${userId}`)) invalidateApiReadCache(key)
+  }
+}

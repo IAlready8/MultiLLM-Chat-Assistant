@@ -172,6 +172,7 @@ describe('API authentication', () => {
           email: true,
           image: true,
           passwordVersion: true,
+          deletionRequestedAt: true,
           role: true,
         },
       })
@@ -341,4 +342,11 @@ describe('API authentication', () => {
       },
     )
   })
+})
+
+it('blocks workspace APIs during deletion but permits the recovery route account check', async () => {
+  mockAuth.mockResolvedValue({ user: { id: 'pending-delete', pv: 0 } })
+  mockFindUser.mockResolvedValue({ id: 'pending-delete', passwordVersion: 0, deletionRequestedAt: new Date() })
+  expect((await getAuthenticatedUser() as NextResponse).status).toBe(401)
+  expect(await getAuthenticatedUser({ allowAccountDeletion: true })).not.toBeInstanceOf(NextResponse)
 })

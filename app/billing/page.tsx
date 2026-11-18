@@ -1,3 +1,4 @@
+import { isPaidSignupEnabled } from '@/lib/paid-signup'
 import { getLlmQuota, readQuotaLimits } from '@/lib/llm-quota'
 import { getProPrice } from '@/lib/billing-price'
 import { auth } from '@/lib/auth'
@@ -84,12 +85,12 @@ export default async function BillingPage() {
             periodEnd={
               subscription?.stripeCurrentPeriodEnd?.toISOString() || null
             }
-            plans={BILLING_PLANS}
+            plans={BILLING_PLANS.filter(plan => plan.id !== 'ENTERPRISE')}
             freePlanWeeklySavedBriefGuidance={
               FREE_PLAN_WEEKLY_SAVED_BRIEF_GUIDANCE
             }
             weeklySavedBriefComparisons={weeklySavedBriefComparisons}
-            checkoutEnabled={isStripeCheckoutConfigured && Boolean(proPrice)}
+            checkoutEnabled={isPaidSignupEnabled() && isStripeCheckoutConfigured && Boolean(proPrice)}
             portalEnabled={isStripeApiConfigured}
           />
         </CardContent>

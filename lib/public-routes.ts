@@ -9,6 +9,4 @@
 export const PUBLIC_PAGE_PATHS = ['/pricing', '/terms', '/privacy', '/support'] as const
 
 export const isPublicPagePath = (pathname: string): boolean =>
-  PUBLIC_PAGE_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`),
-  )
+  pathname === '/' || PUBLIC_PAGE_PATHS.some(path => pathname === path)

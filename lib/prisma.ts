@@ -53,6 +53,8 @@ const createStubDelegate = <T>(label: string): PrismaModelDelegate<T> => {
 
 const createStubClient = (): PrismaClient => {
   const stub = {
+    account: createStubDelegate<{ id: string; userId: string; provider: string }>('account'),
+    accountDeletion: createStubDelegate<import('@/types/prisma').AccountDeletion>('accountDeletion'),
     rateLimitBucket: createStubDelegate<{ id: string; timestamps: bigint[]; expiresAt: Date }>('rateLimitBucket'),
     llmQuotaUsage: createStubDelegate<{ id: string; userId: string; units: number; createdAt: Date }>('llmQuotaUsage'),
     generation: createStubDelegate<import('@/types/prisma').Generation>('generation'),

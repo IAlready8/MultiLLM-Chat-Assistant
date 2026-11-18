@@ -1,3 +1,6 @@
+import { BYOK_COPY, GENERATION_ALLOWANCE_COPY } from '@/lib/release-offer'
+import { isPaidSignupEnabled } from '@/lib/paid-signup'
+import prisma from '@/lib/prisma'
 import { getBillingOrigin } from '@/lib/billing-origin'
 import { getProPrice } from '@/lib/billing-price'
 import { withBillingLock } from '@/lib/billing-lock'
@@ -35,6 +38,7 @@ export async function POST(req: Request) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  if (!isPaidSignupEnabled()) return NextResponse.json({ error: 'New paid signup is not open yet. Existing subscribers can use billing management.', code: 'PAID_SIGNUP_CLOSED' }, { status: 503 })
 
   // Each call creates Stripe API objects. Cap it per account, but never let a
   // limiter outage stand between a customer and paying or cancelling.
@@ -53,17 +57,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'User email not found' }, { status: 400 })
   }
 
+  const email = user.email
   try {
     const baseUrl = getBillingOrigin()
     ensureStripeConfigured('checkout')
     await getProPrice()
 
+    const destination = await withBillingLock(`billing-user:${user.id}`, async () => {
+      const current = await prisma.user.findUnique({ where: { id: user.id }, select: { deletionRequestedAt: true } })
+      if (!current || current.deletionRequestedAt) throw new StripeConfigurationError('Account unavailable')
     const stripeCustomerId = await getOrCreateStripeCustomer(
       user.id,
-      user.email,
+      email,
     )
 
-    const destination = await withBillingLock(`stripe-customer:${stripeCustomerId}`, async () => {
+    return withBillingLock(`stripe-customer:${stripeCustomerId}`, async () => {
       const existingSubscriptions = await stripe.subscriptions.list({
         customer: stripeCustomerId,
         status: 'all',
@@ -89,6 +97,7 @@ export async function POST(req: Request) {
       // Create the Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
+        custom_text: { submit: { message: `${BYOK_COPY} ${GENERATION_ALLOWANCE_COPY} Pro includes 2,000 attempts per UTC month, with up to four models per comparison.` } },
         customer: stripeCustomerId,
         client_reference_id: user.id,
         line_items: [
@@ -115,6 +124,8 @@ export async function POST(req: Request) {
         },
       }, { idempotencyKey: `checkout:${user.id}:${STRIPE_PRO_PRICE_ID}:${existingSubscriptions.data[0]?.id ?? 'new'}:${Math.floor(Date.now() / 1800000)}` })
       return { url: session.url, destination: 'checkout' }
+    })
+
     })
 
     try {

@@ -1,3 +1,4 @@
+vi.mock('@/lib/release-scope', () => ({ isDeferredReleasePath: () => false, MAX_COMPARISON_MODELS: 4 }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
 
