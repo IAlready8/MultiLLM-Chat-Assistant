@@ -128,11 +128,11 @@ export default function PrivacyPage() {
         <p>
           We keep your account and workspace data until you delete it or delete
           your account. You can delete individual conversations, personas, goals,
-          and saved API keys at any time. Deleting your account removes your
+          and saved API keys where those controls are available. Confirmed account deletion first saves a request and blocks new workspace work, then stops billing before removing active data. Billing or database failures leave the request pending and retryable. Successful deletion removes your
           account, workspace content, saved keys, and usage records from the
           live database. Copies can remain in database backups for a limited
           time until those backups expire. Payment and invoice records are kept
-          by Stripe as required for financial record keeping.
+          by Stripe as required for financial record keeping. Minimal deletion and billing reconciliation identifiers are kept for 90 days, then removed on the next successful scheduled maintenance run. Pending deletion requests remain available for recovery.
         </p>
       </LegalSection>
 

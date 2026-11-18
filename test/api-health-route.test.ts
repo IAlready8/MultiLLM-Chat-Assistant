@@ -193,7 +193,7 @@ describe('/api/health route', () => {
 
     expect(payload.checks.database.schema).toBe('current')
     const queries = mockQueryRaw.mock.calls.map((call) => (call[0] as TemplateStringsArray).join('?'))
-    expect(queries).toEqual(['SELECT 1', 'SELECT "role", "passwordVersion" FROM "User" LIMIT 0'])
+    expect(queries).toEqual(['SELECT 1', 'SELECT "role", "passwordVersion", "deletionRequestedAt" FROM "User" LIMIT 0'])
   })
 
   it.each([

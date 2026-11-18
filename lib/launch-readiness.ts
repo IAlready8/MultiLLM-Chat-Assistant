@@ -1,3 +1,5 @@
+import { RELEASE_OFFER } from '@/lib/release-offer'
+
 /**
  * Operator-facing launch checks: configuration that the app can run without,
  * but that a public, paid release should not ship without. Reported on the
@@ -46,14 +48,18 @@ export const getLaunchReadiness = (env: Env = process.env): LaunchReadiness => {
     has(env.STRIPE_SECRET_KEY) && has(env.STRIPE_PRO_PRICE_ID)
   const rawLimits = env.LLM_MONTHLY_REQUEST_LIMITS?.trim()
 
+  const production = env.NODE_ENV === 'production'
+  if (production && !rawLimits) {
+    findings.push({ id: 'plan-limits-required', severity: 'error', message: 'Production requires explicit finite generation allowances before requests can run.' })
+  }
   if (rawLimits) {
     const limits = parseLimits(rawLimits)
-    if (!limits) {
+    if (!limits || (production && (Object.values(limits).some(value => value === null) || limits.FREE !== RELEASE_OFFER.limits.FREE || limits.PRO !== RELEASE_OFFER.limits.PRO))) {
       findings.push({
         id: 'plan-limits-invalid',
         severity: 'error',
         message:
-          'LLM_MONTHLY_REQUEST_LIMITS is not valid. Generation requests are refused until it is fixed or removed.',
+          'LLM_MONTHLY_REQUEST_LIMITS is not valid. Production requires finite caps with Free 50 and Pro 2,000. Correct the configuration before generation requests can run.',
       })
     } else if (checkoutEnabled) {
       const proIsBetter =

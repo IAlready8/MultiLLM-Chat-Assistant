@@ -10,7 +10,7 @@ import { getAppName } from '@/lib/app-name'
 
 // Bump when the wording of /terms or /privacy changes in a way users should
 // be told about.
-export const LEGAL_LAST_UPDATED = '2026-11-10'
+export const LEGAL_LAST_UPDATED = '2026-11-17'
 
 const clean = (value: string | undefined, max: number): string | null => {
   const trimmed = value?.trim()

@@ -88,7 +88,7 @@ describe('auth session token reader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSubscriptionFindUnique.mockResolvedValue(null)
-    mockUserFindUnique.mockResolvedValue(null)
+    mockUserFindUnique.mockResolvedValue({ id: 'user-123', passwordVersion: 0, deletionRequestedAt: null })
   })
 
   it('reads the secure session cookie directly', () => {
@@ -152,6 +152,9 @@ describe('auth session token reader', () => {
         role: 'MEMBER',
         tier: 'FREE',
         pv: 0,
+        deletionPending: false,
+        authenticatedAt: undefined,
+        authProvider: undefined,
       },
     })
 
@@ -228,6 +231,8 @@ describe('auth session token reader', () => {
         name: 'Test User',
         role: 'MEMBER',
         pv: 3,
+        authenticatedAt: undefined,
+        authProvider: undefined,
       },
     })
     expect(mockSubscriptionFindUnique).not.toHaveBeenCalled()
@@ -287,5 +292,25 @@ describe('auth session token reader', () => {
 
     expect(result).toBeInstanceOf(Response)
     expect((result as Response).status).toBe(401)
+  })
+})
+
+describe('deletion session proof', () => {
+  it('stamps fresh proof only at sign-in and ignores client session updates', async () => {
+    const jwt = authOptions.callbacks!.jwt!
+    const original = { id: 'user-123', authenticatedAt: 100, authProvider: 'google' }
+    const updated = await jwt({ token: original, trigger: 'update', session: { authenticatedAt: Date.now(), authProvider: 'google' } } as never)
+    expect(updated.authenticatedAt).toBe(100)
+    const signedIn = await jwt({ token: {}, user: { id: 'user-123' }, account: { provider: 'google' } } as never)
+    expect(signedIn.authenticatedAt).toBeGreaterThan(Date.now() - 1000)
+    expect(signedIn.authProvider).toBe('google')
+  })
+  it('strips the user from old sessions after deletion or password revocation', async () => {
+    const callback = authOptions.callbacks!.session!
+    const input = () => ({ session: { user: { name: 'Old User' }, expires: 'future' }, token: { id: 'user-123', pv: 0 } })
+    mockUserFindUnique.mockResolvedValue(null)
+    expect(await callback(input() as never)).toEqual({ expires: 'future' })
+    mockUserFindUnique.mockResolvedValue({ passwordVersion: 1 })
+    expect(await callback(input() as never)).toEqual({ expires: 'future' })
   })
 })

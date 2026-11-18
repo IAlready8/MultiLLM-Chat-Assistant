@@ -1,3 +1,4 @@
+import { RELEASE_OFFER } from '@/lib/release-offer'
 import { stripe, STRIPE_PRO_PRICE_ID, ensureStripeConfigured, StripeConfigurationError } from '@/lib/stripe'
 
 export async function getProPrice() {
@@ -6,6 +7,7 @@ export async function getProPrice() {
   if (!price.active || price.type !== 'recurring' || !price.recurring || price.recurring.usage_type !== 'licensed' || price.billing_scheme !== 'per_unit' || price.unit_amount === null || price.custom_unit_amount || price.transform_quantity) {
     throw new StripeConfigurationError('The configured Pro price must be an active fixed recurring price')
   }
+  if (price.currency !== RELEASE_OFFER.currency || price.unit_amount !== RELEASE_OFFER.unitAmount || price.recurring.interval !== RELEASE_OFFER.interval || price.recurring.interval_count !== 1) throw new StripeConfigurationError('The configured Pro price must match the approved CAD 19 monthly offer')
   const digits = ['isk', 'ugx'].includes(price.currency) ? 2 : new Intl.NumberFormat('en', { style: 'currency', currency: price.currency }).resolvedOptions().maximumFractionDigits ?? 2
   const amount = new Intl.NumberFormat('en-US', { style: 'currency', currency: price.currency }).format(price.unit_amount / 10 ** digits)
   const { interval, interval_count: count } = price.recurring

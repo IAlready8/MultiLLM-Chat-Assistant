@@ -34,6 +34,7 @@ export const buildSiteMetadata = (
     title: { default: name, template: `%s | ${name}` },
     description: DESCRIPTION,
     applicationName: name,
+    icons: { icon: '/apple-touch-icon.png', apple: '/apple-touch-icon.png' },
     openGraph: {
       type: 'website',
       siteName: name,

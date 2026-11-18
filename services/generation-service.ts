@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { MAX_COMPARISON_MODELS } from '@/lib/release-scope'
 import { prisma } from '@/lib/prisma'
 import { LlmRequestError, type GenerationInput } from '@/lib/llm-request'
 import { apiReadCacheKey, invalidateApiReadCache } from '@/lib/api-read-cache'
@@ -67,6 +68,19 @@ export async function beginGeneration(userId: string, input: SavedGenerationInpu
       if (!conversation) throw new LlmRequestError('Conversation not found', 404, 'CONVERSATION_NOT_FOUND')
       const turn = await tx.message.findFirst({ where: { conversationId: input.conversationId, clientId: input.turnId, role: 'user' } })
       if (!turn) throw new LlmRequestError('Save the user message before starting a generation', 409, 'TURN_NOT_FOUND')
+      // Separate streaming requests share a turn. Serialize admission so callers
+      // cannot exceed the comparison cap by omitting/reusing position values.
+      await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${'comparison:' + input.conversationId + ':' + input.turnId}, 0))`
+      const responses = await tx.message.findMany({
+        where: { conversationId: input.conversationId, turnId: input.turnId, role: 'assistant' },
+        select: { provider: true, model: true, instanceId: true, position: true },
+      })
+      const slot = (item: { provider?: string | null; model?: string | null; instanceId?: string | null; position?: number | null }) =>
+        JSON.stringify([item.position ?? 0, item.provider, item.model ?? null, item.instanceId ?? null])
+      const slots = new Set(responses.map(slot))
+      if (!slots.has(slot(input)) && slots.size >= MAX_COMPARISON_MODELS) {
+        throw new LlmRequestError('A comparison supports at most four models.', 400, 'COMPARISON_LIMIT_EXCEEDED')
+      }
       await tx.message.create({ data: { id, conversationId: input.conversationId, role: 'assistant', content: '', provider: input.provider, model: input.model, instanceId: input.instanceId, turnId: input.turnId, position: input.position ?? 0, generationStatus: 'running' } })
       await tx.generation.create({ data: { id, requestHash, userId, conversationId: input.conversationId, messageId: id, status: 'running', leaseExpiresAt: new Date(Date.now() + GENERATION_LEASE_MS) } })
       await tx.conversation.update({ where: { id: input.conversationId, userId }, data: { updatedAt: new Date() } })

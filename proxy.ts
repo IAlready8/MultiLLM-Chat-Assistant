@@ -1,8 +1,9 @@
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { decode } from 'next-auth/jwt'
 import { readSessionTokenFromCookies } from '@/lib/session-cookie'
-import { PUBLIC_PAGE_PATHS } from '@/lib/public-routes'
+import { isPublicPagePath } from '@/lib/public-routes'
 
 const PUBLIC_PATHS = new Set<string>([
   '/auth/signin',
@@ -14,7 +15,6 @@ const PUBLIC_PATHS = new Set<string>([
   '/api/webhooks',
   '/api/cron/generations', // Bearer-authenticated by the route, not a browser session.
   // Legal documents must be readable before an account exists.
-  ...PUBLIC_PAGE_PATHS,
   // Crawler policy and vulnerability-disclosure contact (RFC 9116).
   '/robots.txt',
   '/sitemap.xml',
@@ -22,6 +22,7 @@ const PUBLIC_PATHS = new Set<string>([
 ])
 
 const isPublicPath = (pathname: string): boolean => {
+  if (isPublicPagePath(pathname)) return true
   for (const prefix of PUBLIC_PATHS) {
     if (pathname === prefix || pathname.startsWith(prefix + '/')) {
       return true
@@ -106,6 +107,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(signInUrl)
   }
 
+  if (isDeferredReleasePath(pathname)) return deferredReleaseResponse()
   return NextResponse.next()
 }
 

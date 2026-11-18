@@ -141,8 +141,9 @@ describe('legal navigation', () => {
     expect(isPublicPagePath('/pricing')).toBe(true)
     expect(isPublicPagePath('/support')).toBe(true)
     expect(isPublicPagePath('/terms')).toBe(true)
-    expect(isPublicPagePath('/privacy/')).toBe(true)
-    for (const path of ['/', '/settings', '/termsandmore', '/privacy-export', '/api/terms', '/billing', '/pricing-admin', '/supporters', '/api/pricing']) {
+    expect(isPublicPagePath('/')).toBe(true)
+    expect(isPublicPagePath('/privacy/')).toBe(false)
+    for (const path of ['/workspace', '/privacy/private', '/settings', '/termsandmore', '/privacy-export', '/api/terms', '/billing', '/pricing-admin', '/supporters', '/api/pricing']) {
       expect(isPublicPagePath(path)).toBe(false)
     }
   })

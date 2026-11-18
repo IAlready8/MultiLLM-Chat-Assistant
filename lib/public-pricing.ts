@@ -1,3 +1,4 @@
+import { isPaidSignupEnabled } from '@/lib/paid-signup'
 import { getProPrice } from '@/lib/billing-price'
 import { readQuotaLimits } from '@/lib/llm-quota'
 import { isStripeCheckoutConfigured } from '@/lib/stripe'
@@ -64,7 +65,7 @@ export const getPublicOffer = async (
   const proPriceLabel = await loadPriceLabel(now)
   return {
     // Without a readable price the Billing page keeps checkout closed too.
-    checkoutOpen: isStripeCheckoutConfigured && proPriceLabel !== null,
+    checkoutOpen: isPaidSignupEnabled() && isStripeCheckoutConfigured && proPriceLabel !== null,
     proPriceLabel,
     allowances: readAllowances(),
   }

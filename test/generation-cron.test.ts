@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+vi.mock('@/services/account-deletion-service', () => ({ recoverAccountDeletions: async () => ({ recovered: 0, more: false }) }))
 const reconcile = vi.hoisted(() => vi.fn())
 vi.mock('@/services/generation-service', () => ({ reconcileExpiredGenerations: reconcile }))
 import { GET } from '@/app/api/cron/generations/route'
@@ -15,6 +16,6 @@ describe('recovery scheduler authorization', () => {
     vi.stubEnv('CRON_SECRET', 'synthetic-cron-secret-for-test')
     reconcile.mockResolvedValue({ recovered: 2, batchFull: false })
     const response = await GET(new Request('http://localhost', { headers: { authorization: 'Bearer synthetic-cron-secret-for-test' } }))
-    expect(await response.json()).toEqual({ recovered: 2, more: false })
+    expect(await response.json()).toEqual({ recovered: 2, more: false, deletion: { recovered: 0, more: false } })
   })
 })

@@ -14,6 +14,9 @@ export interface ProviderMeta {
 
 export const PROVIDER_DISABLED_ERROR_CODE = 'PROVIDER_DISABLED'
 
+// Candidate shortlist. Availability does not claim a successful real generation.
+const v1Providers = new Set(['openai', 'anthropic', 'googleai'])
+
 export const providerRegistry: ProviderMeta[] = [
   {
     id: 'openai',
@@ -84,7 +87,8 @@ export const providerRegistry: ProviderMeta[] = [
 ]
 
 export const operationalProviderRegistry = providerRegistry.filter(
-  (provider) => provider.operational !== false,
+  (provider) => provider.operational !== false &&
+    (process.env.NODE_ENV !== 'production' || v1Providers.has(provider.id)),
 )
 
 export const supportedProviderIds = operationalProviderRegistry.map(
@@ -99,11 +103,12 @@ export const isProviderApiKeyRequired = (providerId: string) =>
 
 export const isProviderOperational = (providerId: string) => {
   const provider = getProviderMeta(providerId)
-  return Boolean(provider && provider.operational !== false)
+  return Boolean(provider && provider.operational !== false &&
+    (process.env.NODE_ENV !== 'production' || v1Providers.has(provider.id)))
 }
 
 export const isProviderDisabled = (providerId: string) =>
-  getProviderMeta(providerId)?.operational === false
+  Boolean(getProviderMeta(providerId) && !isProviderOperational(providerId))
 
 export const getProviderDisabledMessage = (providerId: string) =>
-  getProviderMeta(providerId)?.disabledReason ?? 'Provider is currently unavailable.'
+  getProviderMeta(providerId)?.disabledReason ?? 'Provider is unavailable in this release.'

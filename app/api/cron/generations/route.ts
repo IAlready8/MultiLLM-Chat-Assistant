@@ -1,3 +1,4 @@
+import { recoverAccountDeletions } from '@/services/account-deletion-service'
 import { timingSafeEqual } from 'node:crypto'
 import { reconcileExpiredGenerations } from '@/services/generation-service'
 import { prunePostgresLimits } from '@/lib/postgres-rate-limit'
@@ -13,6 +14,7 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
+    const deletion = await recoverAccountDeletions()
     const started = Date.now()
     let recovered = 0
     let batchFull = false
@@ -20,9 +22,9 @@ export async function GET(request: Request) {
       const result = await reconcileExpiredGenerations()
       recovered += result.recovered
       batchFull = result.batchFull
-    } while (batchFull && Date.now() - started < 40_000)
+    } while (batchFull && Date.now() - started < 15_000)
     if (process.env.RATE_LIMIT_BACKEND === 'postgres') await prunePostgresLimits()
-    return Response.json({ recovered, more: batchFull }, { headers: { 'Cache-Control': 'no-store' } })
+    return Response.json({ recovered, more: batchFull, deletion }, { headers: { 'Cache-Control': 'no-store' } })
   } catch {
     console.error('Generation reconciliation failed')
     return Response.json({ error: 'Recovery failed; retry the scheduled job' }, { status: 503 })

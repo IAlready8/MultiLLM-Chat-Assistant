@@ -48,6 +48,8 @@ model User {
   password      String?   // For credential-based authentication
   passwordVersion Int     @default(0) // Bumped on password change to revoke sessions
   role          UserRole  @default(MEMBER) // Persisted role; combined with AUTH_*_EMAILS allowlists
+  deletionRequestedAt DateTime?
+  analytics     Analytics[]
   accounts      Account[]
   sessions      Session[]
   conversations Conversation[]
@@ -125,12 +127,29 @@ model ProviderConfig {
   @@unique([userId, provider])
 }
 
+// Independent intent survives User cascades; completed records expire after 90 days.
+model AccountDeletion {
+  userId String @id
+  stripeCustomerId String? @unique
+  status String @default("requested")
+  requestedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+  leaseToken String?
+  leaseExpiresAt DateTime?
+  attempts Int @default(0)
+  lastErrorCode String?
+  @@index([status, leaseExpiresAt])
+  @@index([completedAt])
+}
+
 model Analytics {
   id        String   @id @default(cuid())
   event     String
   payload   String?
   createdAt DateTime @default(now())
   userId    String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Goal {
