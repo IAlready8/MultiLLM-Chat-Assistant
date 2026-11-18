@@ -135,10 +135,10 @@ export default function Home() {
           Compare provider outputs, reuse personas, preserve conversation history, and improve repeatable client deliverables.
         </p>
       </section>
-      
+
       <div className="mb-10">
-        <Link 
-          href="/settings" 
+        <Link
+          href="/settings"
           className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-full border border-border bg-card/60 backdrop-blur-sm smooth-transition rainbow-outline-hover"
         >
           <span className="mr-2 h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
