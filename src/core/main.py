@@ -29,6 +29,11 @@ from .security_utils import scrub_sensitive_info
 async def lifespan(app: FastAPI):
     """Initialize providers and dependency checks for the sidecar lifecycle."""
 
+    # Public releases use authenticated Next.js BYOK routes, not this legacy core.
+    # Refuse to serve when not explicitly enabled, or in any production process.
+    if settings.NODE_ENV.strip().lower() == "production" or not settings.PYTHON_CORE_ENABLED:
+        raise RuntimeError("Legacy Python Core is disabled; use the authenticated Next.js runtime.")
+
     log.info("Python Core service starting up...", env=settings.NODE_ENV)
 
     try:
@@ -116,7 +121,7 @@ def _classify_stream_error(error: Exception) -> dict:
 
     return {
         "code": "INTERNAL_ERROR",
-        "error": message or "Internal server error",
+        "error": "Internal server error",
     }
 
 

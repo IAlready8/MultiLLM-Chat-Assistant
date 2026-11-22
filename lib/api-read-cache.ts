@@ -8,8 +8,20 @@ type CacheEntry<T> = {
 }
 
 const DEFAULT_TTL_MS = 30_000
+const MAX_CACHE_ENTRIES = 512
 const cache = new Map<string, CacheEntry<unknown>>()
 const inFlightLoads = new Map<string, Promise<unknown>>()
+
+const pruneCacheForInsert = (now: number) => {
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(key)
+  }
+  while (cache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value
+    if (oldestKey === undefined) break
+    cache.delete(oldestKey)
+  }
+}
 
 const isCacheEnabled = () =>
   ['1', 'true', 'yes', 'on'].includes(
@@ -75,6 +87,8 @@ export async function cachedJsonResponse<T>(
   const cached = cache.get(key) as CacheEntry<T> | undefined
   if (cached && cached.expiresAt > now) {
     const durationMs = Date.now() - startedAt
+    cache.delete(key)
+    cache.set(key, cached)
     recordCacheResult(route, 'hit', durationMs)
     return buildResponse(cached.value, 'hit')
   }
@@ -95,7 +109,9 @@ export async function cachedJsonResponse<T>(
     // A write may invalidate this load while it is in flight. Only the
     // current load may publish a cache entry or clear its pending marker.
     if (inFlightLoads.get(key) === loadPromise) {
-      cache.set(key, { value, expiresAt: Date.now() + getTtlMs() })
+      const savedAt = Date.now()
+      pruneCacheForInsert(savedAt)
+      cache.set(key, { value, expiresAt: savedAt + getTtlMs() })
     }
     const durationMs = Date.now() - startedAt
     recordCacheResult(route, 'miss', durationMs)

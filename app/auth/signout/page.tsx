@@ -2,12 +2,13 @@
 
 import { useEffect } from 'react'
 import { signOut } from 'next-auth/react'
+import { resolveAuthCallbackUrl } from '@/lib/auth-redirect'
 import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function SignOutPage() {
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams?.get('callbackUrl') || '/'
+  const callbackUrl = resolveAuthCallbackUrl(searchParams?.get('callbackUrl'))
 
   useEffect(() => {
     signOut({ callbackUrl }).catch((error) => {

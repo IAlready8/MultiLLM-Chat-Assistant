@@ -52,4 +52,20 @@ describe('api-read-cache', () => {
     expect(loadNew).toHaveBeenCalledTimes(1)
   })
 
+
+  it('evicts least-recently-used entries at a fixed maximum', async () => {
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      for (let i = 0; i < 513; i++) {
+        await cachedJsonResponse('/api/example', 'example:user-' + i, async () => ({ value: i }))
+      }
+      const load = vi.fn(async () => ({ value: 'fresh' }))
+      const response = await cachedJsonResponse('/api/example', 'example:user-0', load)
+      expect(response.headers.get('X-Read-Cache')).toBe('miss')
+      expect(await response.json()).toEqual({ value: 'fresh' })
+      expect(load).toHaveBeenCalledOnce()
+    } finally {
+      log.mockRestore()
+    }
+  })
 })

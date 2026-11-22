@@ -37,8 +37,8 @@ class MultiProviderRequest(BaseModel):
     """
     Request model for orchestrating multiple providers.
     """
-    requests: List[ProviderRequest]
-    prompt: str # A single prompt to send to all models
+    requests: List[ProviderRequest] = Field(..., min_length=1, max_length=4)
+    prompt: str = Field(..., min_length=1, max_length=10000)
     
 class ProviderResponse(BaseModel):
     """

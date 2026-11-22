@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     # Service
     NODE_ENV: str = "development"
+    PYTHON_CORE_ENABLED: bool = False  # Legacy development-only opt-in
     LOG_LEVEL: str = "INFO"
 
     # Services
