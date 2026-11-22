@@ -14,7 +14,7 @@ def get_redis_pool() -> ConnectionPool:
         if not settings.REDIS_URL:
             raise ValueError("REDIS_URL is not set. Caching service cannot start.")
         
-        print(f"Initializing Redis connection pool for: {settings.REDIS_URL}")
+        print("Initializing Redis connection pool")
         pool = redis.ConnectionPool.from_url(
             settings.REDIS_URL, 
             max_connections=10, 
@@ -39,6 +39,6 @@ async def test_redis_connection():
         if pong:
             print("Redis connection successful (PING/PONG).")
             return True
-    except Exception as e:
-        print(f"Redis connection failed: {e}")
+    except Exception:
+        print("Redis connection failed")
     return False

@@ -3,7 +3,7 @@ import { providerSignal } from './util'
  * Google AI (Gemini) provider adapter.
  *
  * Google AI uses a different request/response shape and SSE format than
- * OpenAI-compatible providers.  The API key is passed as a query parameter.
+ * OpenAI-compatible providers. API keys are sent in x-goog-api-key headers.
  */
 
 import type {
@@ -45,10 +45,11 @@ export const googleaiAdapter: ProviderAdapter = {
 
   async testConnection(config: ProviderAdapterConfig): Promise<void> {
     const baseUrl = getProviderBaseUrl('googleai', config.baseUrl)
-    const response = await providerFetch('googleai', `${baseUrl}/models?key=${config.apiKey}`, {
+    const response = await providerFetch('googleai', `${baseUrl}/models`, {
       method: 'GET',
       headers: {
         ...config.extraHeaders,
+        'x-goog-api-key': config.apiKey,
       },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
@@ -68,10 +69,10 @@ export const googleaiAdapter: ProviderAdapter = {
 
     const response = await providerFetch(
       'googleai',
-      `${baseUrl}/models/${model}:generateContent?key=${config.apiKey}`,
+      `${baseUrl}/models/${model}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...config.extraHeaders },
+        headers: { 'Content-Type': 'application/json', ...config.extraHeaders, 'x-goog-api-key': config.apiKey },
         body: JSON.stringify(payload),
         signal: providerSignal(request.signal, TIMEOUT_MS),
       },
@@ -103,10 +104,10 @@ export const googleaiAdapter: ProviderAdapter = {
     // Google AI streaming, which could hang indefinitely on network issues.
     const response = await providerFetch(
       'googleai',
-      `${baseUrl}/models/${model}:streamGenerateContent?alt=sse&key=${config.apiKey}`,
+      `${baseUrl}/models/${model}:streamGenerateContent?alt=sse`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...config.extraHeaders },
+        headers: { 'Content-Type': 'application/json', ...config.extraHeaders, 'x-goog-api-key': config.apiKey },
         body: JSON.stringify(payload),
         signal: providerSignal(request.signal, TIMEOUT_MS),
       },
