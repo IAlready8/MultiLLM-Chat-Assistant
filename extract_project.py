@@ -1,91 +1,56 @@
 #!/usr/bin/env python3
-"""
-Extract all files from the Next.js project dump file.
-"""
+"""Extract structured project dumps safely, without overwriting originals."""
 
 import os
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+
+def _safe_target(output_dir: Path, file_path: str) -> Path:
+    if not file_path or "\\" in file_path or ":" in file_path:
+        raise ValueError("Invalid extracted path")
+    relative = PurePosixPath(file_path)
+    if relative.is_absolute() or ".." in relative.parts or ".git" in relative.parts:
+        raise ValueError("Path escapes extraction directory")
+    target = output_dir.joinpath(*relative.parts)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.parent.resolve().is_relative_to(output_dir):
+        raise ValueError("Extraction directory contains an unsafe symlink")
+    return target
+
 
 def extract_files(input_file, output_dir):
-    """Extract all files from the dump file."""
-
-    with open(input_file, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    # Split by the file separator pattern
-    # Pattern: ================\nFile: path\n================\n
-    pattern = r'={16,}\nFile: (.+?)\n={16,}\n'
-
-    # Find all files
+    root = Path(output_dir).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    with open(input_file, "r", encoding="utf-8") as source:
+        content = source.read()
+    pattern = r"={16,}\nFile: (.+?)\n={16,}\n"
     matches = list(re.finditer(pattern, content))
-
-    files = []
-    for i, match in enumerate(matches):
+    created, skipped = [], []
+    for index, match in enumerate(matches):
         file_path = match.group(1).strip()
-
-        # Get content start position (after the second separator)
-        content_start = match.end()
-
-        # Get content end position (before next file marker or end of file)
-        if i + 1 < len(matches):
-            content_end = matches[i + 1].start()
-        else:
-            content_end = len(content)
-
-        # Extract content
-        file_content = content[content_start:content_end].rstrip('\n')
-
-        # Remove trailing separator if present
-        if file_content.endswith('=' * 16):
-            file_content = file_content[:file_content.rfind('=' * 16)].rstrip('\n')
-
-        files.append((file_path, file_content))
-
-    # Create all files
-    created_files = []
-    skipped_files = []
-
-    for file_path, file_content in files:
-        # Skip invalid paths
-        if not file_path or file_path.startswith('==='):
-            continue
-
-        # Create full path
-        full_path = os.path.join(output_dir, file_path)
-
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+        file_content = content[match.end():end].rstrip("\n")
+        if file_content.endswith("=" * 16):
+            file_content = file_content[:file_content.rfind("=" * 16)].rstrip("\n")
         try:
-            # Write the file
-            with open(full_path, 'w', encoding='utf-8') as f:
-                f.write(file_content)
+            target = _safe_target(root, file_path)
+            # Exclusive creation rejects existing targets and final-component
+            # symlinks rather than replacing user files during extraction.
+            fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as destination:
+                destination.write(file_content)
+            created.append(file_path)
+            print(f"Created: {file_path}")
+        except (ValueError, OSError) as error:
+            skipped.append((file_path, str(error)))
+            print(f"Skipped: {file_path} - {type(error).__name__}")
+    return created, skipped
 
-            created_files.append(file_path)
-            print(f"✓ Created: {file_path}")
-        except Exception as e:
-            skipped_files.append((file_path, str(e)))
-            print(f"✗ Failed: {file_path} - {str(e)}")
 
-    return created_files, skipped_files
-
-if __name__ == '__main__':
-    input_file = '/workspace/user_input_files/pasted-text-2025-12-05T22-49-01.txt'
-    output_dir = '/workspace'
-
-    print(f"Extracting files from {input_file}...")
-    print(f"Output directory: {output_dir}")
-    print("=" * 60)
-
+if __name__ == "__main__":
+    input_file = "/workspace/user_input_files/pasted-text-2025-12-05T22-49-01.txt"
+    output_dir = "/workspace"
+    print(f"Extracting files from {input_file}")
     created, skipped = extract_files(input_file, output_dir)
-
-    print("=" * 60)
-    print(f"\n✓ Successfully created {len(created)} files")
-
-    if skipped:
-        print(f"✗ Failed to create {len(skipped)} files:")
-        for path, error in skipped:
-            print(f"  - {path}: {error}")
-
-    print(f"\nTotal files processed: {len(created) + len(skipped)}")
+    print(f"Created {len(created)} files; skipped {len(skipped)} files")

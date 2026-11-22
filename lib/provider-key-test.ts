@@ -111,10 +111,8 @@ export const testProviderKey = async (
     case 'googleai':
       return fetchWithTimeout(
         'googleai',
-        `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(
-          apiKey
-        )}`,
-        { method: 'GET' }
+        'https://generativelanguage.googleapis.com/v1/models',
+        { method: 'GET', headers: { 'x-goog-api-key': apiKey } }
       )
     case 'grok':
       return null
