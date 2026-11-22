@@ -53,6 +53,28 @@ describe('api-read-cache', () => {
   })
 
 
+  it('retains recently used entries during bounded eviction', async () => {
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+    try {
+      for (let index = 0; index < 512; index++) {
+        await cachedJsonResponse('/api/example', 'recent:user-' + index, async () => index)
+      }
+      const cached = await cachedJsonResponse('/api/example', 'recent:user-0', async () => 999)
+      expect(cached.headers.get('X-Read-Cache')).toBe('hit')
+      expect(await cached.json()).toBe(0)
+
+      await cachedJsonResponse('/api/example', 'recent:user-512', async () => 512)
+
+      const evicted = await cachedJsonResponse('/api/example', 'recent:user-1', async () => 1001)
+      expect(evicted.headers.get('X-Read-Cache')).toBe('miss')
+      const retained = await cachedJsonResponse('/api/example', 'recent:user-0', async () => 999)
+      expect(retained.headers.get('X-Read-Cache')).toBe('hit')
+      expect(await retained.json()).toBe(0)
+    } finally {
+      log.mockRestore()
+    }
+  })
+
   it('evicts least-recently-used entries at a fixed maximum', async () => {
     const log = vi.spyOn(console, 'info').mockImplementation(() => {})
     try {
