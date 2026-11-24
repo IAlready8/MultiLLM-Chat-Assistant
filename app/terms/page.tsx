@@ -135,6 +135,12 @@ export default function TermsPage() {
             usage charges from AI providers on your own keys.
           </li>
           <li>
+            Prices are in Canadian dollars and do not include sales taxes. Where
+            we are required to collect a sales tax such as GST/HST, it is
+            calculated from your billing address and shown at checkout and on
+            your invoice before you are charged.
+          </li>
+          <li>
             We may change prices for future billing periods and will give notice
             before a change applies to you.
           </li>

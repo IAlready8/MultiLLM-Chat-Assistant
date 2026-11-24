@@ -18,6 +18,7 @@ import {
 import { logger } from '@/lib/logger'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { readBillingSource } from '@/lib/billing-source'
+import { checkoutTaxParams, isStripeAutomaticTaxEnabled } from '@/lib/stripe-tax'
 
 
 
@@ -90,8 +91,10 @@ export async function POST(req: Request) {
         return { url: portalSession.url, destination: 'portal' }
       }
 
+      const automaticTax = isStripeAutomaticTaxEnabled()
+      const taxMarker = automaticTax ? 'true' : 'false'
       const openSessions = await stripe.checkout.sessions.list({ customer: stripeCustomerId, status: 'open', limit: 100 })
-      const open = openSessions.data.find(item => item.metadata?.app === 'multi-llm-chat-assistant' && item.metadata?.priceId === STRIPE_PRO_PRICE_ID && item.url && item.expires_at > Math.floor(Date.now() / 1000))
+      const open = openSessions.data.find(item => item.metadata?.app === 'multi-llm-chat-assistant' && item.metadata?.priceId === STRIPE_PRO_PRICE_ID && (item.metadata?.automaticTax ?? 'false') === taxMarker && item.url && item.expires_at > Math.floor(Date.now() / 1000))
       if (open) return { url: open.url, destination: 'checkout' }
 
       // Create the Stripe Checkout session
@@ -114,6 +117,7 @@ export async function POST(req: Request) {
             userId: user.id,
           },
         },
+        ...checkoutTaxParams(automaticTax),
         success_url: new URL('/billing?success=true', baseUrl).toString(),
         cancel_url: new URL('/billing?canceled=true', baseUrl).toString(),
         metadata: {
@@ -121,8 +125,9 @@ export async function POST(req: Request) {
           priceId: STRIPE_PRO_PRICE_ID!,
           tier: 'PRO',
           userId: user.id,
+          automaticTax: taxMarker,
         },
-      }, { idempotencyKey: `checkout:${user.id}:${STRIPE_PRO_PRICE_ID}:${existingSubscriptions.data[0]?.id ?? 'new'}:${Math.floor(Date.now() / 1800000)}` })
+      }, { idempotencyKey: `checkout:${user.id}:${STRIPE_PRO_PRICE_ID}:${existingSubscriptions.data[0]?.id ?? 'new'}:${Math.floor(Date.now() / 1800000)}:tax-${taxMarker}` })
       return { url: session.url, destination: 'checkout' }
     })
 

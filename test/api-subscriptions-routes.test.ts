@@ -265,6 +265,44 @@ describe('subscription routes', () => {
     )
   })
 
+  it('leaves sales tax off by default and charges the tax-exclusive list price', async () => {
+    vi.stubEnv('STRIPE_AUTOMATIC_TAX', '')
+    await createSubscriptionSession(new Request('http://localhost', { method: 'POST' }))
+    const [payload, options] = mockCreateCheckoutSession.mock.calls[0]
+    expect(payload).not.toHaveProperty('automatic_tax')
+    expect(payload).not.toHaveProperty('billing_address_collection')
+    expect(payload).not.toHaveProperty('customer_update')
+    expect(payload.metadata.automaticTax).toBe('false')
+    expect(options.idempotencyKey).toMatch(/:tax-false$/)
+    vi.unstubAllEnvs()
+  })
+
+  it('enables Stripe Tax with a required billing address when the operator turns it on', async () => {
+    vi.stubEnv('STRIPE_AUTOMATIC_TAX', 'true')
+    await createSubscriptionSession(new Request('http://localhost', { method: 'POST' }))
+    const [payload, options] = mockCreateCheckoutSession.mock.calls[0]
+    expect(payload).toEqual(expect.objectContaining({
+      automatic_tax: { enabled: true },
+      billing_address_collection: 'required',
+      customer_update: { address: 'auto' },
+    }))
+    expect(payload.metadata.automaticTax).toBe('true')
+    expect(options.idempotencyKey).toMatch(/:tax-true$/)
+    vi.unstubAllEnvs()
+  })
+
+  it('does not reuse an open checkout created under a different tax setting', async () => {
+    vi.stubEnv('STRIPE_AUTOMATIC_TAX', 'true')
+    mockListCheckoutSessions.mockResolvedValue({ data: [{
+      url: 'https://stripe.test/untaxed', expires_at: Math.floor(Date.now() / 1000) + 600,
+      metadata: { app: 'multi-llm-chat-assistant', priceId: 'price_test' },
+    }] })
+    const response = await createSubscriptionSession(new Request('http://localhost', { method: 'POST' }))
+    expect((await response.json()).url).toBe('https://stripe.test/checkout')
+    expect(mockCreateCheckoutSession).toHaveBeenCalledOnce()
+    vi.unstubAllEnvs()
+  })
+
   it('routes customers with an ongoing subscription to the portal', async () => {
     mockListSubscriptions.mockResolvedValue({
       data: [{ id: 'sub_existing', status: 'past_due' }],
