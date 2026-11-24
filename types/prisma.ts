@@ -122,6 +122,7 @@ export interface PrismaClient {
   llmQuotaUsage: PrismaModelDelegate<{ id: string; userId: string; units: number; createdAt: Date }>
   generation: PrismaModelDelegate<Generation>
   stripeWebhookEvent: PrismaModelDelegate<{ id: string; createdAt: Date }>
+  verificationToken: PrismaModelDelegate<{ identifier: string; token: string; expires: Date }>
   user: PrismaModelDelegate<User>
   conversation: PrismaModelDelegate<Conversation>
   message: PrismaModelDelegate<Message>

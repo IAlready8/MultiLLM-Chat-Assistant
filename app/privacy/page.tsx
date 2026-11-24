@@ -33,6 +33,9 @@ export default function PrivacyPage() {
             profile image as supplied by the sign-in provider you choose (Google
             or GitHub). Accounts that sign in with a password have a one-way
             hash of that password stored. We never store the password itself.
+            If support issues a password reset link, only a one-way hash of it is
+            stored, and it is removed when used or replaced; it expires after 60
+            minutes.
           </li>
           <li>
             <strong>Your workspace content.</strong> Conversations and messages,

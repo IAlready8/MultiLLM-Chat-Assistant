@@ -10,6 +10,7 @@ const PUBLIC_PATHS = new Set<string>([
   '/auth/register',
   '/auth/signout',
   '/auth/error',
+  '/auth/reset-password', // Token-gated by the API; the page holds no account data.
   '/api/auth',
   '/api/health',
   '/api/webhooks',

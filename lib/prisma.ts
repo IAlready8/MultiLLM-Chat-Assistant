@@ -59,6 +59,7 @@ const createStubClient = (): PrismaClient => {
     llmQuotaUsage: createStubDelegate<{ id: string; userId: string; units: number; createdAt: Date }>('llmQuotaUsage'),
     generation: createStubDelegate<import('@/types/prisma').Generation>('generation'),
     stripeWebhookEvent: createStubDelegate<{ id: string; createdAt: Date }>('stripeWebhookEvent'),
+    verificationToken: createStubDelegate<{ identifier: string; token: string; expires: Date }>('verificationToken'),
     user: createStubDelegate<User>('user'),
     conversation: createStubDelegate<Conversation>('conversation'),
     message: createStubDelegate<Message>('message'),

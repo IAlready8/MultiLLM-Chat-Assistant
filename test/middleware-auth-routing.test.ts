@@ -39,7 +39,9 @@ describe('mandatory-auth routing', () => {
   it.each([
     '/auth/signin',
     '/auth/register',
+    '/auth/reset-password',
     '/api/auth/providers',
+    '/api/auth/password-reset',
     '/api/health',
     '/api/webhooks/stripe',
     '/api/cron/generations',

@@ -228,6 +228,11 @@ export default function SignInPage() {
             <Button className="w-full" type="submit" disabled={loading || status === 'loading'}>
               {loading ? 'Signing in...' : 'Sign in with password'}
             </Button>
+            <p className="text-xs text-muted-foreground">
+              Forgot your password? See{' '}
+              <Link className="text-primary hover:underline" href="/support">Support</Link>
+              {' '}for a reset link.
+            </p>
           </form>
 
           <LegalConsentNotice />

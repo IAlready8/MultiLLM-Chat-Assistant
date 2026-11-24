@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import pg from 'pg'
 import bcrypt from 'bcryptjs'
@@ -59,10 +59,10 @@ function client() {
   }
 }
 const json = data => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-async function login(id) {
+async function login(id, secret = password) {
   const request = client()
   const csrf = await (await request('/api/auth/csrf')).json()
-  const response = await request('/api/auth/callback/credentials?json=true', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrfToken: csrf.csrfToken, email: `${id}@example.test`, password, json: 'true', callbackUrl: base.toString() }).toString() })
+  const response = await request('/api/auth/callback/credentials?json=true', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrfToken: csrf.csrfToken, email: `${id}@example.test`, password: secret, json: 'true', callbackUrl: base.toString() }).toString() })
   assert.ok([200, 302].includes(response.status), `Login failed: ${response.status}`)
   const session = await (await request('/api/auth/session')).json()
   assert.equal(session.user?.id, id, 'Credential login must produce a real application session')
@@ -317,11 +317,24 @@ try {
     assert.equal((await fetch(new URL(path, base), { redirect: 'manual' })).status, 200, `${path} must be readable signed out`)
   }
   assert.equal((await historian('/api/account', { method: 'DELETE' })).status, 410, 'Email-only deletion must not bypass fresh verification')
-  console.log('Generation integration passed, including concurrent four-model admission and retirement of email-only deletion')
+  // Support-issued password reset against the real server and database.
+  const resetIdentifier = `password-reset:${capperId}`
+  const resetToken = randomBytes(32).toString('base64url')
+  await db.query(`INSERT INTO "VerificationToken" (identifier, token, expires) VALUES ($1, $2, now() + interval '1 hour')`, [resetIdentifier, createHash('sha256').update(resetToken).digest('hex')])
+  const beforeReset = await login(capperId)
+  const resetPassword = randomUUID()
+  const resetBody = () => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: resetToken, password: resetPassword }), redirect: 'manual' })
+  assert.equal((await fetch(new URL('/api/auth/password-reset', base), resetBody())).status, 200, 'A support-issued reset token must reset the password')
+  assert.equal((await beforeReset('/api/account/usage')).status, 401, 'A password reset must revoke sessions issued before it')
+  assert.equal((await fetch(new URL('/api/auth/password-reset', base), resetBody())).status, 400, 'A reset token must work only once')
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM "VerificationToken" WHERE identifier = $1', [resetIdentifier])).rows[0].count, 0, 'A used reset token must not remain stored')
+  await login(capperId, resetPassword)
+  console.log('Generation integration passed, including concurrent four-model admission, retirement of email-only deletion and single-use password reset')
 } finally {
   modelApi.closeAllConnections()
   if (modelApi.listening) await new Promise(resolve => modelApi.close(resolve))
   await db.query('DELETE FROM "User" WHERE id = ANY($1::text[])', [[owner, outsider, historianId, capperId]])
   await db.query('DELETE FROM "Analytics" WHERE "userId" = ANY($1::text[])', [[owner, outsider, historianId, capperId]])
+  await db.query('DELETE FROM "VerificationToken" WHERE identifier LIKE $1', ['password-reset:generation-test-%'])
   await db.end()
 }

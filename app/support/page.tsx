@@ -68,6 +68,13 @@ export default function SupportPage() {
             registered with. An account created with one sign-in provider cannot
             be opened with a different one.
           </li>
+          <li>
+            <strong>I forgot my password.</strong> This applies only to existing
+            password accounts. Email support from the address on the account. After
+            we verify the request we send a reset link that works once and expires
+            after 60 minutes. Signing in with a provider such as Google is managed
+            by that provider.
+          </li>
         </ul>
       </LegalSection>
 
