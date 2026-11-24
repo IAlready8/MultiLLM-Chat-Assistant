@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { readApiObject } from '@/lib/api-input'
 import { checkAndConsume } from '@/lib/rate-limit'
-import { consumePasswordResetToken, INVALID_RESET_MESSAGE, PasswordResetError } from '@/lib/password-reset'
+import { consumeRecoveryToken, INVALID_RESET_MESSAGE, RecoveryTokenError } from '@/lib/password-reset'
 import { logger } from '@/lib/logger'
 
 const noStore = { 'Cache-Control': 'no-store' }
@@ -37,10 +37,10 @@ export async function POST(request: Request) {
   if (body instanceof NextResponse) return body
 
   try {
-    await consumePasswordResetToken(body.token, body.password)
+    await consumeRecoveryToken(body.token, body.password)
     return NextResponse.json({ ok: true }, { headers: noStore })
   } catch (error) {
-    if (error instanceof PasswordResetError) {
+    if (error instanceof RecoveryTokenError) {
       return NextResponse.json(
         { error: error.kind === 'weak-password' ? error.message : INVALID_RESET_MESSAGE },
         { status: 400, headers: noStore },

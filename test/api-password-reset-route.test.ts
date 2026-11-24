@@ -7,12 +7,12 @@ vi.mock('@/lib/rate-limit', () => ({ checkAndConsume: limiter }))
 const consume = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/password-reset', async () => {
   const actual = await vi.importActual<typeof import('@/lib/password-reset')>('@/lib/password-reset')
-  return { ...actual, consumePasswordResetToken: consume }
+  return { ...actual, consumeRecoveryToken: consume }
 })
 vi.mock('@/lib/prisma', () => ({ default: {} }))
 
 import { POST } from '@/app/api/auth/password-reset/route'
-import { INVALID_RESET_MESSAGE, PasswordResetError } from '@/lib/password-reset'
+import { INVALID_RESET_MESSAGE, RecoveryTokenError } from '@/lib/password-reset'
 
 const request = (body: unknown, ip = '203.0.113.7') => new Request('https://app.example/api/auth/password-reset', {
   method: 'POST',
@@ -51,14 +51,14 @@ describe('POST /api/auth/password-reset', () => {
   })
 
   it('returns one uniform message for every invalid, expired or used token', async () => {
-    consume.mockRejectedValue(new PasswordResetError('invalid', 'internal detail that must not leak'))
+    consume.mockRejectedValue(new RecoveryTokenError('invalid', 'internal detail that must not leak'))
     const response = await POST(request({ token: 'A'.repeat(43), password: 'a fresh password 1' }))
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({ error: INVALID_RESET_MESSAGE })
   })
 
   it('explains password requirements without revealing token state', async () => {
-    consume.mockRejectedValue(new PasswordResetError('weak-password', 'Use at least 8 characters and at most 72 UTF-8 bytes.'))
+    consume.mockRejectedValue(new RecoveryTokenError('weak-password', 'Use at least 8 characters and at most 72 UTF-8 bytes.'))
     const response = await POST(request({ token: 'A'.repeat(43), password: 'short' }))
     expect(response.status).toBe(400)
     expect((await response.json()).error).toMatch(/at least 8 characters/)

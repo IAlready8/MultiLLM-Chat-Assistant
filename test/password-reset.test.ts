@@ -40,9 +40,9 @@ const db = vi.hoisted(() => {
 vi.mock('@/lib/prisma', () => ({ default: db }))
 
 import {
-  consumePasswordResetToken, hashPasswordResetToken, PASSWORD_RESET_TTL_MS, PasswordResetError,
+  consumeRecoveryToken, hashRecoveryToken, RECOVERY_TOKEN_TTL_MS, RecoveryTokenError,
 } from '@/lib/password-reset'
-import { issuePasswordReset, normaliseOrigin, hashPasswordResetToken as scriptHash } from '../scripts/issue-password-reset.mjs'
+import { issueRecoveryLink, normaliseOrigin, hashRecoveryToken as scriptHash } from '../scripts/issue-password-reset.mjs'
 
 const ORIGIN = 'https://app.example'
 const tokenFrom = (url: string | undefined) => new URL(url ?? '').hash.replace('#token=', '')
@@ -58,36 +58,36 @@ beforeEach(() => {
 
 describe('support-issued password reset', () => {
   it('stores only a hash of a 256-bit token and hashes identically in the script and the app', async () => {
-    const issued = await issuePasswordReset(db, { email: 'PW@example.com', origin: ORIGIN })
+    const issued = await issueRecoveryLink(db, { email: 'PW@example.com', origin: ORIGIN })
     expect(issued.ok).toBe(true)
     const token = tokenFrom(issued.url)
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/)
     expect(new URL(issued.url ?? '').pathname).toBe('/auth/reset-password')
     expect(new URL(issued.url ?? '').search).toBe('')
     expect(store.tokens).toHaveLength(1)
-    expect(store.tokens[0].token).toBe(hashPasswordResetToken(token))
+    expect(store.tokens[0].token).toBe(hashRecoveryToken(token))
     expect(store.tokens[0].token).toBe(scriptHash(token))
     expect(store.tokens[0].token).not.toContain(token)
     expect(store.tokens[0].identifier).toBe('password-reset:pw-user')
   })
 
   it('resets the password once, revokes earlier sessions and removes the token', async () => {
-    const issued = await issuePasswordReset(db, { email: 'pw@example.com', origin: ORIGIN })
-    await consumePasswordResetToken(tokenFrom(issued.url), 'a fresh password 1')
+    const issued = await issueRecoveryLink(db, { email: 'pw@example.com', origin: ORIGIN })
+    await consumeRecoveryToken(tokenFrom(issued.url), 'a fresh password 1')
     const user = store.users[0]
     expect(user.passwordVersion).toBe(4)
     expect(await bcrypt.compare('a fresh password 1', user.password!)).toBe(true)
     expect(store.tokens).toHaveLength(0)
-    await expect(consumePasswordResetToken(tokenFrom(issued.url), 'another password 2')).rejects.toMatchObject({ kind: 'invalid' })
+    await expect(consumeRecoveryToken(tokenFrom(issued.url), 'another password 2')).rejects.toMatchObject({ kind: 'invalid' })
     expect(user.passwordVersion).toBe(4)
   })
 
   it('lets only one of two concurrent uses succeed', async () => {
-    const issued = await issuePasswordReset(db, { email: 'pw@example.com', origin: ORIGIN })
+    const issued = await issueRecoveryLink(db, { email: 'pw@example.com', origin: ORIGIN })
     const token = tokenFrom(issued.url)
     const results = await Promise.allSettled([
-      consumePasswordResetToken(token, 'first password 1'),
-      consumePasswordResetToken(token, 'second password 2'),
+      consumeRecoveryToken(token, 'first password 1'),
+      consumeRecoveryToken(token, 'second password 2'),
     ])
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
     expect(store.users[0].passwordVersion).toBe(4)
@@ -95,45 +95,45 @@ describe('support-issued password reset', () => {
 
   it('rejects an expired token with the same message as an unknown one', async () => {
     const issuedAt = new Date('2026-11-24T10:00:00Z')
-    const issued = await issuePasswordReset(db, { email: 'pw@example.com', origin: ORIGIN, now: issuedAt })
-    const expired = consumePasswordResetToken(tokenFrom(issued.url), 'a fresh password 1', new Date(issuedAt.getTime() + PASSWORD_RESET_TTL_MS))
-    const unknown = consumePasswordResetToken('A'.repeat(43), 'a fresh password 1')
+    const issued = await issueRecoveryLink(db, { email: 'pw@example.com', origin: ORIGIN, now: issuedAt })
+    const expired = consumeRecoveryToken(tokenFrom(issued.url), 'a fresh password 1', new Date(issuedAt.getTime() + RECOVERY_TOKEN_TTL_MS))
+    const unknown = consumeRecoveryToken('A'.repeat(43), 'a fresh password 1')
     const errors = await Promise.allSettled([expired, unknown])
-    const messages = errors.map(result => result.status === 'rejected' ? (result.reason as PasswordResetError).message : 'ok')
+    const messages = errors.map(result => result.status === 'rejected' ? (result.reason as RecoveryTokenError).message : 'ok')
     expect(messages[0]).toBe(messages[1])
     expect(messages[0]).toMatch(/invalid or has expired/)
     expect(store.users[0].passwordVersion).toBe(3)
   })
 
   it('replaces an earlier outstanding link when a new one is issued', async () => {
-    const first = await issuePasswordReset(db, { email: 'pw@example.com', origin: ORIGIN })
-    const second = await issuePasswordReset(db, { email: 'pw@example.com', origin: ORIGIN })
+    const first = await issueRecoveryLink(db, { email: 'pw@example.com', origin: ORIGIN })
+    const second = await issueRecoveryLink(db, { email: 'pw@example.com', origin: ORIGIN })
     expect(store.tokens).toHaveLength(1)
-    await expect(consumePasswordResetToken(tokenFrom(first.url), 'a fresh password 1')).rejects.toMatchObject({ kind: 'invalid' })
-    await consumePasswordResetToken(tokenFrom(second.url), 'a fresh password 1')
+    await expect(consumeRecoveryToken(tokenFrom(first.url), 'a fresh password 1')).rejects.toMatchObject({ kind: 'invalid' })
+    await consumeRecoveryToken(tokenFrom(second.url), 'a fresh password 1')
   })
 
   it('rejects malformed tokens and weak passwords before touching the database', async () => {
     const spy = vi.spyOn(db.verificationToken, 'findUnique')
-    await expect(consumePasswordResetToken('short', 'a fresh password 1')).rejects.toMatchObject({ kind: 'invalid' })
-    await expect(consumePasswordResetToken(undefined, 'a fresh password 1')).rejects.toMatchObject({ kind: 'invalid' })
-    await expect(consumePasswordResetToken('A'.repeat(43), 'short')).rejects.toMatchObject({ kind: 'weak-password' })
-    await expect(consumePasswordResetToken('A'.repeat(43), 'x'.repeat(73))).rejects.toMatchObject({ kind: 'weak-password' })
+    await expect(consumeRecoveryToken('short', 'a fresh password 1')).rejects.toMatchObject({ kind: 'invalid' })
+    await expect(consumeRecoveryToken(undefined, 'a fresh password 1')).rejects.toMatchObject({ kind: 'invalid' })
+    await expect(consumeRecoveryToken('A'.repeat(43), 'short')).rejects.toMatchObject({ kind: 'weak-password' })
+    await expect(consumeRecoveryToken('A'.repeat(43), 'x'.repeat(73))).rejects.toMatchObject({ kind: 'weak-password' })
     expect(spy).not.toHaveBeenCalled()
     spy.mockRestore()
   })
 
   it('refuses to issue links for accounts without a password or with deletion pending', async () => {
-    await expect(issuePasswordReset(db, { email: 'oauth@example.com', origin: ORIGIN })).resolves.toEqual({ ok: false, reason: 'not-a-password-account' })
-    await expect(issuePasswordReset(db, { email: 'leaving@example.com', origin: ORIGIN })).resolves.toEqual({ ok: false, reason: 'deletion-pending' })
-    await expect(issuePasswordReset(db, { email: 'nobody@example.com', origin: ORIGIN })).resolves.toEqual({ ok: false, reason: 'no-account' })
+    await expect(issueRecoveryLink(db, { email: 'oauth@example.com', origin: ORIGIN })).resolves.toEqual({ ok: false, reason: 'not-a-password-account' })
+    await expect(issueRecoveryLink(db, { email: 'leaving@example.com', origin: ORIGIN })).resolves.toEqual({ ok: false, reason: 'deletion-pending' })
+    await expect(issueRecoveryLink(db, { email: 'nobody@example.com', origin: ORIGIN })).resolves.toEqual({ ok: false, reason: 'no-account' })
     expect(store.tokens).toHaveLength(0)
   })
 
   it('does not reset an account whose deletion started after the link was issued', async () => {
-    const issued = await issuePasswordReset(db, { email: 'pw@example.com', origin: ORIGIN })
+    const issued = await issueRecoveryLink(db, { email: 'pw@example.com', origin: ORIGIN })
     store.users[0].deletionRequestedAt = new Date()
-    await expect(consumePasswordResetToken(tokenFrom(issued.url), 'a fresh password 1')).rejects.toMatchObject({ kind: 'invalid' })
+    await expect(consumeRecoveryToken(tokenFrom(issued.url), 'a fresh password 1')).rejects.toMatchObject({ kind: 'invalid' })
     expect(store.users[0].passwordVersion).toBe(3)
   })
 

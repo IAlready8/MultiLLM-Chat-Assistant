@@ -15,10 +15,12 @@ import { createHash, randomBytes } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
-export const PASSWORD_RESET_IDENTIFIER_PREFIX = 'password-reset:'
-export const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000
+export const RECOVERY_IDENTIFIER_PREFIX = 'password-reset:'
+export const RECOVERY_TOKEN_TTL_MS = 60 * 60 * 1000
 
-export const hashPasswordResetToken = (token) =>
+// The input is a 256-bit random token, not a user password; SHA-256 is the
+// appropriate storage hash for it.
+export const hashRecoveryToken = (token) =>
   createHash('sha256').update(token, 'utf8').digest('hex')
 
 export function normaliseOrigin(raw) {
@@ -31,7 +33,7 @@ export function normaliseOrigin(raw) {
 }
 
 /** Returns { ok: true, url, expires } or { ok: false, reason } (operator-only output). */
-export async function issuePasswordReset(prisma, { email, origin, now = new Date() }) {
+export async function issueRecoveryLink(prisma, { email, origin, now = new Date() }) {
   const normalisedEmail = String(email ?? '').trim().toLowerCase()
   if (!normalisedEmail.includes('@')) return { ok: false, reason: 'invalid-email' }
   const base = normaliseOrigin(origin)
@@ -44,11 +46,11 @@ export async function issuePasswordReset(prisma, { email, origin, now = new Date
   if (user.deletionRequestedAt) return { ok: false, reason: 'deletion-pending' }
 
   const token = randomBytes(32).toString('base64url')
-  const identifier = `${PASSWORD_RESET_IDENTIFIER_PREFIX}${user.id}`
-  const expires = new Date(now.getTime() + PASSWORD_RESET_TTL_MS)
+  const identifier = `${RECOVERY_IDENTIFIER_PREFIX}${user.id}`
+  const expires = new Date(now.getTime() + RECOVERY_TOKEN_TTL_MS)
   await prisma.$transaction([
     prisma.verificationToken.deleteMany({ where: { identifier } }),
-    prisma.verificationToken.create({ data: { identifier, token: hashPasswordResetToken(token), expires } }),
+    prisma.verificationToken.create({ data: { identifier, token: hashRecoveryToken(token), expires } }),
   ])
   return { ok: true, url: `${base}/auth/reset-password#token=${token}`, expires }
 }
@@ -75,7 +77,7 @@ async function main() {
   const [{ PrismaPg }, { PrismaClient }] = await Promise.all([import('@prisma/adapter-pg'), import('@prisma/client')])
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
   try {
-    const result = await issuePasswordReset(prisma, args)
+    const result = await issueRecoveryLink(prisma, args)
     if (!result.ok) {
       console.error(`No link issued: ${result.reason}`)
       process.exitCode = 2
