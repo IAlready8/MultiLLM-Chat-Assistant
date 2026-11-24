@@ -2,8 +2,16 @@ import { NextResponse } from 'next/server'
 import { getAuthenticatedUser } from '@/lib/api-auth'
 import { jevChoose, getJevApiKey, JevError } from '@/lib/jev'
 import { getUserApiKey } from '@/lib/api-key-service'
+import { LlmRequestError, readBoundedJson } from '@/lib/llm-request'
+import { checkAndConsume } from '@/lib/rate-limit'
 import prisma from '@/lib/prisma'
 import { z } from 'zod'
+
+export const maxDuration = 30
+
+// 10 options x 10,000 characters + a 10,000 character state, with JSON and
+// multi-byte headroom. Larger bodies are rejected before parsing.
+const MAX_JUDGE_BODY_BYTES = 256_000
 
 const judgeSchema = z.object({
   state: z.string().min(1).max(10000),
@@ -20,6 +28,15 @@ const judgeSchema = z.object({
     .max(10),
 })
 
+function jevErrorResponse(error: JevError) {
+  // Upstream rate limiting is passed through so the client can retry later.
+  // Every other upstream failure, including Jev rejecting the key (401/403),
+  // is reported as 502: a 401 from this route must only ever mean that the
+  // caller's own session is invalid.
+  const status = error.statusCode === 429 ? 429 : 502
+  return NextResponse.json({ error: error.message, code: error.code }, { status })
+}
+
 /**
  * POST /api/jev/judge
  *
@@ -31,10 +48,18 @@ export async function POST(request: Request) {
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
 
+  const limit = await checkAndConsume(`jev-judge:${user.id}`, { max: 20, windowMs: 60_000 })
+  if (!limit.allowed) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  }
+
   let body: unknown
   try {
-    body = await request.json()
-  } catch {
+    body = await readBoundedJson(request, MAX_JUDGE_BODY_BYTES)
+  } catch (error) {
+    if (error instanceof LlmRequestError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    }
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
@@ -83,7 +108,7 @@ export async function POST(request: Request) {
     )
   }
 
-  // Get decrypted API key
+  // The user's own decrypted key wins; a server-wide key is only a fallback.
   const apiKey = await getUserApiKey(user.id, 'jev')
 
   const resolvedKey = getJevApiKey(apiKey)
@@ -94,19 +119,22 @@ export async function POST(request: Request) {
     )
   }
 
-  // Build Jev request
   const contents: Record<string, string> = {}
   for (const opt of options) {
     contents[opt.id] = opt.content
   }
 
   try {
-    const result = await jevChoose(resolvedKey, {
-      state,
-      question,
-      options: options.map((o) => ({ id: o.id, label: o.label })),
-      contents,
-    })
+    const result = await jevChoose(
+      resolvedKey,
+      {
+        state,
+        question,
+        options: options.map((o) => ({ id: o.id, label: o.label })),
+        contents,
+      },
+      request.signal,
+    )
 
     return NextResponse.json({
       winnerId: result.winnerId,
@@ -114,19 +142,15 @@ export async function POST(request: Request) {
       probabilities: result.probabilities,
       confidence: result.confidence,
       judgedBy: 'jev',
-      model: 'jev-1.13.0',
+      model: result.model,
     })
   } catch (error) {
     if (error instanceof JevError) {
-      const status = error.statusCode ?? 500
-      return NextResponse.json(
-        { error: error.message, code: error.code },
-        { status: status >= 400 && status < 600 ? status : 500 },
-      )
+      return jevErrorResponse(error)
     }
     return NextResponse.json(
       { error: 'Jev judging failed' },
-      { status: 500 },
+      { status: 502 },
     )
   }
 }

@@ -23,11 +23,20 @@ vi.mock('@/lib/api-key-service', () => ({
     mockHasValidApiKey(userId, provider),
 }))
 
+const mockProviderConfigUpdate = vi.fn()
+
 vi.mock('@/lib/prisma', () => ({
-  default: { providerConfig: { update: vi.fn() } },
+  default: { providerConfig: { update: (args: unknown) => mockProviderConfigUpdate(args) } },
 }))
 
-import { GET } from '@/app/api/jev/config/route'
+import { GET, PUT } from '@/app/api/jev/config/route'
+
+const putRequest = (body: unknown) =>
+  new Request('http://localhost/api/jev/config', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  })
 
 const jevConfig = {
   id: 'cfg-jev',
@@ -95,5 +104,81 @@ describe('/api/jev/config GET', () => {
 
     expect(response.status).toBe(401)
     expect(mockGetUserProviderConfigs).not.toHaveBeenCalled()
+  })
+})
+
+describe('/api/jev/config PUT', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetAuthenticatedUser.mockResolvedValue({ user: { id: 'user-1' } })
+    mockGetUserProviderConfigs.mockResolvedValue([])
+    mockStoreUserApiKey.mockResolvedValue(undefined)
+    mockProviderConfigUpdate.mockResolvedValue(undefined)
+  })
+
+  it('forwards the auth response when authentication fails', async () => {
+    mockGetAuthenticatedUser.mockResolvedValue(
+      NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+    )
+
+    const response = await PUT(putRequest({ enabled: true, token: 'k' }))
+
+    expect(response.status).toBe(401)
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('rejects a body larger than the 4 KB limit with 413 before storing anything', async () => {
+    const response = await PUT(putRequest({ enabled: true, token: 'k', padding: 'x'.repeat(5000) }))
+
+    expect(response.status).toBe(413)
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('rejects malformed JSON with 400', async () => {
+    const response = await PUT(putRequest('{not json'))
+
+    expect(response.status).toBe(400)
+  })
+
+  it('rejects a body without a boolean enabled flag', async () => {
+    const response = await PUT(putRequest({ enabled: 'yes' }))
+
+    expect(response.status).toBe(400)
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('rejects an over-long key', async () => {
+    const response = await PUT(putRequest({ enabled: true, token: 'k'.repeat(201) }))
+
+    expect(response.status).toBe(400)
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+  })
+
+  it('stores a new key with the enabled flag', async () => {
+    const response = await PUT(putRequest({ enabled: true, token: 'new-key' }))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ configured: true, enabled: true })
+    expect(mockStoreUserApiKey).toHaveBeenCalledWith('user-1', 'jev', 'new-key', { jevJudgingEnabled: true })
+  })
+
+  it('updates only the flag when a config exists and no key is sent', async () => {
+    mockGetUserProviderConfigs.mockResolvedValue([jevConfig])
+
+    const response = await PUT(putRequest({ enabled: false }))
+
+    expect(response.status).toBe(200)
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
+    expect(mockProviderConfigUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId_provider: { userId: 'user-1', provider: 'jev' } },
+      data: expect.objectContaining({ settings: JSON.stringify({ jevJudgingEnabled: false }) }),
+    }))
+  })
+
+  it('refuses to enable judging without any key', async () => {
+    const response = await PUT(putRequest({ enabled: true }))
+
+    expect(response.status).toBe(400)
+    expect(mockStoreUserApiKey).not.toHaveBeenCalled()
   })
 })

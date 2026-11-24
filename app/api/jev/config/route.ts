@@ -5,8 +5,11 @@ import {
   getUserProviderConfigs,
   hasValidApiKey,
 } from '@/lib/api-key-service'
+import { LlmRequestError, readBoundedJson } from '@/lib/llm-request'
 import prisma from '@/lib/prisma'
 import { enforceWorkspaceWriteLimit } from '@/lib/route-rate-limit'
+
+const MAX_CONFIG_BODY_BYTES = 4_096
 
 // Manual validation (zod schema triggers false-positive redaction in tooling)
 const parseConfigBody = (body: unknown): { token?: string; enabled: boolean } | null => {
@@ -70,8 +73,12 @@ export async function PUT(request: Request) {
 
   let body: unknown
   try {
-    body = await request.json()
-  } catch {
+    // The body is a boolean plus an optional key of at most 200 characters.
+    body = await readBoundedJson(request, MAX_CONFIG_BODY_BYTES)
+  } catch (error) {
+    if (error instanceof LlmRequestError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    }
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
