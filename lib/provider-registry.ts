@@ -14,6 +14,9 @@ export interface ProviderMeta {
 
 export const PROVIDER_DISABLED_ERROR_CODE = 'PROVIDER_DISABLED'
 
+// NODE_ENV is inlined into client bundles, so server and browser agree.
+const OLLAMA_UNAVAILABLE = process.env.NODE_ENV === 'production'
+
 export const providerRegistry: ProviderMeta[] = [
   {
     id: 'openai',
@@ -56,6 +59,12 @@ export const providerRegistry: ProviderMeta[] = [
     placeholder: 'Optional bearer token for remote Ollama',
     description: 'Local models served by Ollama at http://localhost:11434.',
     requiresApiKey: false,
+    // A hosted deployment cannot reach a user's local Ollama, and
+    // lib/provider-endpoint.ts rejects every Ollama endpoint in production.
+    // Report it as unavailable there so health, settings and model pickers
+    // never offer a provider whose requests are always refused.
+    operational: !OLLAMA_UNAVAILABLE,
+    disabledReason: 'Ollama is only available when the app runs locally.',
   },
   {
     id: 'mistral',
