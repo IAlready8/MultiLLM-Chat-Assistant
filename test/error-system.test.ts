@@ -35,10 +35,25 @@ describe('error recovery and diagnostics', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
     database.create.mockRejectedValueOnce(new Error('token=private-token'))
-    await expect(errorManager.logError(new DatabaseError('offline', createErrorContext('/api/test'))))
+    await expect(errorManager.logError(new DatabaseError('offline', createErrorContext('/api/test', 'test-user'))))
       .resolves.toBeUndefined()
+    expect(database.create).toHaveBeenCalledOnce()
     expect(warn).toHaveBeenCalledWith('error_analytics_persistence_failed', expect.any(Object))
     expect(JSON.stringify(warn.mock.calls)).not.toContain('private-token')
+  })
+
+  it('keeps unattributed critical errors in logs instead of writing an ownerless analytics row', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const logged = vi.spyOn(logger, 'error').mockImplementation(() => {})
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => {})
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    await expect(errorManager.logError(new DatabaseError('offline', createErrorContext('/api/test'))))
+      .resolves.toBeUndefined()
+    expect(database.create).not.toHaveBeenCalled()
+    expect(logged).toHaveBeenCalledWith('app_error', expect.objectContaining({ severity: ErrorSeverity.CRITICAL }))
+    expect(info).toHaveBeenCalledWith('error_analytics_skipped_unattributed', expect.objectContaining({ errorId: expect.any(String) }))
+    expect(warn).not.toHaveBeenCalledWith('error_analytics_persistence_failed', expect.anything())
+    expect(JSON.stringify(database.create.mock.calls)).not.toContain('"system"')
   })
 
   it('falls back safely when the primary logger itself fails', async () => {

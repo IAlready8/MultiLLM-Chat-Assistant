@@ -290,8 +290,13 @@ export class ErrorManager {
         )
       }
 
-      // Persist critical errors for analytics/inspection
-      if (appError.severity === ErrorSeverity.CRITICAL) {
+      // Persist critical errors for analytics/inspection. Analytics rows belong to
+      // a user (Analytics_userId_fkey, ON DELETE CASCADE), so an error without a
+      // user is kept only in the structured app_error log above.
+      const errorUserId = appError.context.userId
+      if (appError.severity === ErrorSeverity.CRITICAL && !errorUserId) {
+        logger.info('error_analytics_skipped_unattributed', { errorId: appError.id })
+      } else if (appError.severity === ErrorSeverity.CRITICAL && errorUserId) {
         try {
           const prisma = await getPrismaClient()
           if (prisma) {
@@ -305,8 +310,7 @@ export class ErrorManager {
                   severity: appError.severity,
                   message: sanitizeLogString(appError.message),
                 }),
-                // Analytics.userId is required in schema; default to 'system' if absent
-                userId: appError.context.userId ?? 'system',
+                userId: errorUserId,
               },
             })
           }
