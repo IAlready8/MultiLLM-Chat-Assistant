@@ -46,7 +46,7 @@ const isJwtDecryptionError = (error: unknown): boolean => {
  * test is a heuristic regression guard; future authorization changes require
  * explicit review. Role-based UI must call an API using this function.
  */
-export async function getAuthenticatedUser(): Promise<
+export async function getAuthenticatedUser(options: { allowAccountDeletion?: boolean } = {}): Promise<
   { user: User } | NextResponse
 > {
   try {
@@ -61,12 +61,13 @@ export async function getAuthenticatedUser(): Promise<
           email: true,
           image: true,
           passwordVersion: true,
+          deletionRequestedAt: true,
           role: true,
         },
       })
       // JWTs outlive deleted accounts and changes to the admin allowlist.
       // Every protected operation must use the current account identity.
-      if (!currentUser) {
+      if (!currentUser || (currentUser.deletionRequestedAt && !options.allowAccountDeletion)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
       // Password changes bump passwordVersion; sessions minted before the change are revoked.

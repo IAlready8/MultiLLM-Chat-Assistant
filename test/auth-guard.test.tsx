@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('next-auth/react', () => ({
-  useSession: () => ({ status: mocks.status, data: null }),
+  useSession: () => ({ status: mocks.status, data: mocks.status === 'authenticated' ? { user: { id: 'unit-user' } } : null }),
 }))
 vi.mock('next/navigation', () => ({
   usePathname: () => mocks.pathname,
@@ -32,7 +32,7 @@ beforeEach(() => {
 })
 
 describe('AuthGuard', () => {
-  it.each(['/terms', '/privacy', '/pricing', '/support', '/auth/signin', '/auth/register'])(
+  it.each(['/', '/terms', '/privacy', '/pricing', '/support', '/auth/signin', '/auth/register'])(
     'renders %s for a signed-out visitor without redirecting',
     (pathname) => {
       renderAt(pathname)
@@ -41,7 +41,7 @@ describe('AuthGuard', () => {
     },
   )
 
-  it.each(['/', '/settings', '/billing', '/termsandmore', '/privacy-export'])(
+  it.each(['/workspace', '/settings', '/billing', '/termsandmore', '/privacy-export'])(
     'hides %s from a signed-out visitor and sends them to sign in',
     (pathname) => {
       renderAt(pathname)

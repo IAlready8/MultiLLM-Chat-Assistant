@@ -1,5 +1,7 @@
 'use client'
 
+import { MAX_COMPARISON_MODELS } from '@/lib/release-scope'
+
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -157,7 +159,7 @@ export default function MultiChatPage() {
 
       // Create default instances for configured providers
       if (filtered.length > 0) {
-        const instances: ModelInstance[] = filtered.map((provider: string) => ({
+        const instances: ModelInstance[] = filtered.slice(0, MAX_COMPARISON_MODELS).map((provider: string) => ({
           id: generateInstanceId(),
           provider,
           model: getDefaultModel(provider)
@@ -592,7 +594,7 @@ export default function MultiChatPage() {
   }
 
   const addModelInstance = (provider: string) => {
-    if (chatState.activeInstances.length >= 8) return
+    if (chatState.activeInstances.length >= MAX_COMPARISON_MODELS) return
     const newInstance: ModelInstance = {
       id: generateInstanceId(),
       provider,
@@ -751,7 +753,7 @@ export default function MultiChatPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => addModelInstance(provider.id)}
-                    disabled={isBusy || chatState.activeInstances.length >= 8}
+                    disabled={isBusy || chatState.activeInstances.length >= MAX_COMPARISON_MODELS}
                     className="h-auto min-h-8 min-w-0 whitespace-normal px-2 text-xs"
                     title={provider.description}
                   >
@@ -781,6 +783,7 @@ export default function MultiChatPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          aria-label={`Remove ${getProviderLabel(instance.provider)} model`}
                           onClick={() => removeModelInstance(instance.id)}
                           disabled={isBusy}
                           className="h-6 w-6 p-0"

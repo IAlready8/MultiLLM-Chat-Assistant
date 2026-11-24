@@ -1,5 +1,10 @@
+const paidSignup = vi.hoisted(() => vi.fn(() => true))
+vi.mock('@/lib/paid-signup', () => ({ isPaidSignupEnabled: paidSignup }))
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
+
+const billingUser = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/prisma', () => ({ default: { user: { findUnique: billingUser } } }))
 
 const {
   mockGetAuthenticatedUser,
@@ -103,6 +108,8 @@ const originalNextAuthUrl = process.env.NEXTAUTH_URL
 describe('subscription routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    paidSignup.mockReturnValue(true)
+    billingUser.mockResolvedValue({ id: 'user-1', deletionRequestedAt: null })
     process.env.NEXTAUTH_URL = 'http://localhost:3000'
 
     mockEnsureStripeConfigured.mockReset()
@@ -202,24 +209,12 @@ describe('subscription routes', () => {
     )
   })
 
-  it('falls back to localhost base URL when NEXTAUTH_URL is invalid', async () => {
+  it('fails closed before Stripe resources when NEXTAUTH_URL is invalid', async () => {
     process.env.NEXTAUTH_URL = 'not-a-valid-url'
-
-    const response = await createSubscriptionSession(
-      new Request('http://localhost'),
-    )
-    const payload = mockCreateCheckoutSession.mock.calls[0]?.[0] as {
-      success_url: string
-      cancel_url: string
-    }
-
-    expect(response.status).toBe(200)
-    expect(payload.success_url).toBe(
-      'http://localhost:3000/billing?success=true',
-    )
-    expect(payload.cancel_url).toBe(
-      'http://localhost:3000/billing?canceled=true',
-    )
+    const response = await createSubscriptionSession(new Request('http://localhost'))
+    expect(response.status).toBe(503)
+    expect(mockGetOrCreateStripeCustomer).not.toHaveBeenCalled()
+    expect(mockCreateCheckoutSession).not.toHaveBeenCalled()
   })
 
   it('records checkout analytics with request source', async () => {
@@ -268,6 +263,44 @@ describe('subscription routes', () => {
       }),
       expect.objectContaining({ idempotencyKey: expect.stringMatching(/^checkout:user-1:price_test:/) }),
     )
+  })
+
+  it('leaves sales tax off by default and charges the tax-exclusive list price', async () => {
+    vi.stubEnv('STRIPE_AUTOMATIC_TAX', '')
+    await createSubscriptionSession(new Request('http://localhost', { method: 'POST' }))
+    const [payload, options] = mockCreateCheckoutSession.mock.calls[0]
+    expect(payload).not.toHaveProperty('automatic_tax')
+    expect(payload).not.toHaveProperty('billing_address_collection')
+    expect(payload).not.toHaveProperty('customer_update')
+    expect(payload.metadata.automaticTax).toBe('false')
+    expect(options.idempotencyKey).toMatch(/:tax-false$/)
+    vi.unstubAllEnvs()
+  })
+
+  it('enables Stripe Tax with a required billing address when the operator turns it on', async () => {
+    vi.stubEnv('STRIPE_AUTOMATIC_TAX', 'true')
+    await createSubscriptionSession(new Request('http://localhost', { method: 'POST' }))
+    const [payload, options] = mockCreateCheckoutSession.mock.calls[0]
+    expect(payload).toEqual(expect.objectContaining({
+      automatic_tax: { enabled: true },
+      billing_address_collection: 'required',
+      customer_update: { address: 'auto' },
+    }))
+    expect(payload.metadata.automaticTax).toBe('true')
+    expect(options.idempotencyKey).toMatch(/:tax-true$/)
+    vi.unstubAllEnvs()
+  })
+
+  it('does not reuse an open checkout created under a different tax setting', async () => {
+    vi.stubEnv('STRIPE_AUTOMATIC_TAX', 'true')
+    mockListCheckoutSessions.mockResolvedValue({ data: [{
+      url: 'https://stripe.test/untaxed', expires_at: Math.floor(Date.now() / 1000) + 600,
+      metadata: { app: 'multi-llm-chat-assistant', priceId: 'price_test' },
+    }] })
+    const response = await createSubscriptionSession(new Request('http://localhost', { method: 'POST' }))
+    expect((await response.json()).url).toBe('https://stripe.test/checkout')
+    expect(mockCreateCheckoutSession).toHaveBeenCalledOnce()
+    vi.unstubAllEnvs()
   })
 
   it('routes customers with an ongoing subscription to the portal', async () => {
@@ -373,6 +406,14 @@ describe('subscription routes', () => {
     expect(await response.json()).toEqual({ url: 'https://checkout.stripe.com/existing', destination: 'checkout' })
     expect(mockCreateCheckoutSession).not.toHaveBeenCalled()
   })
+it('keeps new paid signup closed before creating any Stripe resource while preserving billing management', async () => {
+  paidSignup.mockReturnValue(false)
+  expect((await createSubscriptionSession(new Request('http://localhost'))).status).toBe(503)
+  expect(mockGetOrCreateStripeCustomer).not.toHaveBeenCalled()
+  expect(mockCreateCheckoutSession).not.toHaveBeenCalled()
+  expect((await createManageSession(new Request('http://localhost'))).status).toBe(200)
+})
+
 })
 
 afterEach(() => {
@@ -381,6 +422,9 @@ afterEach(() => {
   } else {
     process.env.NEXTAUTH_URL = originalNextAuthUrl
   }
+
+
+
 
 
 })

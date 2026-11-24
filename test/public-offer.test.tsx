@@ -1,3 +1,5 @@
+const paidSignup = vi.hoisted(() => vi.fn(() => true))
+vi.mock('@/lib/paid-signup', () => ({ isPaidSignupEnabled: paidSignup }))
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
@@ -109,13 +111,10 @@ describe('pricing page', () => {
     expect(text).not.toContain('Renews automatically')
   })
 
-  it('offers a team contact only when a contact address is configured', async () => {
-    const first = render(await PricingPage())
-    expect(screen.queryByRole('link', { name: 'Contact us' })).not.toBeInTheDocument()
-    first.unmount()
+  it('does not advertise Teams sales even with a configured contact', async () => {
     vi.stubEnv('SUPPORT_EMAIL', 'sales@example.test')
     render(await PricingPage())
-    expect(screen.getByRole('link', { name: 'Contact us' })).toHaveAttribute('href', 'mailto:sales@example.test')
+    expect(screen.queryByRole('link', { name: 'Contact us' })).not.toBeInTheDocument()
   })
 
   it('does not sell an enterprise plan', async () => {

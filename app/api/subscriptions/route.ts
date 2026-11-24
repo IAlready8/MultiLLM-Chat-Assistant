@@ -1,3 +1,7 @@
+import { BYOK_COPY, GENERATION_ALLOWANCE_COPY } from '@/lib/release-offer'
+import { isPaidSignupEnabled } from '@/lib/paid-signup'
+import prisma from '@/lib/prisma'
+import { getBillingOrigin } from '@/lib/billing-origin'
 import { getProPrice } from '@/lib/billing-price'
 import { withBillingLock } from '@/lib/billing-lock'
 import { NextResponse } from 'next/server'
@@ -14,21 +18,9 @@ import {
 import { logger } from '@/lib/logger'
 import { recordAnalyticsEvent } from '@/services/analytics-service'
 import { readBillingSource } from '@/lib/billing-source'
+import { checkoutTaxParams, isStripeAutomaticTaxEnabled } from '@/lib/stripe-tax'
 
-// Get the absolute URL for Stripe callbacks
-const getBaseUrl = () => {
-  const configured = process.env.NEXTAUTH_URL?.trim()
-  if (configured) {
-    try {
-      return new URL(configured)
-    } catch {
-      console.warn(
-        'Invalid NEXTAUTH_URL; falling back to http://localhost:3000',
-      )
-    }
-  }
-  return new URL('http://localhost:3000')
-}
+
 
 const ongoingSubscriptionStatuses = new Set([
   'active',
@@ -47,6 +39,7 @@ export async function POST(req: Request) {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
   const { user } = authCheck
+  if (!isPaidSignupEnabled()) return NextResponse.json({ error: 'New paid signup is not open yet. Existing subscribers can use billing management.', code: 'PAID_SIGNUP_CLOSED' }, { status: 503 })
 
   // Each call creates Stripe API objects. Cap it per account, but never let a
   // limiter outage stand between a customer and paying or cancelling.
@@ -65,18 +58,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'User email not found' }, { status: 400 })
   }
 
+  const email = user.email
   try {
+    const baseUrl = getBillingOrigin()
     ensureStripeConfigured('checkout')
     await getProPrice()
 
+    const destination = await withBillingLock(`billing-user:${user.id}`, async () => {
+      const current = await prisma.user.findUnique({ where: { id: user.id }, select: { deletionRequestedAt: true } })
+      if (!current || current.deletionRequestedAt) throw new StripeConfigurationError('Account unavailable')
     const stripeCustomerId = await getOrCreateStripeCustomer(
       user.id,
-      user.email,
+      email,
     )
 
-    const baseUrl = getBaseUrl()
-
-    const destination = await withBillingLock(`stripe-customer:${stripeCustomerId}`, async () => {
+    return withBillingLock(`stripe-customer:${stripeCustomerId}`, async () => {
       const existingSubscriptions = await stripe.subscriptions.list({
         customer: stripeCustomerId,
         status: 'all',
@@ -95,13 +91,16 @@ export async function POST(req: Request) {
         return { url: portalSession.url, destination: 'portal' }
       }
 
+      const automaticTax = isStripeAutomaticTaxEnabled()
+      const taxMarker = automaticTax ? 'true' : 'false'
       const openSessions = await stripe.checkout.sessions.list({ customer: stripeCustomerId, status: 'open', limit: 100 })
-      const open = openSessions.data.find(item => item.metadata?.app === 'multi-llm-chat-assistant' && item.metadata?.priceId === STRIPE_PRO_PRICE_ID && item.url && item.expires_at > Math.floor(Date.now() / 1000))
+      const open = openSessions.data.find(item => item.metadata?.app === 'multi-llm-chat-assistant' && item.metadata?.priceId === STRIPE_PRO_PRICE_ID && (item.metadata?.automaticTax ?? 'false') === taxMarker && item.url && item.expires_at > Math.floor(Date.now() / 1000))
       if (open) return { url: open.url, destination: 'checkout' }
 
       // Create the Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
+        custom_text: { submit: { message: `${BYOK_COPY} ${GENERATION_ALLOWANCE_COPY} Pro includes 2,000 attempts per UTC month, with up to four models per comparison.` } },
         customer: stripeCustomerId,
         client_reference_id: user.id,
         line_items: [
@@ -118,6 +117,7 @@ export async function POST(req: Request) {
             userId: user.id,
           },
         },
+        ...checkoutTaxParams(automaticTax),
         success_url: new URL('/billing?success=true', baseUrl).toString(),
         cancel_url: new URL('/billing?canceled=true', baseUrl).toString(),
         metadata: {
@@ -125,9 +125,12 @@ export async function POST(req: Request) {
           priceId: STRIPE_PRO_PRICE_ID!,
           tier: 'PRO',
           userId: user.id,
+          automaticTax: taxMarker,
         },
-      }, { idempotencyKey: `checkout:${user.id}:${STRIPE_PRO_PRICE_ID}:${existingSubscriptions.data[0]?.id ?? 'new'}:${Math.floor(Date.now() / 1800000)}` })
+      }, { idempotencyKey: `checkout:${user.id}:${STRIPE_PRO_PRICE_ID}:${existingSubscriptions.data[0]?.id ?? 'new'}:${Math.floor(Date.now() / 1800000)}:tax-${taxMarker}` })
       return { url: session.url, destination: 'checkout' }
+    })
+
     })
 
     try {

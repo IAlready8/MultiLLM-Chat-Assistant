@@ -13,7 +13,7 @@ const vercelRoot = dirname(require.resolve('vercel/package.json'));
 const vercelRequire = createRequire(join(vercelRoot, 'package.json'));
 const nodeRequire = createRequire(vercelRequire.resolve('@vercel/node'));
 for (const consumer of [vercelRequire, nodeRequire]) {
-  assert.equal(consumer('undici/package.json').version, '6.28.0');
+  assert.equal(consumer('undici/package.json').version, '6.29.1');
 }
 const { request, Agent } = vercelRequire('undici');
 const chunks = join(vercelRoot, 'dist/chunks');

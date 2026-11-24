@@ -8,13 +8,12 @@ import { Button } from '@/components/ui/button'
 import { AccountProfileForm } from '@/components/account-profile-form'
 import { ChangePasswordForm } from '@/components/change-password-form'
 import { AccountHistoryExport } from '@/components/account-history-export'
-import { DeleteAccountForm } from '@/components/delete-account-form'
+import { AccountDeletionPanel } from '@/components/account-deletion-panel'
 import { AccountDataDownload } from '@/components/account-data-download'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import ApiKeyForm from '@/components/api-key-form'
-import { JevSettingsForm } from '@/components/jev-settings-form'
 import { ExportImportDialog } from '@/components/export-import-dialog'
 import { exportAllData, importAllData } from '@/services/export-import-service'
 import { supportedProviderIds } from '@/lib/provider-registry'
@@ -175,7 +174,6 @@ export default function SettingsPage() {
         <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="providers">API Providers</TabsTrigger>
-          <TabsTrigger value="jev">Jev</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
           <TabsTrigger value="advanced">Advanced</TabsTrigger>
         </TabsList>
@@ -212,9 +210,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="jev" className="space-y-6">
-          <JevSettingsForm />
-        </TabsContent>
+
 
 
         <TabsContent value="appearance" className="space-y-6">
@@ -288,6 +284,14 @@ export default function SettingsPage() {
               <CardDescription>Configure advanced application settings</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div data-testid="usage-analytics-disclosure">
+                <Label>Usage analytics</Label>
+                <p className="text-sm text-muted-foreground">
+                  Usage events are stored with your account to power your Analytics page and plan allowances: provider,
+                  model, token counts, response time, errors, and which features you use. Prompt and response text is not
+                  part of these events. This recording is always on and is not anonymous.
+                </p>
+              </div>
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Legacy Local Data</Label>
@@ -320,7 +324,7 @@ export default function SettingsPage() {
               <CardTitle>Delete Account</CardTitle>
               <CardDescription>Permanently remove your account and all of its data</CardDescription>
             </CardHeader>
-            <CardContent><DeleteAccountForm /></CardContent>
+            <CardContent><AccountDeletionPanel /></CardContent>
           </Card>
         </TabsContent>
       </Tabs>

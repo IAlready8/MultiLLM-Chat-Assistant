@@ -39,11 +39,13 @@ describe('mandatory-auth routing', () => {
   it.each([
     '/auth/signin',
     '/auth/register',
+    '/auth/reset-password',
     '/api/auth/providers',
+    '/api/auth/password-reset',
     '/api/health',
     '/api/webhooks/stripe',
     '/api/cron/generations',
-    '/terms',
+    '/', '/terms',
     '/privacy',
     '/robots.txt',
     '/.well-known/security.txt',
@@ -59,7 +61,7 @@ describe('mandatory-auth routing', () => {
     expect(mockDecode).not.toHaveBeenCalled()
   })
 
-  it.each(['/termsandmore', '/privacy-export', '/api/terms', '/settings', '/robots.txt.bak', '/.well-known/other', '/pricing-admin', '/supporters', '/sitemap.xml.bak'])(
+  it.each(['/workspace', '/pricing/private', '/terms/private', '/privacy/private', '/termsandmore', '/privacy-export', '/api/terms', '/settings', '/robots.txt.bak', '/.well-known/other', '/pricing-admin', '/supporters', '/sitemap.xml.bak'])(
     'does not widen public access to %s',
     async (path) => {
       const response = await middleware(

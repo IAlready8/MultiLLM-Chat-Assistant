@@ -64,9 +64,16 @@ export default function SupportPage() {
             calendar month (UTC). The Billing page shows the exact time.
           </li>
           <li>
-            <strong>I cannot sign in.</strong> Use the same sign-in provider you
-            registered with. An account created with Google cannot be opened
-            with GitHub, and the reverse.
+            <strong>I cannot sign in.</strong> Use the same sign-in method you
+            registered with. An account created with one sign-in provider cannot
+            be opened with a different one.
+          </li>
+          <li>
+            <strong>I forgot my password.</strong> This applies only to existing
+            password accounts. Email support from the address on the account. After
+            we verify the request we send a reset link that works once and expires
+            after 60 minutes. Signing in with a provider such as Google is managed
+            by that provider.
           </li>
         </ul>
       </LegalSection>

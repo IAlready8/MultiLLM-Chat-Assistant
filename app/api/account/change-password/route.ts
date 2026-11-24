@@ -5,18 +5,7 @@ import { getAuthenticatedUser } from '@/lib/api-auth'
 import { readApiObject } from '@/lib/api-input'
 import { checkAndConsume } from '@/lib/rate-limit'
 import prisma from '@/lib/prisma'
-
-// bcrypt only uses the first 72 bytes of a password; longer inputs would be
-// silently truncated, so the length is capped up front.
-const MAX_PASSWORD_BYTES = 72
-
-const newPasswordSchema = z
-  .string()
-  .min(8)
-  .max(MAX_PASSWORD_BYTES)
-  .refine((value) => new TextEncoder().encode(value).length <= MAX_PASSWORD_BYTES, {
-    message: 'Use at least 8 characters and at most 72 UTF-8 bytes.',
-  })
+import { newPasswordSchema } from '@/lib/password-policy'
 
 const schema = z
   .object({

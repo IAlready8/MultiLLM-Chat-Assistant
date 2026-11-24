@@ -12,6 +12,7 @@ const MAX_CACHE_ENTRIES = 512
 const cache = new Map<string, CacheEntry<unknown>>()
 const inFlightLoads = new Map<string, Promise<unknown>>()
 
+// Evict expired entries first, then least-recently-used keys.
 const pruneCacheForInsert = (now: number) => {
   for (const [key, entry] of cache) {
     if (entry.expiresAt <= now) cache.delete(key)
@@ -118,5 +119,12 @@ export async function cachedJsonResponse<T>(
     return buildResponse(value, 'miss')
   } finally {
     if (inFlightLoads.get(key) === loadPromise) inFlightLoads.delete(key)
+  }
+}
+
+/** Selectively fence completed and in-flight reads belonging to a deleted user. */
+export function invalidateUserApiReadCache(userId: string) {
+  for (const key of new Set([...cache.keys(), ...inFlightLoads.keys()])) {
+    if (key.endsWith(`:${userId}`)) invalidateApiReadCache(key)
   }
 }

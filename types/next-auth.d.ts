@@ -13,6 +13,7 @@ declare module 'next-auth' {
       id: string
       role: TeamRole
       tier: SubscriptionTier
+      deletionPending?: boolean
     } & DefaultSession['user']
   }
 }

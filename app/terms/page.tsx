@@ -119,8 +119,12 @@ export default function TermsPage() {
             Deleting your account cancels your subscription immediately.
           </li>
           <li>
-            Payments are not refundable, including for a partly used billing
-            period, except where the law requires a refund.
+            You may request a refund of your first workspace subscription payment
+            within 14 calendar days through Support. Later renewals are
+            non-refundable except where required by law or for a documented billing
+            error. Provider API charges are separate and are not refunded here.
+            Refund requests and subscription cancellation are separate actions;
+            deletion does not automatically issue a refund.
           </li>
           <li>
             Where a plan has a monthly allowance, each attempted generation counts
@@ -129,6 +133,12 @@ export default function TermsPage() {
           <li>
             A subscription fee pays for the service only. It does not include
             usage charges from AI providers on your own keys.
+          </li>
+          <li>
+            Prices are in Canadian dollars and do not include sales taxes. Where
+            we are required to collect a sales tax such as GST/HST, it is
+            calculated from your billing address and shown at checkout and on
+            your invoice before you are charged.
           </li>
           <li>
             We may change prices for future billing periods and will give notice

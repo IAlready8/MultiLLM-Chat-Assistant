@@ -1,3 +1,4 @@
+import { isDeferredReleasePath, deferredReleaseResponse } from '@/lib/release-scope'
 import { readApiObject } from '@/lib/api-input'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -36,6 +37,7 @@ const createGoalSchema = z.object({
 export const GET = withApiMetrics(async (_req: Request) => {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/goals')) return deferredReleaseResponse()
   const { user } = authCheck
 
   try {
@@ -57,6 +59,7 @@ export const GET = withApiMetrics(async (_req: Request) => {
 export const POST = withApiMetrics(async (req: Request) => {
   const authCheck = await getAuthenticatedUser()
   if (authCheck instanceof NextResponse) return authCheck
+  if (isDeferredReleasePath('/api/goals')) return deferredReleaseResponse()
   const { user } = authCheck
   const writeLimited = await enforceWorkspaceWriteLimit(user.id)
   if (writeLimited) return writeLimited

@@ -64,7 +64,7 @@ async function probeDatabase(): Promise<{
         progress.stage = 'schema'
         // Zero-row read of columns that every authenticated request depends on.
         // It fails only when a required migration has not been applied.
-        await prisma.$queryRaw`SELECT "role", "passwordVersion" FROM "User" LIMIT 0`
+        await prisma.$queryRaw`SELECT "role", "passwordVersion", "deletionRequestedAt" FROM "User" LIMIT 0`
       })(),
       DATABASE_PROBE_TIMEOUT_MS,
     )
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
   const providerDiagnostics = {
     status: operationalProviders.length > 0 ? 'ok' : 'degraded',
     responseTimeMs: providers.durationMs,
-    message: `${operationalProviders.length} of ${providerRegistry.length} providers operational`,
+    message: `${operationalProviders.length} provider integrations available in this environment; real generation is not checked by health`,
     providers: operationalProviders.map((p) => ({
       id: p.id,
       name: p.name,

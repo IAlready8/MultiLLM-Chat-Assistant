@@ -1,7 +1,7 @@
 # Launch Checklist
 
 The ordered operator steps to open this deployment to the public with paid
-plans. Everything here is configuration or a decision; none of it is code.
+plans. Use this together with docs/releases/2026-11-17-reconciliation.md and the finite G01–G14 release gates. Admin readiness is a configuration check, not end-to-end release proof.
 After each step, `/admin/status` shows what is still missing under
 Launch Readiness.
 
@@ -25,7 +25,7 @@ and contact address appear. `/.well-known/security.txt` returns 200.
 Read `/terms` and `/privacy` as published and confirm each of these, or change
 the page:
 
-- payments are not refundable except where the law requires;
+- first workspace payment refund requests are accepted within 14 days; later renewals are non-refundable except where required or for a billing error;
 - the minimum age is 18;
 - the list of data collected and the third parties it is shared with.
 
@@ -44,8 +44,8 @@ created end to end.
 ## 4. Plan allowances (required before selling Pro)
 
 Set `LLM_MONTHLY_REQUEST_LIMITS` to the approved numbers, for example
-`{"FREE":50,"PRO":2000,"ENTERPRISE":null}`. `null` means unlimited. Pro must
-allow more than Free or the paid plan sells nothing extra.
+`{"FREE":50,"PRO":2000,"ENTERPRISE":0}`. Production rejects missing, unlimited or malformed values. Free and Pro must
+match the approved offer. Enterprise is not sold.
 
 Check: `/pricing` and `/billing` show both allowances.
 
@@ -53,7 +53,7 @@ Check: `/pricing` and `/billing` show both allowances.
 
 In this order:
 
-1. In Stripe live mode, confirm the Pro product has one active, fixed,
+1. In Stripe sandbox first, confirm the Pro product has one active, fixed,
    recurring price.
 2. Set `STRIPE_SECRET_KEY` and `STRIPE_PRO_PRICE_ID`.
 3. Create a webhook endpoint at `<NEXTAUTH_URL>/api/webhooks/stripe` for
@@ -66,9 +66,7 @@ In this order:
    payment method).
 5. Redeploy.
 
-Check: `/pricing` shows the live price. With a real card on a test account:
-subscribe, confirm the tier becomes Pro on `/billing`, open the portal, cancel,
-and confirm the cancellation shows on `/billing`.
+Check the full sandbox lifecycle first, including failed payment, cancellation timing, duplicate/reordered events and paid account deletion. Read live settings separately. A legitimate live purchase/refund requires separate explicit authorization and a budget; the CAD 5 provider-test allowance does not authorize payment operations.
 
 ## 6. Final verification
 
@@ -85,3 +83,5 @@ and confirm the cancellation shows on `/billing`.
 - Decide whether Comparison, Pipeline and AI Roundtable should carry an
   "experimental" label in the product. The Terms allow for one; the product
   does not currently show it.
+
+Keep PAID_SIGNUP_ENABLED=false and LEGAL_NOTICE_APPROVED=false until the finite release evidence is reviewed. Prepare LEGAL_ENTITY_NAME="Daniel Frydenberg" and the confirmed support address in the intended environment; do not infer governing law. Production approval must include the additive account-deletion migration and verified environment values.

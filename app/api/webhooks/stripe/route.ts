@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import Stripe from 'stripe'
 import {
   stripe,
+  stripeMode,
   STRIPE_WEBHOOK_SECRET,
   STRIPE_PRO_PRICE_ID,
   ensureStripeConfigured,
@@ -102,22 +103,25 @@ async function reconcileSubscription(subscription: Stripe.Subscription, tx: Pris
     throw new Error(`Stripe subscription ${subscription.id} has no customer ID`)
   }
 
-  const userId = await resolveUserId(subscription, customerId, tx)
+  const customerDeletion = await tx.accountDeletion.findFirst({ where: { stripeCustomerId: customerId } })
+  const userId = customerDeletion?.userId || await resolveUserId(subscription, customerId, tx)
   if (!userId) {
     throw new Error(
       `No application user is mapped to Stripe customer ${customerId}`,
     )
   }
 
-  // Self-serve account deletion cancels the Stripe subscription and then
-  // removes the user. Stripe reports that cancellation afterwards; with no
-  // account left there is nothing to reconcile, and writing would violate the
-  // user foreign key and make Stripe retry the event for days.
-  const owner = await tx.user.findUnique({
-    where: { id: userId },
-    select: { id: true },
-  })
-  if (!owner) return
+  const deletion = customerDeletion || await tx.accountDeletion.findFirst({ where: { userId } })
+  const user = await tx.user.findUnique({ where: { id: userId }, select: { id: true, deletionRequestedAt: true } })
+  if (deletion || user?.deletionRequestedAt || !user) {
+    if ((deletion || user?.deletionRequestedAt)
+      && !['canceled', 'incomplete_expired'].includes(subscription.status)) {
+      await stripe.subscriptions.cancel(subscription.id, { invoice_now: false, prorate: false }, {
+        timeout: 5_000, maxNetworkRetries: 0, idempotencyKey: `delete-subscription:${userId}:${subscription.id}`,
+      })
+    }
+    return
+  }
 
   const proItem = subscription.items.data.find(
     (item) => item.price.id === STRIPE_PRO_PRICE_ID,
@@ -204,6 +208,8 @@ export async function POST(req: Request) {
     console.warn('Stripe webhook signature verification failed')
     return NextResponse.json({ error: 'Webhook Error' }, { status: 400 })
   }
+
+  if (typeof event.livemode === 'boolean' && event.livemode !== (stripeMode === 'live')) return NextResponse.json({ error: 'Webhook mode mismatch' }, { status: 400 })
 
   if (!supportedEventTypes.has(event.type)) {
     return NextResponse.json({ received: true })

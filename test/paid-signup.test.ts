@@ -1,0 +1,23 @@
+import { afterEach, expect, it, vi } from 'vitest'
+import { isPaidSignupEnabled } from '@/lib/paid-signup'
+afterEach(() => vi.unstubAllEnvs())
+it('requires explicit release approval and real operator/contact configuration', () => {
+  vi.stubEnv('LLM_MONTHLY_REQUEST_LIMITS', '{"FREE":50,"PRO":2000,"ENTERPRISE":0}')
+  vi.stubEnv('NEXT_PUBLIC_APP_NAME', 'ManyOne')
+  vi.stubEnv('PAID_SIGNUP_ENABLED', 'false')
+  vi.stubEnv('LEGAL_NOTICE_APPROVED', 'false')
+  vi.stubEnv('LEGAL_ENTITY_NAME', 'Daniel Frydenberg')
+  vi.stubEnv('SUPPORT_EMAIL', 'support@unit.example')
+  expect(isPaidSignupEnabled()).toBe(false)
+  vi.stubEnv('PAID_SIGNUP_ENABLED', 'true')
+  expect(isPaidSignupEnabled()).toBe(false)
+  vi.stubEnv('LEGAL_NOTICE_APPROVED', 'true')
+  expect(isPaidSignupEnabled()).toBe(true)
+  vi.stubEnv('LLM_MONTHLY_REQUEST_LIMITS', '')
+  expect(isPaidSignupEnabled()).toBe(false)
+  vi.stubEnv('LLM_MONTHLY_REQUEST_LIMITS', '{"FREE":50,"PRO":2000,"ENTERPRISE":null}')
+  expect(isPaidSignupEnabled()).toBe(false)
+  vi.stubEnv('LLM_MONTHLY_REQUEST_LIMITS', '{"FREE":50,"PRO":2000,"ENTERPRISE":0}')
+  vi.stubEnv('LEGAL_ENTITY_NAME', 'ManyOne')
+  expect(isPaidSignupEnabled()).toBe(false)
+})

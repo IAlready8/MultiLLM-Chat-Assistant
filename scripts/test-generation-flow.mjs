@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import pg from 'pg'
 import bcrypt from 'bcryptjs'
@@ -17,6 +17,7 @@ const db = new pg.Pool({ connectionString: database.toString() })
 const runId = randomUUID()
 const owner = `generation-test-owner-${runId}`
 const outsider = `generation-test-outsider-${runId}`
+const capperId = `generation-test-capper-${runId}`
 const historianId = `generation-test-historian-${runId}`
 const password = randomUUID()
 let providerCalls = 0
@@ -58,10 +59,10 @@ function client() {
   }
 }
 const json = data => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-async function login(id) {
+async function login(id, secret = password) {
   const request = client()
   const csrf = await (await request('/api/auth/csrf')).json()
-  const response = await request('/api/auth/callback/credentials?json=true', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrfToken: csrf.csrfToken, email: `${id}@example.test`, password, json: 'true', callbackUrl: base.toString() }).toString() })
+  const response = await request('/api/auth/callback/credentials?json=true', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrfToken: csrf.csrfToken, email: `${id}@example.test`, password: secret, json: 'true', callbackUrl: base.toString() }).toString() })
   assert.ok([200, 302].includes(response.status), `Login failed: ${response.status}`)
   const session = await (await request('/api/auth/session')).json()
   assert.equal(session.user?.id, id, 'Credential login must produce a real application session')
@@ -75,9 +76,10 @@ async function events(response) {
 
 try {
   const hash = await bcrypt.hash(password, 10)
-  for (const id of [owner, outsider, historianId]) await db.query('INSERT INTO "User" (id, email, name, password) VALUES ($1, $2, $1, $3)', [id, `${id}@example.test`, hash])
+  for (const id of [owner, outsider, historianId, capperId]) await db.query('INSERT INTO "User" (id, email, name, password) VALUES ($1, $2, $1, $3)', [id, `${id}@example.test`, hash])
   await db.query('INSERT INTO "ProviderConfig" (id, provider, "userId", settings, "updatedAt") VALUES ($1, $2, $3, $4, NOW())', [`config-${runId}`, 'ollama', owner, JSON.stringify({ baseUrl: 'http://localhost:11434', models: ['qa-fast'] })])
   await db.query('INSERT INTO "ProviderConfig" (id, provider, "userId", settings, "updatedAt") VALUES ($1, $2, $3, $4, NOW())', [`historian-config-${runId}`, 'ollama', historianId, JSON.stringify({ baseUrl: 'http://localhost:11434', models: ['qa-fast'] })])
+  await db.query('INSERT INTO "ProviderConfig" (id, provider, "userId", settings, "updatedAt") VALUES ($1, $2, $3, $4, NOW())', [`capper-config-${runId}`, 'ollama', capperId, JSON.stringify({ baseUrl: 'http://localhost:11434', models: ['qa-fast'] })])
   modelApi.listen(11434)
   await once(modelApi, 'listening')
   const request = await login(owner)
@@ -128,10 +130,12 @@ try {
   assert.equal(duplicateCount.rows[0].count, 1)
   const regeneration = await events(await request('/api/llm/stream', json(payload('qa-fast', 0))))
   assert.equal(regeneration.at(-1).type, 'done')
-  const truncated = await events(await request('/api/llm/stream', json(payload('qa-truncated', 3))))
+  const reliabilityTurnId = randomUUID()
+  assert.equal((await request(`/api/conversations/${conversation.id}`, json([{ role: 'user', content: 'Failure and cancellation checks', clientId: reliabilityTurnId }]))).status, 200)
+  const truncated = await events(await request('/api/llm/stream', json({ ...payload('qa-truncated', 0), turnId: reliabilityTurnId })))
   assert.equal(truncated.at(-1).code, 'PROVIDER_STREAM_INTERRUPTED')
   const cancel = new AbortController()
-  const canceled = await request('/api/llm/stream', { ...json(payload('qa-cancel', 4)), signal: cancel.signal })
+  const canceled = await request('/api/llm/stream', { ...json({ ...payload('qa-cancel', 1), turnId: reliabilityTurnId }), signal: cancel.signal })
   assert.equal(canceled.status, 200)
   const reader = canceled.body.getReader()
   assert.ok((await reader.read()).value.byteLength > 0)
@@ -157,11 +161,25 @@ try {
   if (process.env.LLM_MONTHLY_REQUEST_LIMITS) {
     const ownerUsage = await db.query('SELECT SUM(units)::int AS used FROM "LlmQuotaUsage" WHERE "userId" = $1', [owner])
     assert.equal(ownerUsage.rows[0].used, 6, 'Replay, rejected ownership and duplicate requests must not consume quota')
-    const attempts = await Promise.all(Array.from({ length: 9 }, () => other('/api/llm/stream', json({ provider: 'ollama', model: 'qa-fast', messages: [{ role: 'user', content: 'quota test' }] }))))
-    assert.equal(attempts.filter(response => response.status === 200).length, 8, 'Atomic quota admission must never exceed the configured allowance')
-    assert.equal(attempts.filter(response => response.status === 429).length, 1)
+    await db.query('INSERT INTO "LlmQuotaUsage" (id, "userId", units) VALUES ($1, $2, $3)', [randomUUID(), outsider, 7])
+    const beforeQuotaRace = providerCalls
+    const attempts = await Promise.all(Array.from({ length: 10 }, () => other('/api/llm/stream', json({ provider: 'ollama', model: 'qa-fast', messages: [{ role: 'user', content: 'quota test' }] }))))
+    assert.equal(attempts.filter(response => response.status === 200).length, 1, 'Atomic quota admission must never exceed the configured allowance')
+    assert.equal(attempts.filter(response => response.status === 429).length, 9)
     await Promise.all(attempts.map(response => response.text()))
+    assert.equal(providerCalls - beforeQuotaRace, 1, 'Only the one remaining unit may dispatch')
   }
+  // Ten separate HTTP requests race for four slots, all reusing position zero.
+  // This exercises server admission rather than trusting a browser or batch cap.
+  const capper = await login(capperId)
+  const capTurn = randomUUID()
+  const capConversation = await (await capper('/api/conversations', json({ title: 'Comparison cap race', messages: [{ role: 'user', content: 'Four model cap', clientId: capTurn }] }))).json()
+  const callsBeforeCap = providerCalls
+  const capAttempts = await Promise.all(Array.from({ length: 10 }, (_, index) => capper('/api/llm/stream', json({ provider: 'ollama', model: `qa-cap-${index}`, conversationId: capConversation.id, requestId: randomUUID(), turnId: capTurn, position: 0, messages: [{ role: 'user', content: 'Four model cap' }] }))))
+  assert.equal(capAttempts.filter(response => response.status === 200).length, 4)
+  assert.equal(capAttempts.filter(response => response.status === 400).length, 6)
+  await Promise.all(capAttempts.map(response => response.text()))
+  assert.equal(providerCalls - callsBeforeCap, 4, 'Rejected fifth models must not dispatch')
   const savedBatch = { conversationId: conversation.id, turnId: duplicateTurn.messages[0].clientId, prompt: 'Next turn', requests: ['qa-fast', 'qa-slow'].map(model => ({ provider: 'ollama', model, prompt: 'Next turn', requestId: randomUUID() })) }
   const pipelineResults = await (await request('/api/llm/orchestrate', json(savedBatch))).json()
   assert.equal(pipelineResults.length, 2)
@@ -298,51 +316,25 @@ try {
   for (const path of ['/pricing', '/support', '/terms', '/privacy', '/sitemap.xml', '/robots.txt']) {
     assert.equal((await fetch(new URL(path, base), { redirect: 'manual' })).status, 200, `${path} must be readable signed out`)
   }
-  // Self-serve account deletion against the real database: every refusal path
-  // leaves the account intact, and one confirmed request removes all of it.
-  const deleteAccount = (client, body, headers = {}) => client('/api/account', { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) })
-  const historianEmail = `${historianId}@example.test`
-  const ownedCounts = async id => (await db.query('SELECT (SELECT COUNT(*) FROM "User" WHERE id = $1)::int AS users, (SELECT COUNT(*) FROM "Conversation" WHERE "userId" = $1)::int AS conversations, (SELECT COUNT(*) FROM "Message" m JOIN "Conversation" c ON c.id = m."conversationId" WHERE c."userId" = $1)::int AS messages, (SELECT COUNT(*) FROM "Generation" WHERE "userId" = $1)::int AS generations, (SELECT COUNT(*) FROM "ProviderConfig" WHERE "userId" = $1)::int AS configs, (SELECT COUNT(*) FROM "LlmQuotaUsage" WHERE "userId" = $1)::int AS quota, (SELECT COUNT(*) FROM "Analytics" WHERE "userId" = $1)::int AS analytics', [id])).rows[0]
-  await db.query('INSERT INTO "Analytics" (id, event, "userId") VALUES ($1, $2, $3)', [`deletion-analytics-${runId}`, 'analytics_viewed', historianId])
-  const historianBefore = await ownedCounts(historianId)
-  const ownerBefore = await ownedCounts(owner)
-  assert.ok(historianBefore.conversations > 0 && historianBefore.messages > 0 && historianBefore.generations > 0 && historianBefore.configs > 0 && historianBefore.analytics > 0, 'Deletion must be exercised against an account that owns data')
-  assert.equal((await deleteAccount(historian, {})).status, 400)
-  assert.equal((await deleteAccount(historian, { confirmEmail: `${owner}@example.test` })).status, 400, 'Another account email must not confirm deletion')
-  assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, userId: owner })).status, 400, 'A caller must not be able to name a different account')
-  const passwordRequired = await deleteAccount(historian, { confirmEmail: historianEmail })
-  assert.equal(passwordRequired.status, 400)
-  assert.equal((await passwordRequired.json()).code, 'PASSWORD_REQUIRED')
-  assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, password: 'wrong-password' })).status, 401)
-  assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, password }, { Origin: 'https://attacker.example' })).status, 403, 'Cross-origin deletion must be refused')
-  assert.deepEqual(await ownedCounts(historianId), historianBefore, 'Refused deletion attempts must not remove anything')
-  // Five attempts were consumed above; the sixth in the window is throttled
-  // even though it carries valid credentials.
-  assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, password })).status, 429, 'Deletion attempts must be rate limited per account')
-  assert.deepEqual(await ownedCounts(historianId), historianBefore)
-  // Clear only this account's deletion bucket in whichever shared backend is
-  // active, so the confirmed request below is evaluated on its own merits.
-  const deletionBucket = `account-delete:${historianId}`
-  if (process.env.RATE_LIMIT_BACKEND === 'postgres') {
-    await db.query('DELETE FROM "RateLimitBucket" WHERE id = $1', [createHash('sha256').update(deletionBucket).digest('hex')])
-  } else if (process.env.REDIS_URL) {
-    const { createClient } = await import('redis')
-    const redis = createClient({ url: process.env.REDIS_URL })
-    await redis.connect()
-    await redis.del(deletionBucket)
-    await redis.quit()
-  }
-  const deleted = await deleteAccount(historian, { confirmEmail: historianEmail.toUpperCase(), password })
-  assert.equal(deleted.status, 200, `Confirmed deletion failed: ${deleted.status}`)
-  assert.deepEqual(await ownedCounts(historianId), { users: 0, conversations: 0, messages: 0, generations: 0, configs: 0, quota: 0, analytics: 0 }, 'Deletion must remove the account and everything it owns')
-  assert.deepEqual(await ownedCounts(owner), ownerBefore, 'Deleting one account must not touch another account')
-  assert.equal((await historian('/api/conversations')).status, 401, 'A self-deleted account must not retain access through its session token')
-  assert.equal((await deleteAccount(historian, { confirmEmail: historianEmail, password })).status, 401)
-  console.log(JSON.stringify({ passed: ['real credential authentication', 'unauthenticated denial', 'cross-origin mutation denial', 'parallel responses and isolated failure', 'no automatic provider POST retries', 'provider token usage', 'durable reload ordering', 'idempotent replay', 'conflicting request denial', 'cross-account read/update/delete/generation denial', 'duplicate user turn prevention', 'regeneration', 'truncated stream failure', 'cancel and save partial response', 'unique usage ledger', 'expired lease recovery preserves checkpoint', ...(process.env.LLM_MONTHLY_REQUEST_LIMITS ? ['concurrent quota reservations'] : []), 'durable batch orchestration and replay', 'owned paginated history', 'server-assembled model context', 'owned turn-aligned message pagination', 'persisted account profile and strict field validation', 'owned consistent account archive', 'atomic archive restore and replay without billing or generation writes', 'deleted account session revocation', 'self-serve account deletion with cascade, refusal paths and rate limit', 'plan usage, secret-free account data export and public pages'], providerCalls }))
+  assert.equal((await historian('/api/account', { method: 'DELETE' })).status, 410, 'Email-only deletion must not bypass fresh verification')
+  // Support-issued password reset against the real server and database.
+  const resetIdentifier = `password-reset:${capperId}`
+  const resetToken = randomBytes(32).toString('base64url')
+  await db.query(`INSERT INTO "VerificationToken" (identifier, token, expires) VALUES ($1, $2, now() + interval '1 hour')`, [resetIdentifier, createHash('sha256').update(resetToken).digest('hex')])
+  const beforeReset = await login(capperId)
+  const resetPassword = randomUUID()
+  const resetBody = () => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: resetToken, password: resetPassword }), redirect: 'manual' })
+  assert.equal((await fetch(new URL('/api/auth/password-reset', base), resetBody())).status, 200, 'A support-issued reset token must reset the password')
+  assert.equal((await beforeReset('/api/account/usage')).status, 401, 'A password reset must revoke sessions issued before it')
+  assert.equal((await fetch(new URL('/api/auth/password-reset', base), resetBody())).status, 400, 'A reset token must work only once')
+  assert.equal((await db.query('SELECT count(*)::int AS count FROM "VerificationToken" WHERE identifier = $1', [resetIdentifier])).rows[0].count, 0, 'A used reset token must not remain stored')
+  await login(capperId, resetPassword)
+  console.log('Generation integration passed, including concurrent four-model admission, retirement of email-only deletion and single-use password reset')
 } finally {
   modelApi.closeAllConnections()
   if (modelApi.listening) await new Promise(resolve => modelApi.close(resolve))
-  await db.query('DELETE FROM "User" WHERE id = ANY($1::text[])', [[owner, outsider, historianId]])
-  await db.query('DELETE FROM "Analytics" WHERE "userId" = ANY($1::text[])', [[owner, outsider, historianId]])
+  await db.query('DELETE FROM "User" WHERE id = ANY($1::text[])', [[owner, outsider, historianId, capperId]])
+  await db.query('DELETE FROM "Analytics" WHERE "userId" = ANY($1::text[])', [[owner, outsider, historianId, capperId]])
+  await db.query('DELETE FROM "VerificationToken" WHERE identifier LIKE $1', ['password-reset:generation-test-%'])
   await db.end()
 }

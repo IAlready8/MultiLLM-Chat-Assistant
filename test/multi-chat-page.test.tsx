@@ -37,6 +37,14 @@ describe('MultiChatPage provider model picker', () => {
     vi.unstubAllGlobals()
   })
 
+  it('selects at most four configured providers on startup without deleting saved keys', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ configuredProviders: ['openai', 'anthropic', 'googleai', 'openrouter', 'grok', 'mistral', 'kimi'] })))
+    render(<MultiChatPage />)
+    expect(await screen.findByText('Active Models (4)')).toBeVisible()
+    expect(screen.getByRole('button', { name: /Mistral/i })).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: /Remove.*model/i })).toHaveLength(4)
+  })
+
   it('offers every catalog-backed provider and recent OpenAI/Anthropic models', async () => {
     const user = userEvent.setup()
     render(<MultiChatPage />)
@@ -60,6 +68,9 @@ describe('MultiChatPage provider model picker', () => {
 
     await user.click(screen.getByRole('button', { name: /Ollama \(local\)/i }))
     expect(screen.getByRole('option', { name: 'Llama 3 (8B)' })).toBeVisible()
+
+    expect(screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })).toBeDisabled()
+    await user.click(screen.getAllByRole('button', { name: /Remove.*model/i })[0])
 
     await user.click(
       screen.getByRole('button', { name: /Kimi \(Moonshot AI\)/i })

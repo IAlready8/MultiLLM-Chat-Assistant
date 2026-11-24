@@ -395,3 +395,7 @@ export async function getWorkflowMetrics(
     ),
   }
 }
+
+export function clearUserAnalyticsFallback(userId: string) {
+  fallbackEvents.delete(userId)
+}
