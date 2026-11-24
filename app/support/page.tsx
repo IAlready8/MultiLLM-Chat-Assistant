@@ -64,9 +64,9 @@ export default function SupportPage() {
             calendar month (UTC). The Billing page shows the exact time.
           </li>
           <li>
-            <strong>I cannot sign in.</strong> Use the same sign-in provider you
-            registered with. An account created with Google cannot be opened
-            with GitHub, and the reverse.
+            <strong>I cannot sign in.</strong> Use the same sign-in method you
+            registered with. An account created with one sign-in provider cannot
+            be opened with a different one.
           </li>
         </ul>
       </LegalSection>
