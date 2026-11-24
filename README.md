@@ -125,11 +125,15 @@ npm run verify:prod -- --base-url https://<your-domain> --check-webhook
 
 `--check-webhook` requires `--base-url`.
 
-To apply pending DB migrations and enforce optional integrations:
+To enforce optional integrations:
 
 ```bash
-npm run verify:prod -- --apply-migrations --require-stripe --require-sidecar
+npm run verify:prod -- --require-stripe --require-sidecar
 ```
+
+Schema changes are applied to production **before** the PR that needs them is
+merged. `--apply-migrations` is one step of that procedure, not a post-deploy
+cleanup. Follow [Change & Deploy Process, section 7](docs/CHANGE_AND_DEPLOY_PROCESS.md#7-schema-changes-apply-first-then-merge).
 
 For branch-aware preview parity without creating a Vercel deployment:
 
